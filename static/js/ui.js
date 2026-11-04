@@ -3,6 +3,8 @@ const settingsOverlay = document.getElementById('settings-overlay');
 const closeSettings = document.getElementById('close-settings');
 const dynamicBg = document.getElementById('dynamic-bg');
 const bgBtns = document.querySelectorAll('.bg-opt-btn');
+const eraserBtns = document.querySelectorAll('.eraser-opt-btn');
+const eraserBtnLabel = document.getElementById('eraser-btn-label');
 const fabFocus = document.getElementById('fab-focus');
 const toggleSyncBg = document.getElementById('toggle-sync-bg');
 const btnCopyLink = document.getElementById('btn-copy-link');
@@ -17,6 +19,32 @@ const chatInput = document.getElementById('chat-input');
 const chatMessages = document.getElementById('chat-messages');
 const chatBadge = document.getElementById('chat-badge');
 let unreadChat = 0;
+
+function updateEraserModeUI(mode) {
+    window.eraserMode = mode === 'stroke' ? 'stroke' : 'point';
+    localStorage.setItem('syncspace_eraser_mode', window.eraserMode);
+    eraserBtns.forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-eraser') === window.eraserMode);
+    });
+    if (eraserBtnLabel) {
+        eraserBtnLabel.innerText = window.eraserMode === 'stroke' ? 'Tẩy nét' : 'Tẩy điểm';
+    }
+}
+
+updateEraserModeUI(window.eraserMode || 'point');
+
+eraserBtns.forEach(btn => {
+    window.bindSafeButton(btn, () => {
+        const mode = btn.getAttribute('data-eraser');
+        updateEraserModeUI(mode);
+        if (window.selectDrawingTool) {
+            window.selectDrawingTool('eraser');
+        }
+        if (window.showToast) {
+            window.showToast(mode === 'stroke' ? 'Đã bật: ✂️ Tẩy theo nét (Chạm vào nét vẽ để xóa cả nét)' : 'Đã bật: 🧽 Tẩy theo điểm (Chà tới đâu xóa tới đó)');
+        }
+    });
+});
 
 window.bindSafeButton(fabSettings, () => {
     settingsOverlay.classList.toggle('active');
@@ -192,11 +220,11 @@ chatHeader.addEventListener('pointercancel', stopChatDrag);
 function appendChatMessage(msg) {
     if (!msg) return;
     const item = document.createElement('div');
-    item.className = 'chat-item' + (msg.username === USERNAME ? ' self' : '');
+    item.className = 'chat-item' + (msg.username === window.USERNAME ? ' self' : '');
     const meta = document.createElement('div');
     meta.className = 'chat-meta';
     const userSpan = document.createElement('span');
-    userSpan.innerText = msg.username || 'Khách';
+    userSpan.innerText = msg.username || 'Thành viên';
     const timeSpan = document.createElement('span');
     timeSpan.innerText = msg.time || '';
     meta.appendChild(userSpan);
@@ -220,7 +248,7 @@ chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const text = chatInput.value.trim();
     if (!text) return;
-    socket.emit('chat_message', { room_id: ROOM_ID, username: USERNAME, text: text });
+    socket.emit('chat_message', { room_id: ROOM_ID, username: window.USERNAME, text: text });
     chatInput.value = '';
 });
 

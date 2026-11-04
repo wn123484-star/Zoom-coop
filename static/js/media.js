@@ -13,6 +13,7 @@ const mediaContent = document.getElementById('media-content');
 const mediaControlsBox = document.getElementById('media-controls-box');
 const mediaHistoryBar = document.getElementById('media-history-bar');
 const btnToggleControls = document.getElementById('btn-toggle-media-controls');
+const fileUploadInput = document.getElementById('file-upload');
 
 let activeHubMedia = null;
 let ytPlayer = null;
@@ -37,10 +38,10 @@ function syncMediaWidgetState() {
 
 function openMediaHubAtCenter(showControls) {
     const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
-    const w = Math.min(530, window.innerWidth - 24);
+    const w = Math.min(580, window.innerWidth - 24);
     mediaContainer.style.width = w + 'px';
     mediaContainer.style.left = Math.round(center.x - w / 2) + 'px';
-    mediaContainer.style.top = Math.round(center.y - 210) + 'px';
+    mediaContainer.style.top = Math.round(center.y - 220) + 'px';
     mediaContainer.style.display = 'flex';
     mediaContainer.classList.remove('minimized');
     if (showControls) {
@@ -88,11 +89,18 @@ window.bindSafeButton(mediaBtn, () => {
 
 window.bindSafeButton(quickUploadBtn, () => {
     openMediaHubAtCenter(true);
-    const fileInput = document.getElementById('file-upload');
-    if (fileInput) {
-        try { fileInput.click(); } catch (e) {}
+    if (fileUploadInput) {
+        try { fileUploadInput.click(); } catch (e) {}
     }
 });
+
+if (fileUploadInput) {
+    fileUploadInput.addEventListener('change', () => {
+        if (fileUploadInput.files && fileUploadInput.files.length > 0) {
+            performFileUpload(false);
+        }
+    });
+}
 
 window.bindSafeButton(mediaMinBtn, () => {
     mediaContainer.classList.toggle('minimized');
@@ -112,10 +120,10 @@ window.bindSafeButton(btnClearMedia, () => {
 
 window.bindSafeButton(btnPinCurrentMedia, () => {
     if (!activeHubMedia || !activeHubMedia.url) {
-        if (window.showToast) window.showToast('Chưa có Media nào đang phát để ghim!');
+        if (window.showToast) window.showToast('Chưa có Media hoặc Tài liệu nào đang mở để ghim!');
         return;
     }
-    spawnBoardMediaCard(activeHubMedia.kind || activeHubMedia.type, activeHubMedia.url, activeHubMedia.name || 'Media');
+    spawnBoardMediaCard(activeHubMedia.kind || activeHubMedia.type, activeHubMedia.url, activeHubMedia.name || 'Tài liệu');
 });
 
 let isMediaDragging = false;
@@ -173,37 +181,130 @@ function extractYoutubeId(url) {
     return match ? match[1] : null;
 }
 
-function resolveKind(typeOrKind, url) {
+function resolveKind(typeOrKind, url, name) {
     const t = (typeOrKind || '').toLowerCase();
-    const u = (url || '').toLowerCase();
+    const u = ((url || '') + ' ' + (name || '')).toLowerCase();
     if (t === 'youtube' || extractYoutubeId(url)) return 'youtube';
-    if (t === 'image' || t.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(u)) return 'image';
-    if (t === 'video' || t.startsWith('video/') || /\.(mp4|webm|ogg|mov|mkv)$/i.test(u)) return 'video';
-    if (t === 'audio' || t.startsWith('audio/') || /\.(mp3|wav|flac|aac|m4a|oga)$/i.test(u)) return 'audio';
-    if (t === 'pdf' || t === 'application/pdf' || /\.pdf$/i.test(u)) return 'pdf';
+    if (t === 'image' || t.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)(\?|$)/i.test(u)) return 'image';
+    if (t === 'video' || t.startsWith('video/') || /\.(mp4|webm|ogg|mov|mkv|m4v)(\?|$)/i.test(u)) return 'video';
+    if (t === 'audio' || t.startsWith('audio/') || /\.(mp3|wav|flac|aac|m4a|oga)(\?|$)/i.test(u)) return 'audio';
+    if (t === 'pdf' || t === 'application/pdf' || /\.pdf(\?|$)/i.test(u)) return 'pdf';
+    if (t === 'excel' || /\.(xlsx|xls|csv)(\?|$)/i.test(u)) return 'excel';
+    if (t === 'word' || /\.(docx|doc)(\?|$)/i.test(u)) return 'word';
+    if (t === 'html' || /\.(html|htm)(\?|$)/i.test(u)) return 'html';
+    if (t === 'text' || /\.(txt|md|json|py|js|css|xml|log|sql|sh)(\?|$)/i.test(u)) return 'text';
     return 'file';
 }
 
-function buildMediaElementHTML(kind, url, name) {
-    const safeName = (name || 'Tệp chia sẻ').replace(/[<>]/g, '');
-    if (kind === 'youtube') {
-        const videoId = extractYoutubeId(url);
-        if (!videoId) return '<p class="empty-media-text">Link YouTube không hợp lệ</p>';
-        return `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
-    }
+function getKindIcon(k) {
+    if (k === 'youtube') return '▶️';
+    if (k === 'image') return '🖼️';
+    if (k === 'video') return '🎬';
+    if (k === 'audio') return '🎵';
+    if (k === 'pdf') return '📕';
+    if (k === 'excel') return '📊';
+    if (k === 'word') return '📝';
+    if (k === 'html') return '🌐';
+    if (k === 'text') return '📄';
+    return '📁';
+}
+
+function renderRichContentInto(targetEl, kind, url, name, isHub) {
+    const safeName = (name || 'Tài liệu').replace(/[<>]/g, '');
     if (kind === 'image') {
-        return `<img src="${url}" alt="${safeName}">`;
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper" style="background:#0b0b10; height:auto; max-height:380px;"><div class="doc-toolbar-bar"><span>🖼️ ${safeName}</span><a href="${url}" target="_blank">🔍 Mở ảnh gốc</a></div><div style="padding:8px; text-align:center; overflow:auto;"><img src="${url}" alt="${safeName}" style="max-width:100%; max-height:320px; border-radius:6px;"></div></div>`;
+        return;
     }
     if (kind === 'video') {
-        return `<video id="hub-html5-media" src="${url}" controls autoplay playsinline></video>`;
+        const idAttr = isHub ? 'id="hub-html5-media"' : '';
+        targetEl.innerHTML = `<video ${idAttr} src="${url}" controls autoplay playsinline style="width:100%; max-height:340px; background:#000;"></video>`;
+        return;
     }
     if (kind === 'audio') {
-        return `<div class="audio-player-box"><div class="audio-player-title">🎵 ${safeName}</div><audio id="hub-html5-media" src="${url}" controls autoplay></audio></div>`;
+        const idAttr = isHub ? 'id="hub-html5-media"' : '';
+        targetEl.innerHTML = `<div class="audio-player-box"><div class="audio-player-title">🎵 ${safeName}</div><audio ${idAttr} src="${url}" controls autoplay></audio></div>`;
+        return;
     }
     if (kind === 'pdf') {
-        return `<embed src="${url}" type="application/pdf" width="100%" height="100%"><div style="padding:6px; background:#111; width:100%; text-align:center;"><a href="${url}" target="_blank" style="color:#00d2ff; font-size:12px; font-weight:bold;">📄 Mở PDF toàn màn hình (${safeName})</a></div>`;
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper"><div class="doc-toolbar-bar"><span>📕 ${safeName}</span><a href="${url}" target="_blank">↗ Mở PDF tab mới</a></div><iframe src="${url}#toolbar=1&view=FitH" style="width:100%; flex:1; border:none; background:#fff;"></iframe></div>`;
+        return;
     }
-    return `<div class="audio-player-box"><div class="audio-player-title">📁 ${safeName}</div><a href="${url}" target="_blank" style="color:#00d2ff; font-weight:bold;">Tải xuống / Mở tệp</a></div>`;
+    if (kind === 'html') {
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper"><div class="doc-toolbar-bar"><span>🌐 Trang HTML: ${safeName}</span><a href="${url}" target="_blank">↗ Mở toàn trang</a></div><iframe src="${url}" class="html-preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe></div>`;
+        return;
+    }
+    if (kind === 'excel') {
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper"><div class="doc-toolbar-bar"><span>📊 Bảng tính: ${safeName}</span><a href="${url}" download="${safeName}">⬇ Tải về</a></div><div class="excel-sheet-tabs">Đang đọc dữ liệu Excel...</div><div class="excel-table-wrap"></div></div>`;
+        const tabsEl = targetEl.querySelector('.excel-sheet-tabs');
+        const tableWrap = targetEl.querySelector('.excel-table-wrap');
+        fetch(url)
+            .then(r => r.arrayBuffer())
+            .then(buf => {
+                if (typeof XLSX === 'undefined') {
+                    tableWrap.innerHTML = `<p style="padding:16px;">Trình duyệt chưa nạp thư viện Excel. <a href="${url}" target="_blank">Tải tệp tại đây</a></p>`;
+                    return;
+                }
+                const wb = XLSX.read(buf, { type: 'array' });
+                tabsEl.innerHTML = '';
+                wb.SheetNames.forEach((sheetName, idx) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'excel-tab-btn' + (idx === 0 ? ' active' : '');
+                    btn.innerText = sheetName;
+                    window.bindSafeButton(btn, () => {
+                        tabsEl.querySelectorAll('.excel-tab-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        const ws = wb.Sheets[sheetName];
+                        tableWrap.innerHTML = XLSX.utils.sheet_to_html(ws);
+                    });
+                    tabsEl.appendChild(btn);
+                });
+                if (wb.SheetNames.length > 0) {
+                    const firstSheet = wb.Sheets[wb.SheetNames[0]];
+                    tableWrap.innerHTML = XLSX.utils.sheet_to_html(firstSheet);
+                }
+            })
+            .catch(() => {
+                tableWrap.innerHTML = `<p style="padding:16px;">Không thể đọc bảng tính. <a href="${url}" target="_blank">Tải tệp về máy</a></p>`;
+            });
+        return;
+    }
+    if (kind === 'word') {
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper"><div class="doc-toolbar-bar"><span>📝 Tài liệu Word: ${safeName}</span><a href="${url}" download="${safeName}">⬇ Tải về</a></div><div class="word-doc-view">Đang hiển thị nội dung Word...</div></div>`;
+        const docView = targetEl.querySelector('.word-doc-view');
+        fetch(url)
+            .then(r => r.arrayBuffer())
+            .then(buf => {
+                if (typeof mammoth === 'undefined') {
+                    docView.innerHTML = `<p>Không thể nạp bộ đọc Word. <a href="${url}" target="_blank">Tải tệp về máy</a></p>`;
+                    return;
+                }
+                return mammoth.convertToHtml({ arrayBuffer: buf });
+            })
+            .then(result => {
+                if (result && result.value !== undefined) {
+                    docView.innerHTML = result.value || '<p>Tài liệu trống.</p>';
+                }
+            })
+            .catch(() => {
+                docView.innerHTML = `<p>Định dạng .doc cũ hoặc tệp lỗi. <a href="${url}" download="${safeName}" style="color:#0984e3; font-weight:bold;">Nhấn vào đây để tải tệp Word về máy</a></p>`;
+            });
+        return;
+    }
+    if (kind === 'text') {
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper"><div class="doc-toolbar-bar"><span>📄 Văn bản / Code: ${safeName}</span><a href="${url}" target="_blank">↗ Mở gốc</a></div><pre class="text-doc-view">Đang tải nội dung...</pre></div>`;
+        const preEl = targetEl.querySelector('.text-doc-view');
+        fetch(url)
+            .then(r => r.text())
+            .then(txt => {
+                preEl.innerText = txt.slice(0, 100000);
+            })
+            .catch(() => {
+                preEl.innerText = 'Không thể đọc tệp văn bản.';
+            });
+        return;
+    }
+    targetEl.innerHTML = `<div class="audio-player-box"><div class="audio-player-title">📁 ${safeName}</div><a href="${url}" download="${safeName}" target="_blank" style="background:#00d2ff; color:#000; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none;">⬇ Tải xuống / Mở tệp</a></div>`;
 }
 
 function destroyYtPlayer() {
@@ -217,7 +318,7 @@ function clearMediaView() {
     destroyYtPlayer();
     activeHubMedia = null;
     btnUnlockAudio.style.display = 'none';
-    mediaContent.innerHTML = '<div class="empty-media-box"><p class="empty-media-text">🎬 Chọn <b>Ảnh, Video, Nhạc MP3, Tài liệu PDF</b> hoặc dán link <b>YouTube</b> ở trên để mọi người cùng xem và nghe đồng bộ!</p></div>';
+    mediaContent.innerHTML = '<div class="empty-media-box"><p class="empty-media-text">📂 Hỗ trợ hiển thị trực tiếp: <b>Ảnh, Video, Nhạc MP3, PDF, Bảng tính Excel (.xlsx/.csv), Word (.docx), Web HTML (.html), Văn bản/Code</b> và <b>YouTube</b>!</p></div>';
     mediaControlsBox.classList.remove('collapsed');
 }
 
@@ -310,14 +411,14 @@ function bindHtml5SyncEvents(mediaEl, startPos, shouldPlay) {
 
 function createSyncedYoutubePlayer(videoId, startPos, shouldPlay) {
     destroyYtPlayer();
-    mediaContent.innerHTML = '<div id="yt-sync-mount" style="width:100%; height:310px;"></div>';
+    mediaContent.innerHTML = '<div id="yt-sync-mount" style="width:100%; height:340px;"></div>';
     if (!window.YT || !window.YT.Player) {
         mediaContent.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&start=${Math.floor(startPos)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         return;
     }
     ytPlayer = new YT.Player('yt-sync-mount', {
         width: '100%',
-        height: '310',
+        height: '340',
         videoId: videoId,
         playerVars: {
             autoplay: 1,
@@ -378,13 +479,16 @@ function renderMediaInHub(item) {
         return;
     }
     btnUnlockAudio.style.display = 'none';
-    const kind = resolveKind(item.kind || item.type, item.url);
+    const kind = resolveKind(item.kind || item.type, item.url, item.name);
     const startPos = parseFloat(item.current_pos || item.position || 0);
     const shouldPlay = item.playing !== undefined ? !!item.playing : true;
-    activeHubMedia = { kind: kind, type: item.type, url: item.url, name: item.name || 'Media' };
+    activeHubMedia = { kind: kind, type: item.type, url: item.url, name: item.name || 'Tài liệu' };
 
     if (mediaContainer.style.display === 'none' || !mediaContainer.style.display) {
         openMediaHubAtCenter(false);
+    } else {
+        mediaContainer.classList.remove('minimized');
+        mediaBtn.classList.add('active');
     }
 
     if (kind === 'youtube') {
@@ -396,7 +500,7 @@ function renderMediaInHub(item) {
         createSyncedYoutubePlayer(videoId, startPos, shouldPlay);
     } else {
         destroyYtPlayer();
-        mediaContent.innerHTML = buildMediaElementHTML(kind, item.url, item.name);
+        renderRichContentInto(mediaContent, kind, item.url, item.name, true);
         if (kind === 'video' || kind === 'audio') {
             const mediaEl = document.getElementById('hub-html5-media');
             bindHtml5SyncEvents(mediaEl, startPos, shouldPlay);
@@ -413,10 +517,11 @@ function renderMediaHistoryList(list) {
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'media-chip';
-        const k = resolveKind(item.kind || item.type, item.url);
-        const icon = k === 'youtube' ? '▶️' : k === 'image' ? '🖼️' : k === 'video' ? '🎬' : k === 'audio' ? '🎵' : '📄';
+        const k = resolveKind(item.kind || item.type, item.url, item.name);
+        const icon = getKindIcon(k);
         chip.innerText = `${icon} ${item.name || 'Media'}`;
         window.bindSafeButton(chip, () => {
+            renderMediaInHub(item);
             socket.emit('media_share', {
                 room_id: ROOM_ID,
                 type: item.type,
@@ -438,7 +543,7 @@ function createBoardMediaDOM(data) {
         existing.style.top = typeof data.y === 'number' ? data.y + 'px' : data.y;
         return;
     }
-    const kind = resolveKind(data.kind || data.type, data.url);
+    const kind = resolveKind(data.kind || data.type, data.url, data.name);
     const card = document.createElement('div');
     card.className = 'board-media-card glass-effect';
     card.id = data.id;
@@ -449,8 +554,8 @@ function createBoardMediaDOM(data) {
     header.className = 'widget-header';
     const title = document.createElement('span');
     title.className = 'widget-title';
-    const icon = kind === 'youtube' ? '▶️' : kind === 'image' ? '🖼️' : kind === 'video' ? '🎬' : kind === 'audio' ? '🎵' : '📄';
-    title.innerText = `${icon} ${data.name || 'Media'} (${data.owner || 'Thành viên'})`;
+    const icon = getKindIcon(kind);
+    title.innerText = `${icon} ${data.name || 'Tài liệu'} (${data.owner || 'Thành viên'})`;
 
     const controls = document.createElement('div');
     controls.className = 'widget-controls';
@@ -469,7 +574,7 @@ function createBoardMediaDOM(data) {
     delBtn.type = 'button';
     delBtn.className = 'widget-btn close';
     delBtn.innerText = '✕';
-    delBtn.title = 'Xóa thẻ Media này khỏi bảng';
+    delBtn.title = 'Xóa thẻ này khỏi bảng';
     window.bindSafeButton(delBtn, () => {
         card.remove();
         socket.emit('delete_board_media', { room_id: ROOM_ID, id: data.id });
@@ -481,7 +586,12 @@ function createBoardMediaDOM(data) {
 
     const body = document.createElement('div');
     body.className = 'board-media-body';
-    body.innerHTML = buildMediaElementHTML(kind, data.url, data.name);
+    if (kind === 'youtube') {
+        const vid = extractYoutubeId(data.url);
+        body.innerHTML = vid ? `<iframe src="https://www.youtube.com/embed/${vid}?playsinline=1" allowfullscreen></iframe>` : '<p>Link lỗi</p>';
+    } else {
+        renderRichContentInto(body, kind, data.url, data.name, false);
+    }
 
     card.appendChild(header);
     card.appendChild(body);
@@ -535,21 +645,21 @@ function spawnBoardMediaCard(kind, url, name) {
     const id = 'bmedia_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
     const offset = (boardMediaContainer.children.length % 5) * 30;
-    const x = Math.round(center.x - 180 + offset) + 'px';
-    const y = Math.round(center.y - 140 + offset) + 'px';
+    const x = Math.round(center.x - 210 + offset) + 'px';
+    const y = Math.round(center.y - 160 + offset) + 'px';
     const payload = {
         room_id: ROOM_ID,
         id: id,
         kind: kind,
         url: url,
-        name: name || 'Media',
+        name: name || 'Tài liệu',
         owner: window.USERNAME,
         x: x,
         y: y
     };
     createBoardMediaDOM(payload);
     socket.emit('new_board_media', payload);
-    if (window.showToast) window.showToast('Đã ghim Media lên mặt bảng chung!');
+    if (window.showToast) window.showToast('Đã ghim "' + (name || 'Tài liệu') + '" lên mặt bảng!');
 }
 
 window.loadMediaState = function(mediaData, mediaList) {
@@ -576,24 +686,36 @@ window.bindSafeButton(document.getElementById('btn-play-yt'), () => {
         if (window.showToast) window.showToast('Vui lòng nhập đúng định dạng link YouTube!');
         return;
     }
-    socket.emit('media_share', {
-        room_id: ROOM_ID,
+    openMediaHubAtCenter(false);
+    const item = {
         type: 'youtube',
         kind: 'youtube',
         url: url,
         name: 'YouTube (' + vid + ')',
         sender: window.USERNAME
+    };
+    renderMediaInHub(item);
+    socket.emit('media_share', {
+        room_id: ROOM_ID,
+        type: 'youtube',
+        kind: 'youtube',
+        url: url,
+        name: item.name,
+        sender: window.USERNAME,
+        x: parseFloat(mediaContainer.style.left) || 1950,
+        y: parseFloat(mediaContainer.style.top) || 2250
     });
 });
 
 function performFileUpload(pinDirectlyToBoard) {
-    const fileInput = document.getElementById('file-upload');
-    if (!fileInput.files || fileInput.files.length === 0) {
-        if (window.showToast) window.showToast('Hãy chọn tệp Ảnh, Video, Nhạc MP3 hoặc PDF trước!');
-        try { fileInput.click(); } catch (e) {}
+    if (!fileUploadInput || !fileUploadInput.files || fileUploadInput.files.length === 0) {
+        if (window.showToast) window.showToast('Hãy chọn tệp Ảnh, Video, PDF, Excel, Word hoặc HTML!');
+        if (fileUploadInput) {
+            try { fileUploadInput.click(); } catch (e) {}
+        }
         return;
     }
-    const file = fileInput.files[0];
+    const file = fileUploadInput.files[0];
     if (file.size > 100 * 1024 * 1024) {
         if (window.showToast) window.showToast('Tệp vượt quá giới hạn 100MB!');
         return;
@@ -609,35 +731,40 @@ function performFileUpload(pinDirectlyToBoard) {
     fetch('/upload', { method: 'POST', body: formData })
         .then(res => res.json())
         .then(data => {
-            uploadBtn.innerText = '📤 Phát Chung';
+            uploadBtn.innerText = '📤 Mở Xem Chung';
             uploadBtn.disabled = false;
             if (pinBtn) pinBtn.disabled = false;
             if (data && data.url) {
-                const kind = data.kind || resolveKind(data.type, data.url);
+                const kind = data.kind || resolveKind(data.type, data.url, data.name || file.name);
                 const name = data.name || file.name;
                 if (pinDirectlyToBoard) {
                     spawnBoardMediaCard(kind, data.url, name);
                 } else {
+                    openMediaHubAtCenter(false);
+                    const item = { type: data.type, kind: kind, url: data.url, name: name, sender: window.USERNAME };
+                    renderMediaInHub(item);
                     socket.emit('media_share', {
                         room_id: ROOM_ID,
                         type: data.type,
                         kind: kind,
                         url: data.url,
                         name: name,
-                        sender: window.USERNAME
+                        sender: window.USERNAME,
+                        x: parseFloat(mediaContainer.style.left) || 1950,
+                        y: parseFloat(mediaContainer.style.top) || 2250
                     });
                 }
-                fileInput.value = '';
-                if (window.showToast) window.showToast('Đã tải lên: ' + name);
+                fileUploadInput.value = '';
+                if (window.showToast) window.showToast('Đã tải lên thành công: ' + name);
             } else {
-                if (window.showToast) window.showToast(data.error || 'Tải tệp thất bại!');
+                if (window.showToast) window.showToast((data && data.error) || 'Tải tệp thất bại!');
             }
         })
         .catch(() => {
-            uploadBtn.innerText = '📤 Phát Chung';
+            uploadBtn.innerText = '📤 Mở Xem Chung';
             uploadBtn.disabled = false;
             if (pinBtn) pinBtn.disabled = false;
-            if (window.showToast) window.showToast('Lỗi kết nối khi tải tệp!');
+            if (window.showToast) window.showToast('Lỗi kết nối máy chủ khi tải tệp!');
         });
 }
 
@@ -648,6 +775,10 @@ socket.on('media_shared', (data) => {
     if (!data) return;
     if (Array.isArray(data.media_list)) {
         renderMediaHistoryList(data.media_list);
+    }
+    if (data.widget_state && typeof data.widget_state.x === 'number') {
+        mediaContainer.style.left = data.widget_state.x + 'px';
+        mediaContainer.style.top = data.widget_state.y + 'px';
     }
     if (data.type === 'clear') {
         clearMediaView();

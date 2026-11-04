@@ -6,6 +6,7 @@ const workspace = document.getElementById('workspace');
 const zoomIndicator = document.getElementById('zoom-indicator');
 
 window.workspaceScale = 1;
+window.eraserMode = localStorage.getItem('syncspace_eraser_mode') || 'point';
 let panX = -(5000 - window.innerWidth) / 2;
 let panY = -(5000 - window.innerHeight) / 2;
 let targetScale = 1;
@@ -122,7 +123,7 @@ function mainAnimationLoop() {
 mainAnimationLoop();
 
 window.addEventListener('wheel', (e) => {
-    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.top-toolbar')) {
+    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.top-toolbar') || e.target.closest('.media-content') || e.target.closest('.board-media-body')) {
         return;
     }
     e.preventDefault();
@@ -135,14 +136,19 @@ window.addEventListener('wheel', (e) => {
     targetScale = nextScale;
 }, { passive: false });
 
+window.selectDrawingTool = function(toolName) {
+    currentTool = toolName;
+    const toolBtns = document.querySelectorAll('.tool-btn');
+    toolBtns.forEach(b => b.classList.toggle('active', b.id === 'tool-' + toolName));
+    if (currentTool === 'pan') canvas.classList.add('pan-mode');
+    else canvas.classList.remove('pan-mode');
+};
+
 const toolBtns = document.querySelectorAll('.tool-btn');
 toolBtns.forEach(btn => {
     window.bindSafeButton(btn, () => {
-        toolBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentTool = btn.id.replace('tool-', '');
-        if (currentTool === 'pan') canvas.classList.add('pan-mode');
-        else canvas.classList.remove('pan-mode');
+        const tName = btn.id.replace('tool-', '');
+        window.selectDrawingTool(tName);
     });
 });
 
@@ -248,6 +254,76 @@ function applyBrushSetting(tool, color, width) {
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = color;
     }
+}
+
+function distToSegmentSquared(px, py, x1, y1, x2, y2) {
+    const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+    if (l2 === 0) return (px - x1) * (px - x1) + (py - y1) * (py - y1);
+    let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const projX = x1 + t * (x2 - x1);
+    const projY = y1 + t * (y2 - y1);
+    return (px - projX) * (px - projX) + (py - projY) * (py - projY);
+}
+
+function isPointHittingStroke(px, py, stroke, tolerance) {
+    if (!stroke || stroke.tool === 'eraser') return false;
+    const pts = stroke.points || [];
+    if (pts.length === 0) return false;
+    const strokeW = parseFloat(stroke.width || 4);
+    const hitR = Math.max(12, tolerance + strokeW);
+    const hitRSq = hitR * hitR;
+
+    if (stroke.tool === 'text') {
+        const p0 = pts[0];
+        const textLen = (stroke.text || '').length * strokeW * 3.2 + 40;
+        const textH = strokeW * 6 + 20;
+        return px >= p0.x - 10 && px <= p0.x + textLen && py >= p0.y - textH && py <= p0.y + 15;
+    }
+    if (stroke.tool === 'rect' && pts.length >= 2) {
+        const xMin = Math.min(pts[0].x, pts[pts.length - 1].x);
+        const xMax = Math.max(pts[0].x, pts[pts.length - 1].x);
+        const yMin = Math.min(pts[0].y, pts[pts.length - 1].y);
+        const yMax = Math.max(pts[0].y, pts[pts.length - 1].y);
+        return (
+            distToSegmentSquared(px, py, xMin, yMin, xMax, yMin) <= hitRSq ||
+            distToSegmentSquared(px, py, xMax, yMin, xMax, yMax) <= hitRSq ||
+            distToSegmentSquared(px, py, xMax, yMax, xMin, yMax) <= hitRSq ||
+            distToSegmentSquared(px, py, xMin, yMax, xMin, yMin) <= hitRSq
+        );
+    }
+    if (stroke.tool === 'circle' && pts.length >= 2) {
+        const cx = (pts[0].x + pts[pts.length - 1].x) / 2;
+        const cy = (pts[0].y + pts[pts.length - 1].y) / 2;
+        const rx = Math.max(10, Math.abs(pts[pts.length - 1].x - pts[0].x) / 2);
+        const ry = Math.max(10, Math.abs(pts[pts.length - 1].y - pts[0].y) / 2);
+        const normDist = ((px - cx) * (px - cx)) / ((rx + hitR) * (rx + hitR)) + ((py - cy) * (py - cy)) / ((ry + hitR) * (ry + hitR));
+        return normDist <= 1.15;
+    }
+    if (pts.length === 1) {
+        return (px - pts[0].x) * (px - pts[0].x) + (py - pts[0].y) * (py - pts[0].y) <= hitRSq;
+    }
+    for (let i = 0; i < pts.length - 1; i++) {
+        if (distToSegmentSquared(px, py, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y) <= hitRSq) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function eraseStrokeAtPoint(px, py) {
+    for (let i = strokeHistory.length - 1; i >= 0; i--) {
+        const st = strokeHistory[i];
+        if (isPointHittingStroke(px, py, st, currentWidth * 1.5)) {
+            const removed = strokeHistory.splice(i, 1)[0];
+            redrawAllHistory();
+            if (removed && removed.id) {
+                socket.emit('delete_stroke', { room_id: ROOM_ID, stroke_id: removed.id });
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 function drawSegmentImmediate(tool, color, width, x0, y0, x1, y1) {
@@ -366,6 +442,12 @@ function startPointerAction(clientX, clientY, button) {
     }
     if (button !== 0) return;
     const pos = window.getWorkspaceCoords(clientX, clientY);
+    if (currentTool === 'eraser' && window.eraserMode === 'stroke') {
+        drawing = true;
+        currentStroke = null;
+        eraseStrokeAtPoint(pos.x, pos.y);
+        return;
+    }
     if (currentTool === 'text') {
         const txt = prompt('Nhập nội dung chữ muốn chèn lên bảng:');
         if (txt && txt.trim()) {
@@ -425,8 +507,13 @@ function movePointerAction(clientX, clientY) {
         applyTransformImmediate();
         return;
     }
-    if (!drawing || !currentStroke) return;
+    if (!drawing) return;
     const pos = window.getWorkspaceCoords(clientX, clientY);
+    if (currentTool === 'eraser' && window.eraserMode === 'stroke') {
+        eraseStrokeAtPoint(pos.x, pos.y);
+        return;
+    }
+    if (!currentStroke) return;
     const pts = currentStroke.points;
     const prev = pts[pts.length - 1];
     if (isShapeTool(currentTool)) {
@@ -469,10 +556,10 @@ function endPointerAction() {
         isPanning = false;
         return;
     }
-    if (!drawing || !currentStroke) return;
+    if (!drawing) return;
     drawing = false;
     shapeSnapshot = null;
-    if (currentStroke.tool !== 'laser') {
+    if (currentStroke && currentStroke.tool !== 'laser') {
         strokeHistory.push(currentStroke);
         socket.emit('draw_stroke', { room_id: ROOM_ID, stroke: currentStroke });
     }
@@ -565,6 +652,12 @@ socket.on('draw_stroke', (stroke) => {
     if (isShapeTool(stroke.tool) || stroke.tool === 'text') {
         renderStrokeObject(stroke);
     }
+});
+
+socket.on('stroke_deleted', (data) => {
+    if (!data || !data.stroke_id) return;
+    strokeHistory = strokeHistory.filter(s => s.id !== data.stroke_id);
+    redrawAllHistory();
 });
 
 socket.on('board_sync', (data) => {

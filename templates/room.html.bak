@@ -34,10 +34,11 @@
 
 <div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1950px; top: 2250px;">
 <div id="media-header" class="widget-header">
-<span class="widget-title">🎬 Trạm Media Chung (YouTube / Ảnh / Video / MP3 / PDF)</span>
+<span class="widget-title">🎬 Trạm Media Đồng Bộ (YouTube / Video / MP3 / PDF)</span>
 <div class="widget-controls">
-<button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện khung tải lên">🔽 Ẩn/Hiện Nhập</button>
-<button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Media đang phát thành thẻ trên mặt bảng">📌 Ghim lên bảng</button>
+<button type="button" id="btn-sync-now" class="widget-btn" title="Đồng bộ thời gian phát với phòng">🔄 Đồng bộ</button>
+<button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện khung tải lên">🔽 Nhập</button>
+<button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Media thành thẻ trên bảng">📌 Ghim</button>
 <button type="button" id="btn-clear-media" class="widget-btn" title="Dừng phát">🗑️ Dừng</button>
 <button type="button" id="media-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
 <button type="button" id="media-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
@@ -46,8 +47,8 @@
 <div id="media-body" class="widget-body">
 <div id="media-controls-box" class="media-controls">
 <div class="media-input-row">
-<input type="text" id="youtube-link" placeholder="Dán link YouTube (watch, shorts, youtu.be) để xem chung...">
-<button type="button" id="btn-play-yt">▶️ Phát YouTube</button>
+<input type="text" id="youtube-link" placeholder="Dán link YouTube (watch, shorts, youtu.be) để phát đồng bộ...">
+<button type="button" id="btn-play-yt">▶️ Phát YT</button>
 </div>
 <div class="media-input-row upload-row">
 <input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,application/pdf">
@@ -58,9 +59,10 @@
 </div>
 <div id="media-content" class="media-content">
 <div class="empty-media-box">
-<p class="empty-media-text">🎬 Chọn <b>Ảnh, Video, Nhạc MP3, Tài liệu PDF</b> hoặc dán link <b>YouTube</b> ở trên để mọi người trong phòng cùng xem và nghe trực tiếp!</p>
+<p class="empty-media-text">🎬 Chọn <b>Ảnh, Video, Nhạc MP3, Tài liệu PDF</b> hoặc dán link <b>YouTube</b> ở trên để mọi người cùng xem và nghe đồng bộ!</p>
 </div>
 </div>
+<button type="button" id="btn-unlock-audio" class="unlock-audio-banner" style="display: none;">🔊 Chạm vào đây để Bật tiếng & Đồng bộ Video với phòng</button>
 </div>
 </div>
 
@@ -68,13 +70,14 @@
 </div>
 
 <div id="ui-layer">
-<div class="room-info-bar glass-effect">
-<span class="room-badge" title="Mã phòng hiện tại">🏠 <b>{{ room_id }}</b></span>
-<button type="button" id="btn-copy-link" class="mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
-<span id="online-badge" class="online-badge" title="Số người đang trực tuyến">👥 <b id="online-count">1</b></span>
+<div class="room-info-bar">
+<span class="info-pill room-badge" title="Mã phòng hiện tại">🏠 <b>{{ room_id }}</b></span>
+<button type="button" id="btn-edit-name" class="info-pill user-pill" title="Nhấn để đổi tên hiển thị của bạn">👤 <b id="current-user-display">{{ username if username else 'Nhập tên...' }}</b> ✏️</button>
+<button type="button" id="btn-copy-link" class="info-pill mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
+<span id="online-badge" class="info-pill online-badge" title="Số người đang trực tuyến">👥 <b id="online-count">1</b></span>
 </div>
 
-<div class="toolbar top-toolbar glass-effect">
+<div class="toolbar top-toolbar">
 <button type="button" id="tool-pan" class="tool-btn" title="Kéo bảng (Hoặc giữ Space / Chuột phải)">✋<span>Kéo</span></button>
 <button type="button" id="tool-pen" class="tool-btn active" title="Bút vẽ mượt">✏️<span>Bút</span></button>
 <button type="button" id="tool-highlighter" class="tool-btn" title="Bút dạ quang">🖍️<span>Dạ quang</span></button>
@@ -88,7 +91,6 @@
 <button type="button" id="tool-circle" class="tool-btn" title="Vẽ hình tròn">◯<span>Tròn</span></button>
 <button type="button" id="tool-text" class="tool-btn" title="Chèn chữ lên bảng">🔤<span>Chữ</span></button>
 <button type="button" id="tool-eraser" class="tool-btn" title="Tẩy nét vẽ">🧽<span>Tẩy</span></button>
-<div class="divider"></div>
 <div class="brush-controls">
 <input type="color" id="color-picker" value="#00d2ff" title="Chọn màu tùy ý">
 <div class="quick-colors">
@@ -101,18 +103,16 @@
 <input type="range" id="line-width" min="1" max="50" value="4" title="Độ dày nét vẽ">
 <span id="line-width-val" class="width-label">4px</span>
 </div>
-<div class="divider"></div>
 <button type="button" id="tool-undo" class="icon-action-btn" title="Hoàn tác nét vẽ (Ctrl+Z)">↩️<span>Hoàn tác</span></button>
 <button type="button" id="tool-clear" class="danger-btn" title="Xóa toàn bộ nét vẽ">🗑️<span>Xóa bảng</span></button>
 </div>
 
-<div id="bottom-dock" class="bottom-dock glass-effect">
+<div id="bottom-dock" class="bottom-dock">
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
 <button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Đăng Ảnh, Video, Nhạc MP3 hoặc PDF lên xem chung">📤<span>Đăng Ảnh/Video/PDF</span></button>
 <button type="button" id="tool-media" class="dock-btn" title="Bật/Tắt Trạm xem Video & YouTube chung">🎬<span>Xem Video / YT</span></button>
 <button type="button" id="tool-xo" class="dock-btn" title="Bật/Tắt bàn cờ Caro XO 20x20">🎮<span>Cờ Caro XO</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
-<div class="divider"></div>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
 <button type="button" id="tool-export" class="dock-btn secondary" title="Lưu ảnh chụp bảng">💾<span>Lưu ảnh</span></button>
 </div>
@@ -185,13 +185,25 @@
 </div>
 </div>
 
+<div id="name-modal" class="name-modal-backdrop" style="display: none;">
+<div class="name-modal-box glass-effect">
+<h3>👋 Chào mừng vào phòng <span style="color:#00d2ff;">{{ room_id }}</span></h3>
+<p>Vui lòng nhập tên hiển thị của bạn để mọi người cùng nhận diện khi vẽ, bấm tay và trò chuyện:</p>
+<form id="name-modal-form">
+<input type="text" id="name-modal-input" placeholder="Nhập tên của bạn (VD: Minh, Lan...)" required maxlength="35" autocomplete="off">
+<button type="submit">Xác nhận & Vào phòng</button>
+</form>
+</div>
+</div>
+
 <button type="button" id="fab-focus" class="fab-btn focus-fab glass-effect" title="Ẩn/Hiện thanh công cụ">👁️</button>
 <div id="toast-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
 <script>
 const ROOM_ID = "{{ room_id }}";
-const USERNAME = "{{ username }}";
+window.USERNAME = "{{ username }}";
 </script>
 <script src="/static/js/socket_client.js"></script>
 <script src="/static/js/pointer.js"></script>

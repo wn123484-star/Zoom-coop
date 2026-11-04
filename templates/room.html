@@ -34,12 +34,12 @@
 
 <div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1950px; top: 2250px;">
 <div id="media-header" class="widget-header">
-<span class="widget-title">🎬 Trạm Media Đồng Bộ (YouTube / Video / MP3 / PDF)</span>
+<span class="widget-title">🎬 Trạm Media & Tài Liệu (YT / Ảnh / Video / Excel / Word / HTML / PDF)</span>
 <div class="widget-controls">
 <button type="button" id="btn-sync-now" class="widget-btn" title="Đồng bộ thời gian phát với phòng">🔄 Đồng bộ</button>
 <button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện khung tải lên">🔽 Nhập</button>
-<button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Media thành thẻ trên bảng">📌 Ghim</button>
-<button type="button" id="btn-clear-media" class="widget-btn" title="Dừng phát">🗑️ Dừng</button>
+<button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Media/Tài liệu đang mở thành thẻ trên bảng">📌 Ghim lên bảng</button>
+<button type="button" id="btn-clear-media" class="widget-btn" title="Đóng nội dung đang mở">🗑️ Đóng</button>
 <button type="button" id="media-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
 <button type="button" id="media-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
 </div>
@@ -51,15 +51,15 @@
 <button type="button" id="btn-play-yt">▶️ Phát YT</button>
 </div>
 <div class="media-input-row upload-row">
-<input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,application/pdf">
-<button type="button" id="btn-upload">📤 Phát Chung</button>
-<button type="button" id="btn-upload-board" class="pin-btn" title="Tải tệp lên và đặt trực tiếp lên mặt bảng">📌 Đặt lên Bảng</button>
+<input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.html,.htm,.txt,.md,.json,.py,.js,.css">
+<button type="button" id="btn-upload">📤 Mở Xem Chung</button>
+<button type="button" id="btn-upload-board" class="pin-btn" title="Tải tệp lên và đặt trực tiếp thành thẻ trên mặt bảng">📌 Đặt lên Bảng</button>
 </div>
 <div id="media-history-bar" class="media-history-bar"></div>
 </div>
 <div id="media-content" class="media-content">
 <div class="empty-media-box">
-<p class="empty-media-text">🎬 Chọn <b>Ảnh, Video, Nhạc MP3, Tài liệu PDF</b> hoặc dán link <b>YouTube</b> ở trên để mọi người cùng xem và nghe đồng bộ!</p>
+<p class="empty-media-text">📂 Hỗ trợ hiển thị trực tiếp: <b>Ảnh, Video, Nhạc MP3, PDF, Bảng tính Excel (.xlsx/.csv), Word (.docx), Web HTML (.html), Văn bản/Code</b> và <b>YouTube</b>!</p>
 </div>
 </div>
 <button type="button" id="btn-unlock-audio" class="unlock-audio-banner" style="display: none;">🔊 Chạm vào đây để Bật tiếng & Đồng bộ Video với phòng</button>
@@ -70,6 +70,7 @@
 </div>
 
 <div id="ui-layer">
+<div class="top-bar-container">
 <div class="room-info-bar">
 <span class="info-pill room-badge" title="Mã phòng hiện tại">🏠 <b>{{ room_id }}</b></span>
 <button type="button" id="btn-edit-name" class="info-pill user-pill" title="Nhấn để đổi tên hiển thị của bạn">👤 <b id="current-user-display">{{ username if username else 'Nhập tên...' }}</b> ✏️</button>
@@ -90,7 +91,7 @@
 <button type="button" id="tool-rect" class="tool-btn" title="Vẽ khung chữ nhật">▭<span>Khung</span></button>
 <button type="button" id="tool-circle" class="tool-btn" title="Vẽ hình tròn">◯<span>Tròn</span></button>
 <button type="button" id="tool-text" class="tool-btn" title="Chèn chữ lên bảng">🔤<span>Chữ</span></button>
-<button type="button" id="tool-eraser" class="tool-btn" title="Tẩy nét vẽ">🧽<span>Tẩy</span></button>
+<button type="button" id="tool-eraser" class="tool-btn" title="Tẩy (Chỉnh tẩy điểm / tẩy nét trong Cài đặt ⚙️)">🧽<span id="eraser-btn-label">Tẩy điểm</span></button>
 <div class="brush-controls">
 <input type="color" id="color-picker" value="#00d2ff" title="Chọn màu tùy ý">
 <div class="quick-colors">
@@ -107,17 +108,20 @@
 <button type="button" id="tool-clear" class="danger-btn" title="Xóa toàn bộ nét vẽ">🗑️<span>Xóa bảng</span></button>
 </div>
 
+<div class="top-right-actions">
+<button type="button" id="fab-settings" class="fab-btn glass-effect" title="Tùy chỉnh giao diện & Loại tẩy">⚙️</button>
+</div>
+</div>
+
 <div id="bottom-dock" class="bottom-dock">
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
-<button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Đăng Ảnh, Video, Nhạc MP3 hoặc PDF lên xem chung">📤<span>Đăng Ảnh/Video/PDF</span></button>
-<button type="button" id="tool-media" class="dock-btn" title="Bật/Tắt Trạm xem Video & YouTube chung">🎬<span>Xem Video / YT</span></button>
+<button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn Ảnh, Video, PDF, Excel, Word, HTML từ máy để hiển thị ngay">📤<span>Đăng Ảnh / Tài Liệu</span></button>
+<button type="button" id="tool-media" class="dock-btn" title="Bật/Tắt Trạm Media & Tài liệu chung">🎬<span>Trạm Media / YT</span></button>
 <button type="button" id="tool-xo" class="dock-btn" title="Bật/Tắt bàn cờ Caro XO 20x20">🎮<span>Cờ Caro XO</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
 <button type="button" id="tool-export" class="dock-btn secondary" title="Lưu ảnh chụp bảng">💾<span>Lưu ảnh</span></button>
 </div>
-
-<button type="button" id="fab-settings" class="fab-btn glass-effect" title="Tùy chỉnh giao diện">⚙️</button>
 
 <div id="settings-overlay" class="settings-overlay glass-effect">
 <div class="settings-header">
@@ -125,6 +129,13 @@
 <button type="button" id="close-settings" class="widget-btn close" title="Đóng">✕</button>
 </div>
 <div class="settings-body">
+<div class="setting-group">
+<label>Chế độ Công cụ Tẩy (Eraser)</label>
+<div class="bg-options">
+<button type="button" class="eraser-opt-btn active" data-eraser="point">🧽 Tẩy theo điểm</button>
+<button type="button" class="eraser-opt-btn" data-eraser="stroke">✂️ Tẩy theo nét</button>
+</div>
+</div>
 <div class="setting-group">
 <label>Hình nền Đặc biệt</label>
 <div class="bg-options">
@@ -190,7 +201,7 @@
 <h3>👋 Chào mừng vào phòng <span style="color:#00d2ff;">{{ room_id }}</span></h3>
 <p>Vui lòng nhập tên hiển thị của bạn để mọi người cùng nhận diện khi vẽ, bấm tay và trò chuyện:</p>
 <form id="name-modal-form">
-<input type="text" id="name-modal-input" placeholder="Nhập tên của bạn (VD: Minh, Lan...)" required maxlength="35" autocomplete="off">
+<input type="text" id="name-modal-input" placeholder="Nhập tên của bạn (VD: William, Minh...)" required maxlength="35" autocomplete="off">
 <button type="submit">Xác nhận & Vào phòng</button>
 </form>
 </div>
@@ -200,6 +211,8 @@
 <div id="toast-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
 const ROOM_ID = "{{ room_id }}";

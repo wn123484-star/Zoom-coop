@@ -5,7 +5,7 @@ import time
 import threading
 import uuid
 import mimetypes
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory
 from flask_socketio import SocketIO, join_room, emit
 from dotenv import load_dotenv
 
@@ -69,14 +69,22 @@ def default_room_state():
 def detect_media_kind(filename, content_type):
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     ct = (content_type or '').lower()
-    if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg') or ct.startswith('image/'):
+    if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico') or ct.startswith('image/'):
         return 'image'
-    if ext in ('mp4', 'webm', 'ogg', 'mov', 'mkv') or ct.startswith('video/'):
+    if ext in ('mp4', 'webm', 'ogg', 'mov', 'mkv', 'm4v') or ct.startswith('video/'):
         return 'video'
     if ext in ('mp3', 'wav', 'flac', 'aac', 'm4a', 'oga') or ct.startswith('audio/'):
         return 'audio'
     if ext == 'pdf' or ct == 'application/pdf':
         return 'pdf'
+    if ext in ('xlsx', 'xls', 'csv') or 'spreadsheet' in ct or 'excel' in ct or ct == 'text/csv':
+        return 'excel'
+    if ext in ('docx', 'doc') or 'wordprocessingml' in ct or 'msword' in ct:
+        return 'word'
+    if ext in ('html', 'htm') or ct == 'text/html':
+        return 'html'
+    if ext in ('txt', 'md', 'json', 'py', 'js', 'css', 'xml', 'log', 'yml', 'yaml', 'ini', 'sql', 'sh') or ct.startswith('text/'):
+        return 'text'
     return 'file'
 
 def compute_live_media(media_obj):
@@ -220,9 +228,15 @@ init_db()
 saver_thread = threading.Thread(target=flush_dirty_rooms, daemon=True)
 saver_thread.start()
 
+@app.after_request
+def add_header(response):
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
 @app.before_request
 def check_bans():
-    if request.path.startswith('/static/'):
+    if request.path.startswith('/static/') or request.path.startswith('/uploads/'):
         return
     conn = get_db()
     try:
@@ -242,6 +256,11 @@ def index():
 def room(room_id):
     raw_name = request.args.get('name', '').strip()
     return render_template('room.html', room_id=room_id, username=raw_name)
+
+@app.route('/uploads/<path:filename>')
+def serve_uploaded_file(filename):
+    upload_dir = os.path.join(app.root_path, 'static', 'uploads')
+    return send_from_directory(upload_dir, filename)
 
 @app.route('/secret-admin', methods=['GET', 'POST'])
 def admin():
@@ -273,8 +292,9 @@ def admin_delete_room(room_id):
     if state:
         for item in state.get('media_list', []):
             url = item.get('url', '')
-            if url.startswith('/static/uploads/'):
-                rel_path = url.lstrip('/')
+            if '/uploads/' in url:
+                fname = url.rsplit('/', 1)[-1]
+                rel_path = os.path.join('static', 'uploads', fname)
                 if os.path.exists(rel_path):
                     try:
                         os.remove(rel_path)
@@ -298,20 +318,21 @@ def upload_file():
     file = request.files['file']
     if not file or file.filename == '':
         return jsonify({'error': 'Chưa chọn tệp'}), 400
-    os.makedirs('static/uploads', exist_ok=True)
+    upload_dir = os.path.join(app.root_path, 'static', 'uploads')
+    os.makedirs(upload_dir, exist_ok=True)
     orig_name = file.filename
     ext = orig_name.rsplit('.', 1)[-1].lower() if '.' in orig_name else 'bin'
     filename = f"{uuid.uuid4().hex}.{ext}"
-    filepath = os.path.join('static/uploads', filename)
+    filepath = os.path.join(upload_dir, filename)
     file.save(filepath)
-    guessed_mime, _ = mimetypes.guess_type(filepath)
+    guessed_mime, _ = mimetypes.guess_type(orig_name)
     content_type = file.content_type or guessed_mime or 'application/octet-stream'
     kind = detect_media_kind(orig_name, content_type)
     return jsonify({
-        'url': f'/static/uploads/{filename}',
+        'url': f'/uploads/{filename}',
         'type': content_type,
         'kind': kind,
-        'name': orig_name[:60]
+        'name': orig_name[:70]
     })
 
 @socketio.on('join_room')
@@ -397,6 +418,19 @@ def handle_draw_stroke(data):
         state['draw_history'] = state['draw_history'][-1000:]
     mark_room_dirty(room_id)
     emit('draw_stroke', stroke, to=room_id, include_self=False)
+
+@socketio.on('delete_stroke')
+def handle_delete_stroke(data):
+    room_id = data.get('room_id')
+    stroke_id = data.get('stroke_id')
+    if not room_id or not stroke_id:
+        return
+    state = get_room_state(room_id)
+    before_len = len(state['draw_history'])
+    state['draw_history'] = [s for s in state['draw_history'] if s.get('id') != stroke_id]
+    if len(state['draw_history']) != before_len:
+        mark_room_dirty(room_id)
+        emit('stroke_deleted', {'stroke_id': stroke_id}, to=room_id, include_self=False)
 
 @socketio.on('undo_stroke')
 def handle_undo_stroke(data):
@@ -605,7 +639,7 @@ def handle_media_share(data):
         'type': data.get('type'),
         'kind': data.get('kind') or detect_media_kind(data.get('name', ''), data.get('type', '')),
         'url': data.get('url'),
-        'name': data.get('name') or ('YouTube Video' if data.get('type') == 'youtube' else 'Media File'),
+        'name': data.get('name') or ('YouTube Video' if data.get('type') == 'youtube' else 'Tài liệu / Media'),
         'sender': data.get('sender', 'Thành viên'),
         'time': time.strftime('%H:%M'),
         'playing': True,
@@ -618,11 +652,13 @@ def handle_media_share(data):
         state['media_list'].append(item)
         if len(state['media_list']) > 30:
             state['media_list'] = state['media_list'][-30:]
+    if isinstance(data.get('x'), (int, float)) and isinstance(data.get('y'), (int, float)):
+        state['widgets']['media']['x'] = data['x']
+        state['widgets']['media']['y'] = data['y']
     state['widgets']['media']['open'] = True
     state['widgets']['media']['minimized'] = False
     mark_room_dirty(room_id)
-    emit('widget_updated', {'widget': 'media', 'state': state['widgets']['media']}, to=room_id)
-    emit('media_shared', {'media': item, 'media_list': state['media_list'][-30:]}, to=room_id)
+    emit('media_shared', {'media': item, 'media_list': state['media_list'][-30:], 'widget_state': state['widgets']['media']}, to=room_id)
 
 @socketio.on('media_playback_sync')
 def handle_media_playback_sync(data):
