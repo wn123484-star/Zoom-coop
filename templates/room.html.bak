@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SyncSpace - Phòng {{ room_id }}</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="fade-in">
+<div id="dynamic-bg" class="bg-magical"></div>
+
+<div id="workspace">
+<canvas id="board" width="5000" height="5000"></canvas>
+<div id="sticky-container"></div>
+<div id="cursors-container"></div>
+</div>
+
+<div id="ui-layer">
+<div class="room-info-bar glass-effect">
+<span class="room-badge" title="Mã phòng hiện tại">🏠 <b>{{ room_id }}</b></span>
+<button id="btn-copy-link" class="mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
+<span id="online-badge" class="online-badge" title="Số người đang trực tuyến">👥 <b id="online-count">1</b></span>
+</div>
+
+<div class="toolbar top-toolbar glass-effect">
+<button id="tool-pan" class="tool-btn" title="Kéo bảng (Hoặc giữ phím Space)">✋<span>Kéo</span></button>
+<button id="tool-pen" class="tool-btn active" title="Bút vẽ tự do">✏️<span>Bút</span></button>
+<button id="tool-highlighter" class="tool-btn" title="Bút dạ quang">🖍️<span>Dạ quang</span></button>
+<button id="tool-line" class="tool-btn" title="Vẽ đường thẳng">📏<span>Đường</span></button>
+<button id="tool-rect" class="tool-btn" title="Vẽ hình chữ nhật">▭<span>Khung</span></button>
+<button id="tool-circle" class="tool-btn" title="Vẽ hình tròn">◯<span>Tròn</span></button>
+<button id="tool-eraser" class="tool-btn" title="Tẩy nét vẽ">🧽<span>Tẩy</span></button>
+<div class="divider"></div>
+<div class="brush-controls">
+<input type="color" id="color-picker" value="#00d2ff" title="Chọn màu sắc">
+<input type="range" id="line-width" min="1" max="50" value="4" title="Độ dày nét vẽ">
+<span id="line-width-val" class="width-label">4px</span>
+</div>
+<div class="divider"></div>
+<button id="tool-undo" class="icon-action-btn" title="Hoàn tác nét vẽ cuối (Ctrl+Z)">↩️<span>Hoàn tác</span></button>
+<button id="tool-center" class="icon-action-btn" title="Đưa bảng về vị trí trung tâm">🎯<span>Về tâm</span></button>
+<button id="tool-sticky" class="action-btn" title="Tạo ghi chú dán mới">📝<span>Ghi chú</span></button>
+<button id="tool-media" class="action-btn" title="Bật/Tắt trạm phát Media">🎬<span>Media</span></button>
+<button id="tool-xo" class="action-btn" title="Bật/Tắt bàn cờ Caro 20x20">🎮<span>Caro</span></button>
+<button id="tool-chat" class="action-btn" title="Bật/Tắt khung trò chuyện">💬<span>Chat</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
+<div class="divider"></div>
+<button id="tool-export" class="icon-action-btn" title="Tải ảnh chụp bảng về máy">💾<span>Lưu ảnh</span></button>
+<button id="tool-clear" class="danger-btn" title="Xóa toàn bộ nét vẽ trên bảng">🗑️<span>Xóa</span></button>
+</div>
+
+<button id="fab-settings" class="fab-btn glass-effect" title="Tùy chỉnh không gian">⚙️</button>
+
+<div id="settings-overlay" class="settings-overlay glass-effect">
+<div class="settings-header">
+<span>⚙️ Tùy chỉnh Không gian</span>
+<button id="close-settings" class="icon-btn" title="Đóng">✕</button>
+</div>
+<div class="settings-body">
+<div class="setting-group">
+<label>Hình nền Đặc biệt</label>
+<div class="bg-options">
+<button class="bg-opt-btn active" data-bg="bg-magical">✨ Huyền ảo</button>
+<button class="bg-opt-btn" data-bg="bg-cyberpunk">🌆 Cyberpunk</button>
+<button class="bg-opt-btn" data-bg="bg-stars">🌌 Trời sao</button>
+</div>
+</div>
+<div class="setting-group">
+<label>Hình nền Cơ bản</label>
+<div class="bg-options">
+<button class="bg-opt-btn" data-bg="bg-dots">Dark Dots</button>
+<button class="bg-opt-btn" data-bg="bg-grid">Dark Grid</button>
+<button class="bg-opt-btn" data-bg="bg-solid">Dark Solid</button>
+<button class="bg-opt-btn" data-bg="bg-light-dots">Light Dots</button>
+<button class="bg-opt-btn" data-bg="bg-light-grid">Light Grid</button>
+</div>
+</div>
+<div class="setting-group">
+<label>Hiển thị & Đồng bộ</label>
+<div class="toggle-row">
+<span>Hiện con trỏ người khác</span>
+<input type="checkbox" id="toggle-cursors" checked>
+</div>
+<div class="toggle-row">
+<span>Hiện tên người dùng</span>
+<input type="checkbox" id="toggle-names" checked>
+</div>
+<div class="toggle-row">
+<span>Đồng bộ nền cho cả phòng</span>
+<input type="checkbox" id="toggle-sync-bg" checked>
+</div>
+</div>
+</div>
+</div>
+
+<div id="xo-container" class="floating-widget xo-widget glass-effect" style="display: none;">
+<div id="xo-header" class="widget-header">
+<span class="widget-title">🎮 Caro XO 20x20</span>
+<div class="widget-controls">
+<button id="xo-reset-btn" class="widget-btn" title="Tạo ván mới">🔄 Ván mới</button>
+<button id="xo-min-btn" class="widget-btn" title="Thu gọn/Mở rộng">—</button>
+<button id="xo-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
+</div>
+</div>
+<div id="xo-body" class="widget-body">
+<div id="xo-status" class="xo-status">Sẵn sàng</div>
+<div class="xo-board-wrapper">
+<div id="xo-board" class="xo-board"></div>
+</div>
+</div>
+</div>
+
+<div id="media-container" class="floating-widget media-widget glass-effect" style="display: none;">
+<div id="media-header" class="widget-header">
+<span class="widget-title">🎬 Media Hub</span>
+<div class="widget-controls">
+<button id="btn-toggle-media-controls" class="widget-btn" title="Ẩn/Hiện thanh nhập link">🔽 Ẩn nhập</button>
+<button id="btn-clear-media" class="widget-btn" title="Dừng và xóa Media hiện tại">🗑️ Gỡ</button>
+<button id="media-min-btn" class="widget-btn" title="Thu gọn/Mở rộng">—</button>
+<button id="media-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
+</div>
+</div>
+<div id="media-body" class="widget-body">
+<div id="media-controls-box" class="media-controls">
+<div class="media-input-row">
+<input type="text" id="youtube-link" placeholder="Dán link YouTube (watch, shorts, youtu.be)...">
+<button id="btn-play-yt">Phát YT</button>
+</div>
+<div class="media-input-row">
+<input type="file" id="file-upload" accept="image/*,video/*,audio/*,application/pdf">
+<button id="btn-upload">Tải lên</button>
+</div>
+</div>
+<div id="media-content" class="media-content">
+<p class="empty-media-text">Chia sẻ video YouTube, ảnh, nhạc hoặc PDF cùng mọi người trong phòng</p>
+</div>
+</div>
+</div>
+
+<div id="chat-container" class="floating-widget chat-widget glass-effect" style="display: none;">
+<div id="chat-header" class="widget-header">
+<span class="widget-title">💬 Trò chuyện Phòng</span>
+<div class="widget-controls">
+<button id="chat-min-btn" class="widget-btn" title="Thu gọn/Mở rộng">—</button>
+<button id="chat-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
+</div>
+</div>
+<div id="chat-body" class="widget-body chat-body">
+<div id="chat-messages" class="chat-messages"></div>
+<form id="chat-form" class="chat-input-row">
+<input type="text" id="chat-input" placeholder="Nhập tin nhắn..." autocomplete="off">
+<button type="submit">Gửi</button>
+</form>
+</div>
+</div>
+
+<div class="bottom-status-bar glass-effect">
+<span id="zoom-indicator">100%</span>
+</div>
+</div>
+
+<button id="fab-focus" class="fab-btn focus-fab glass-effect" title="Ẩn/Hiện thanh công cụ (Chế độ tập trung)">👁️</button>
+<div id="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script>
+const ROOM_ID = "{{ room_id }}";
+const USERNAME = "{{ username }}";
+</script>
+<script src="/static/js/socket_client.js"></script>
+<script src="/static/js/pointer.js"></script>
+<script src="/static/js/canvas.js"></script>
+<script src="/static/js/sticky.js"></script>
+<script src="/static/js/xo.js"></script>
+<script src="/static/js/media.js"></script>
+<script src="/static/js/ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+const xoContainer = document.getElementById('xo-container');
+const xoBoard = document.getElementById('xo-board');
+const xoStatus = document.getElementById('xo-status');
+const xoBtn = document.getElementById('tool-xo');
+const xoResetBtn = document.getElementById('xo-reset-btn');
+const xoMinBtn = document.getElementById('xo-min-btn');
+const xoCloseBtn = document.getElementById('xo-close-btn');
+const xoHeader = document.getElementById('xo-header');
+
+let isXoDragging = false;
+let xoDragOffsetX = 0;
+let xoDragOffsetY = 0;
+
+xoBtn.addEventListener('click', () => {
+    if (xoContainer.style.display === 'none' || !xoContainer.style.display) {
+        xoContainer.style.display = 'flex';
+        xoContainer.classList.remove('minimized');
+        xoBtn.classList.add('active');
+    } else {
+        xoContainer.style.display = 'none';
+        xoBtn.classList.remove('active');
+    }
+});
+
+xoMinBtn.addEventListener('click', () => {
+    xoContainer.classList.toggle('minimized');
+});
+
+xoCloseBtn.addEventListener('click', () => {
+    xoContainer.style.display = 'none';
+    xoBtn.classList.remove('active');
+});
+
+xoHeader.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button')) return;
+    isXoDragging = true;
+    const rect = xoContainer.getBoundingClientRect();
+    xoDragOffsetX = e.clientX - rect.left;
+    xoDragOffsetY = e.clientY - rect.top;
+    xoContainer.style.right = 'auto';
+    xoContainer.style.left = rect.left + 'px';
+    xoContainer.style.top = rect.top + 'px';
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!isXoDragging) return;
+    const nx = Math.max(0, Math.min(window.innerWidth - 120, e.clientX - xoDragOffsetX));
+    const ny = Math.max(0, Math.min(window.innerHeight - 60, e.clientY - xoDragOffsetY));
+    xoContainer.style.left = nx + 'px';
+    xoContainer.style.top = ny + 'px';
+});
+
+window.addEventListener('mouseup', () => {
+    isXoDragging = false;
+});
+
+xoResetBtn.addEventListener('click', () => {
+    socket.emit('xo_manual_reset', { room_id: ROOM_ID });
+});
+
+function initXoGrid() {
+    xoBoard.innerHTML = '';
+    for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 20; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'xo-cell';
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+            cell.addEventListener('click', () => {
+                socket.emit('xo_click', { room_id: ROOM_ID, row: r, col: c, username: USERNAME });
+            });
+            xoBoard.appendChild(cell);
+        }
+    }
+}
+initXoGrid();
+
+function renderXoGame(game, notice) {
+    if (!game || !game.board) return;
+    const cells = xoBoard.getElementsByClassName('xo-cell');
+    const winningSet = new Set();
+    if (game.winning_line && game.winning_line.length > 0) {
+        game.winning_line.forEach(pt => winningSet.add(pt[0] + '_' + pt[1]));
+    }
+    let hasMoves = false;
+    for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 20; c++) {
+            const idx = r * 20 + c;
+            const cell = cells[idx];
+            if (!cell) continue;
+            const val = game.board[r][c];
+            if (val) hasMoves = true;
+            cell.className = 'xo-cell';
+            if (val === 'X') cell.classList.add('x');
+            if (val === 'O') cell.classList.add('o');
+            if (winningSet.has(r + '_' + c)) cell.classList.add('win');
+            cell.innerText = val;
+        }
+    }
+    const pX = (game.players && game.players.X) ? game.players.X : 'Chờ...';
+    const pO = (game.players && game.players.O) ? game.players.O : 'Chờ...';
+    let statusHTML = `<span style="color:#00d2ff">X: ${pX}</span> vs <span style="color:#ff4757">O: ${pO}</span>`;
+    if (game.status === 'playing') {
+        const turnColor = game.turn === 'X' ? '#00d2ff' : '#ff4757';
+        statusHTML += ` | Lượt: <b style="color:${turnColor}">${game.turn}</b>`;
+    } else if (game.status === 'finished') {
+        statusHTML += ` | <b style="color:#feca57">🏆 ${game.winner_name} THẮNG!</b>`;
+    } else if (game.status === 'draw') {
+        statusHTML += ` | <b style="color:#aaa">HÒA!</b>`;
+    }
+    if (notice) {
+        statusHTML += `<br><small style="color:#feca57; font-size:11px;">${notice}</small>`;
+    }
+    xoStatus.innerHTML = statusHTML;
+    if (hasMoves && xoContainer.style.display === 'none') {
+        xoContainer.style.display = 'flex';
+        xoBtn.classList.add('active');
+    }
+}
+
+window.loadXoState = function(game) {
+    renderXoGame(game, null);
+};
+
+socket.on('xo_update', (data) => {
+    if (data && data.game) {
+        renderXoGame(data.game, data.notice);
+    }
+});

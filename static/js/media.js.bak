@@ -1,0 +1,175 @@
+const mediaContainer = document.getElementById('media-container');
+const mediaBtn = document.getElementById('tool-media');
+const mediaMinBtn = document.getElementById('media-min-btn');
+const mediaCloseBtn = document.getElementById('media-close-btn');
+const btnClearMedia = document.getElementById('btn-clear-media');
+const mediaHeader = document.getElementById('media-header');
+const mediaContent = document.getElementById('media-content');
+const mediaControlsBox = document.getElementById('media-controls-box');
+const btnToggleControls = document.getElementById('btn-toggle-media-controls');
+
+let isMediaDragging = false;
+let mediaOffsetX = 0;
+let mediaOffsetY = 0;
+
+btnToggleControls.addEventListener('click', () => {
+    if (mediaControlsBox.classList.contains('collapsed')) {
+        mediaControlsBox.classList.remove('collapsed');
+        btnToggleControls.innerText = '🔽 Ẩn nhập';
+    } else {
+        mediaControlsBox.classList.add('collapsed');
+        btnToggleControls.innerText = '🔼 Hiện nhập';
+    }
+});
+
+mediaBtn.addEventListener('click', () => {
+    if (mediaContainer.style.display === 'none' || !mediaContainer.style.display) {
+        mediaContainer.style.display = 'flex';
+        mediaContainer.classList.remove('minimized');
+        mediaBtn.classList.add('active');
+    } else {
+        mediaContainer.style.display = 'none';
+        mediaBtn.classList.remove('active');
+    }
+});
+
+mediaMinBtn.addEventListener('click', () => {
+    mediaContainer.classList.toggle('minimized');
+});
+
+mediaCloseBtn.addEventListener('click', () => {
+    mediaContainer.style.display = 'none';
+    mediaBtn.classList.remove('active');
+});
+
+btnClearMedia.addEventListener('click', () => {
+    clearMediaView();
+    socket.emit('media_share', { room_id: ROOM_ID, type: 'clear' });
+});
+
+mediaHeader.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button')) return;
+    isMediaDragging = true;
+    const rect = mediaContainer.getBoundingClientRect();
+    mediaOffsetX = e.clientX - rect.left;
+    mediaOffsetY = e.clientY - rect.top;
+    mediaContainer.style.left = rect.left + 'px';
+    mediaContainer.style.top = rect.top + 'px';
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!isMediaDragging) return;
+    const nx = Math.max(0, Math.min(window.innerWidth - 120, e.clientX - mediaOffsetX));
+    const ny = Math.max(0, Math.min(window.innerHeight - 60, e.clientY - mediaOffsetY));
+    mediaContainer.style.left = nx + 'px';
+    mediaContainer.style.top = ny + 'px';
+});
+
+window.addEventListener('mouseup', () => {
+    isMediaDragging = false;
+});
+
+function extractYoutubeId(url) {
+    if (!url) return null;
+    const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+    const match = url.match(regExp);
+    return match ? match[1] : null;
+}
+
+function clearMediaView() {
+    mediaContent.innerHTML = '<p class="empty-media-text">Chia sẻ video YouTube, ảnh, nhạc hoặc PDF cùng mọi người trong phòng</p>';
+    mediaControlsBox.classList.remove('collapsed');
+    btnToggleControls.innerText = '🔽 Ẩn nhập';
+}
+
+function renderMedia(type, url) {
+    if (!type || type === 'clear' || !url) {
+        clearMediaView();
+        return;
+    }
+    if (type === 'youtube') {
+        const videoId = extractYoutubeId(url);
+        if (!videoId) {
+            if (window.showToast) window.showToast('Link YouTube không hợp lệ!');
+            return;
+        }
+        mediaContent.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    } else if (type.startsWith('image/')) {
+        mediaContent.innerHTML = `<img src="${url}" alt="Shared Image">`;
+    } else if (type.startsWith('video/')) {
+        mediaContent.innerHTML = `<video src="${url}" controls autoplay></video>`;
+    } else if (type.startsWith('audio/')) {
+        mediaContent.innerHTML = `<audio src="${url}" controls autoplay style="width:90%; height:48px;"></audio>`;
+    } else if (type === 'application/pdf') {
+        mediaContent.innerHTML = `<embed src="${url}" type="application/pdf" width="100%" height="100%">`;
+    }
+    mediaControlsBox.classList.add('collapsed');
+    btnToggleControls.innerText = '🔼 Hiện nhập';
+    if (mediaContainer.style.display === 'none' || !mediaContainer.style.display) {
+        mediaContainer.style.display = 'flex';
+        mediaBtn.classList.add('active');
+    }
+}
+
+window.loadMediaState = function(mediaData) {
+    if (mediaData && mediaData.url) {
+        renderMedia(mediaData.type, mediaData.url);
+    }
+};
+
+document.getElementById('btn-play-yt').addEventListener('click', () => {
+    const url = document.getElementById('youtube-link').value.trim();
+    if (!url) return;
+    const vid = extractYoutubeId(url);
+    if (!vid) {
+        if (window.showToast) window.showToast('Vui lòng nhập đúng định dạng link YouTube!');
+        return;
+    }
+    renderMedia('youtube', url);
+    socket.emit('media_share', { room_id: ROOM_ID, type: 'youtube', url: url, sender: USERNAME });
+});
+
+document.getElementById('btn-upload').addEventListener('click', () => {
+    const fileInput = document.getElementById('file-upload');
+    if (!fileInput.files || fileInput.files.length === 0) {
+        if (window.showToast) window.showToast('Vui lòng chọn tệp trước khi tải lên!');
+        return;
+    }
+    const file = fileInput.files[0];
+    if (file.size > 50 * 1024 * 1024) {
+        if (window.showToast) window.showToast('Tệp vượt quá giới hạn 50MB!');
+        return;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const uploadBtn = document.getElementById('btn-upload');
+    uploadBtn.innerText = 'Đang tải...';
+    uploadBtn.disabled = true;
+
+    fetch('/upload', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            uploadBtn.innerText = 'Tải lên';
+            uploadBtn.disabled = false;
+            if (data && data.url) {
+                renderMedia(data.type, data.url);
+                socket.emit('media_share', { room_id: ROOM_ID, type: data.type, url: data.url, sender: USERNAME });
+                fileInput.value = '';
+            } else {
+                if (window.showToast) window.showToast('Tải tệp thất bại!');
+            }
+        })
+        .catch(() => {
+            uploadBtn.innerText = 'Tải lên';
+            uploadBtn.disabled = false;
+            if (window.showToast) window.showToast('Lỗi kết nối khi tải tệp!');
+        });
+});
+
+socket.on('media_shared', (data) => {
+    if (!data || data.type === 'clear') {
+        clearMediaView();
+    } else {
+        renderMedia(data.type, data.url);
+    }
+});
