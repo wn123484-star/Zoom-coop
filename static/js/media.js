@@ -14,6 +14,7 @@ const mediaControlsBox = document.getElementById('media-controls-box');
 const mediaHistoryBar = document.getElementById('media-history-bar');
 const btnToggleControls = document.getElementById('btn-toggle-media-controls');
 const fileUploadInput = document.getElementById('file-upload');
+const btnStreamWebTab = document.getElementById('btn-stream-web-tab');
 
 const screenContainer = document.getElementById('screen-container');
 const screenHeader = document.getElementById('screen-header');
@@ -41,6 +42,7 @@ let screenWorker = null;
 let screenPeers = {};
 let viewerPeer = null;
 let webRtcRenderingConfirmed = false;
+let isEncodingFrame = false;
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -199,7 +201,7 @@ function stopLocalScreenShare(notifyRoom) {
 async function startScreenShareWithMode(mode, modeLabel) {
     if (window.closeAllPopovers) window.closeAllPopovers();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        if (window.showToast) window.showToast('Thiết bị này không hỗ trợ chia sẻ màn hình (Chỉ hỗ trợ xem)!');
+        if (window.showToast) window.showToast('Thiết bị này không hỗ trợ phát chia sẻ màn hình (Chỉ hỗ trợ xem)!');
         return;
     }
     try {
@@ -259,29 +261,35 @@ async function startScreenShareWithMode(mode, modeLabel) {
         const relayCanvas = document.createElement('canvas');
         const relayCtx = relayCanvas.getContext('2d');
         const sendOneFrame = () => {
-            if (!localScreenStream) return;
+            if (!localScreenStream || isEncodingFrame || !socket.connected) return;
             const srcVid = (hiddenCaptureVideo && hiddenCaptureVideo.videoWidth > 0) ? hiddenCaptureVideo : screenVideo;
             if (!srcVid || srcVid.videoWidth === 0) return;
-            const vw = srcVid.videoWidth;
-            const vh = srcVid.videoHeight;
-            const targetW = Math.min(920, vw);
-            const targetH = Math.max(100, Math.round((vh / vw) * targetW));
-            if (relayCanvas.width !== targetW || relayCanvas.height !== targetH) {
-                relayCanvas.width = targetW;
-                relayCanvas.height = targetH;
+            isEncodingFrame = true;
+            try {
+                const vw = srcVid.videoWidth;
+                const vh = srcVid.videoHeight;
+                const targetW = Math.min(880, vw);
+                const targetH = Math.max(100, Math.round((vh / vw) * targetW));
+                if (relayCanvas.width !== targetW || relayCanvas.height !== targetH) {
+                    relayCanvas.width = targetW;
+                    relayCanvas.height = targetH;
+                }
+                relayCtx.drawImage(srcVid, 0, 0, targetW, targetH);
+                const dataUrl = relayCanvas.toDataURL('image/jpeg', 0.52);
+                socket.emit('screen_frame', {
+                    room_id: ROOM_ID,
+                    frame: dataUrl,
+                    username: window.USERNAME || 'Thành viên',
+                    mode_label: modeLabel
+                });
+            } catch (err) {
+            } finally {
+                isEncodingFrame = false;
             }
-            relayCtx.drawImage(srcVid, 0, 0, targetW, targetH);
-            const dataUrl = relayCanvas.toDataURL('image/jpeg', 0.54);
-            socket.emit('screen_frame', {
-                room_id: ROOM_ID,
-                frame: dataUrl,
-                username: window.USERNAME || 'Thành viên',
-                mode_label: modeLabel
-            });
         };
 
         setTimeout(sendOneFrame, 200);
-        screenWorker = createBackgroundTimerWorker(160, sendOneFrame);
+        screenWorker = createBackgroundTimerWorker(180, sendOneFrame);
 
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
@@ -295,6 +303,8 @@ async function startScreenShareWithMode(mode, modeLabel) {
     }
 }
 
+window.startScreenShareWithMode = startScreenShareWithMode;
+
 document.querySelectorAll('.screen-mode-btn[data-mode]').forEach(btn => {
     window.bindSafeButton(btn, () => {
         const mode = btn.getAttribute('data-mode');
@@ -302,6 +312,17 @@ document.querySelectorAll('.screen-mode-btn[data-mode]').forEach(btn => {
         startScreenShareWithMode(mode, label);
     });
 });
+
+if (btnStreamWebTab) {
+    window.bindSafeButton(btnStreamWebTab, () => {
+        const rawUrl = document.getElementById('youtube-link').value.trim();
+        if (rawUrl) {
+            const fullUrl = (/^https?:\/\//i.test(rawUrl)) ? rawUrl : ('https://' + rawUrl);
+            window.open(fullUrl, '_blank');
+        }
+        startScreenShareWithMode('browser', 'Tab Web Đăng Nhập');
+    });
+}
 
 window.bindSafeButton(screenStopBtn, () => {
     stopLocalScreenShare(true);
@@ -525,23 +546,23 @@ function syncMediaWidgetState() {
         widget: 'media',
         x: parseFloat(mediaContainer.style.left) || 1920,
         y: parseFloat(mediaContainer.style.top) || 2220,
-        w: parseFloat(mediaContainer.style.width) || mediaContainer.offsetWidth || 580,
-        h: parseFloat(mediaContainer.style.height) || mediaContainer.offsetHeight || 440,
+        w: parseFloat(mediaContainer.style.width) || mediaContainer.offsetWidth || 600,
+        h: parseFloat(mediaContainer.style.height) || mediaContainer.offsetHeight || 460,
         open: mediaContainer.style.display !== 'none',
         minimized: mediaContainer.classList.contains('minimized')
     });
 }
 
-window.makeWidgetResizable(mediaContainer, 340, 280, true, () => {
+window.makeWidgetResizable(mediaContainer, 360, 280, true, () => {
     syncMediaWidgetState();
 });
 
 function openMediaHubAtCenter(showControls) {
     const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
-    const w = Math.min(580, window.innerWidth - 24);
+    const w = Math.min(600, window.innerWidth - 24);
     mediaContainer.style.width = w + 'px';
     mediaContainer.style.left = Math.round(center.x - w / 2) + 'px';
-    mediaContainer.style.top = Math.round(center.y - 220) + 'px';
+    mediaContainer.style.top = Math.round(center.y - 230) + 'px';
     mediaContainer.style.display = 'flex';
     mediaContainer.classList.remove('minimized');
     if (showControls) {
@@ -557,7 +578,7 @@ window.bindSafeButton(btnToggleControls, () => {
 
 window.bindSafeButton(btnSyncNow, () => {
     socket.emit('request_media_sync', { room_id: ROOM_ID });
-    if (window.showToast) window.showToast('🔄 Đang đồng bộ thời gian phát với phòng...');
+    if (window.showToast) window.showToast('🔄 Đang đồng bộ với phòng...');
 });
 
 window.bindSafeButton(btnUnlockAudio, () => {
@@ -620,10 +641,10 @@ window.bindSafeButton(btnClearMedia, () => {
 
 window.bindSafeButton(btnPinCurrentMedia, () => {
     if (!activeHubMedia || !activeHubMedia.url) {
-        if (window.showToast) window.showToast('Chưa có Media hoặc Tài liệu nào đang mở để ghim!');
+        if (window.showToast) window.showToast('Chưa có Trang Web hoặc Media nào đang mở để ghim!');
         return;
     }
-    spawnBoardMediaCard(activeHubMedia.kind || activeHubMedia.type, activeHubMedia.url, activeHubMedia.name || 'Tài liệu');
+    spawnBoardMediaCard(activeHubMedia.kind || activeHubMedia.type, activeHubMedia.url, activeHubMedia.name || 'Tài liệu', activeHubMedia.use_proxy);
 });
 
 let isMediaDragging = false;
@@ -678,10 +699,18 @@ function extractYoutubeId(url) {
     return match ? match[1] : null;
 }
 
+function normalizeWebUrl(raw) {
+    const s = (raw || '').trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s) || s.startsWith('/')) return s;
+    return 'https://' + s;
+}
+
 function resolveKind(typeOrKind, url, name) {
     const t = (typeOrKind || '').toLowerCase();
     const u = ((url || '') + ' ' + (name || '')).toLowerCase();
     if (t === 'youtube' || extractYoutubeId(url)) return 'youtube';
+    if (t === 'website') return 'website';
     if (t === 'image' || t.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)(\?|$)/i.test(u)) return 'image';
     if (t === 'video' || t.startsWith('video/') || /\.(mp4|webm|ogg|mov|mkv|m4v)(\?|$)/i.test(u)) return 'video';
     if (t === 'audio' || t.startsWith('audio/') || /\.(mp3|wav|flac|aac|m4a|oga)(\?|$)/i.test(u)) return 'audio';
@@ -690,11 +719,13 @@ function resolveKind(typeOrKind, url, name) {
     if (t === 'word' || /\.(docx|doc)(\?|$)/i.test(u)) return 'word';
     if (t === 'html' || /\.(html|htm)(\?|$)/i.test(u)) return 'html';
     if (t === 'text' || /\.(txt|md|json|py|js|css|xml|log|sql|sh)(\?|$)/i.test(u)) return 'text';
+    if (/^https?:\/\//i.test(url || '')) return 'website';
     return 'file';
 }
 
 function getKindIcon(k) {
     if (k === 'youtube') return '▶️';
+    if (k === 'website') return '🌐';
     if (k === 'image') return '🖼️';
     if (k === 'video') return '🎬';
     if (k === 'audio') return '🎵';
@@ -706,8 +737,91 @@ function getKindIcon(k) {
     return '📁';
 }
 
-function renderRichContentInto(targetEl, kind, url, name, isHub) {
+function renderWebsiteViewerInto(targetEl, rawUrl, name, useProxyDefault, isHub) {
+    const fullUrl = normalizeWebUrl(rawUrl);
+    let useProxy = !!useProxyDefault;
+    const getFrameSrc = () => useProxy ? (`/web-proxy?url=${encodeURIComponent(fullUrl)}`) : fullUrl;
+
+    targetEl.innerHTML = `
+        <div class="doc-viewer-wrapper">
+            <div class="doc-toolbar-bar" style="flex-wrap:wrap; gap:6px;">
+                <input type="text" class="web-url-nav-input" value="${fullUrl.replace(/"/g, '&quot;')}" style="flex:1; min-width:140px; padding:4px 8px; border-radius:6px; border:1px solid #444; background:#0f111a; color:#00d2ff; font-size:11px;">
+                <button type="button" class="widget-btn btn-web-go" title="Đi tới địa chỉ này và đồng bộ cho phòng">Đi tới</button>
+                <button type="button" class="widget-btn btn-web-mode" title="Đổi giữa Nhúng trực tiếp và Cổng Proxy vượt chặn">${useProxy ? '🛡️ Đang dùng Proxy' : '⚡ Trực tiếp'}</button>
+                <button type="button" class="widget-btn btn-web-stream" style="background:#feca57; color:#000;" title="Mở web ở tab mới và chiếu trực tiếp màn hình đã đăng nhập của bạn">📡 Chiếu Tab Đăng Nhập</button>
+                <a href="${fullUrl}" target="_blank" style="font-size:11px;">↗ Tab mới</a>
+            </div>
+            <iframe class="html-preview-frame" src="${getFrameSrc()}" allow="autoplay; encrypted-media; fullscreen; clipboard-read; clipboard-write" allowfullscreen></iframe>
+        </div>
+    `;
+
+    const navInput = targetEl.querySelector('.web-url-nav-input');
+    const goBtn = targetEl.querySelector('.btn-web-go');
+    const modeBtn = targetEl.querySelector('.btn-web-mode');
+    const streamBtn = targetEl.querySelector('.btn-web-stream');
+    const iframe = targetEl.querySelector('.html-preview-frame');
+
+    const navigateAndSync = (nextUrl, nextProxy) => {
+        const cleanUrl = normalizeWebUrl(nextUrl);
+        if (!cleanUrl) return;
+        let hostLabel = cleanUrl;
+        try {
+            hostLabel = new URL(cleanUrl).hostname;
+        } catch (e) {}
+        if (isHub) {
+            socket.emit('media_share', {
+                room_id: ROOM_ID,
+                type: 'website',
+                kind: 'website',
+                url: cleanUrl,
+                use_proxy: nextProxy,
+                name: 'Web: ' + hostLabel,
+                sender: window.USERNAME,
+                x: parseFloat(mediaContainer.style.left) || 1920,
+                y: parseFloat(mediaContainer.style.top) || 2220
+            });
+        } else {
+            iframe.src = nextProxy ? (`/web-proxy?url=${encodeURIComponent(cleanUrl)}`) : cleanUrl;
+        }
+    };
+
+    if (goBtn && navInput) {
+        window.bindSafeButton(goBtn, () => {
+            navigateAndSync(navInput.value, useProxy);
+        });
+        navInput.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                navigateAndSync(navInput.value, useProxy);
+            }
+        });
+        navInput.addEventListener('pointerdown', e => e.stopPropagation());
+    }
+
+    if (modeBtn) {
+        window.bindSafeButton(modeBtn, () => {
+            useProxy = !useProxy;
+            modeBtn.innerText = useProxy ? '🛡️ Đang dùng Proxy' : '⚡ Trực tiếp';
+            navigateAndSync(navInput ? navInput.value : fullUrl, useProxy);
+        });
+    }
+
+    if (streamBtn) {
+        window.bindSafeButton(streamBtn, () => {
+            const target = navInput ? normalizeWebUrl(navInput.value) : fullUrl;
+            window.open(target, '_blank');
+            startScreenShareWithMode('browser', 'Tab Web: ' + target.slice(0, 28));
+        });
+    }
+}
+
+function renderRichContentInto(targetEl, kind, url, name, isHub, useProxy) {
     const safeName = (name || 'Tài liệu').replace(/[<>]/g, '');
+    if (kind === 'website') {
+        renderWebsiteViewerInto(targetEl, url, safeName, useProxy, isHub);
+        return;
+    }
     if (kind === 'image') {
         targetEl.innerHTML = `<div class="doc-viewer-wrapper" style="background:#0b0b10;"><div class="doc-toolbar-bar"><span>🖼️ ${safeName}</span><a href="${url}" target="_blank">🔍 Mở ảnh gốc</a></div><div style="padding:8px; flex:1; display:flex; align-items:center; justify-content:center; overflow:auto;"><img src="${url}" alt="${safeName}" style="max-width:100%; max-height:100%; border-radius:6px;"></div></div>`;
         return;
@@ -824,7 +938,7 @@ function clearMediaView() {
     destroyYtPlayer();
     activeHubMedia = null;
     btnUnlockAudio.style.display = 'none';
-    mediaContent.innerHTML = '<div class="empty-media-box"><p class="empty-media-text">📂 Hỗ trợ hiển thị trực tiếp: <b>Ảnh, Video, Nhạc MP3, PDF, Bảng tính Excel (.xlsx/.csv), Word (.docx), Web HTML (.html), Văn bản/Code</b> và <b>YouTube</b>!</p></div>';
+    mediaContent.innerHTML = '<div class="empty-media-box"><p class="empty-media-text">🌐 Dán <b>URL Trang Web bất kỳ</b>, link <b>YouTube</b> hoặc tải lên <b>Ảnh, Video, MP3, PDF, Excel, Word, HTML</b> để cả phòng cùng xem!<br><small style="color:#00d2ff;">(Nếu trang web cần đăng nhập tài khoản, hãy bấm <b>📡 Chiếu Tab Đăng Nhập</b> để mọi người nhìn thấy giống hệt màn hình của bạn)</small></p></div>';
     mediaControlsBox.classList.remove('collapsed');
 }
 
@@ -1007,7 +1121,13 @@ function renderMediaInHub(item) {
     const kind = resolveKind(item.kind || item.type, item.url, item.name);
     const startPos = parseFloat(item.current_pos || item.position || 0);
     const shouldPlay = item.playing !== undefined ? !!item.playing : true;
-    activeHubMedia = { kind: kind, type: item.type, url: item.url, name: item.name || 'Tài liệu' };
+    activeHubMedia = {
+        kind: kind,
+        type: item.type,
+        url: item.url,
+        name: item.name || 'Tài liệu',
+        use_proxy: !!item.use_proxy
+    };
 
     if (mediaContainer.style.display === 'none' || !mediaContainer.style.display) {
         openMediaHubAtCenter(false);
@@ -1025,7 +1145,7 @@ function renderMediaInHub(item) {
         createSyncedYoutubePlayer(videoId, startPos, shouldPlay);
     } else {
         destroyYtPlayer();
-        renderRichContentInto(mediaContent, kind, item.url, item.name, true);
+        renderRichContentInto(mediaContent, kind, item.url, item.name, true, !!item.use_proxy);
         if (kind === 'video' || kind === 'audio') {
             const mediaEl = document.getElementById('hub-html5-media');
             bindHtml5SyncEvents(mediaEl, startPos, shouldPlay, null);
@@ -1052,6 +1172,7 @@ function renderMediaHistoryList(list) {
                 type: item.type,
                 kind: k,
                 url: item.url,
+                use_proxy: !!item.use_proxy,
                 name: item.name,
                 sender: window.USERNAME
             });
@@ -1108,7 +1229,7 @@ function createBoardMediaDOM(data) {
         openLink.target = '_blank';
         openLink.className = 'widget-btn';
         openLink.style.textDecoration = 'none';
-        openLink.title = 'Mở tệp ở tab mới';
+        openLink.title = 'Mở ở tab mới';
         openLink.innerText = '↗';
         openLink.addEventListener('pointerdown', e => e.stopPropagation());
         controls.appendChild(openLink);
@@ -1191,7 +1312,7 @@ function createBoardMediaDOM(data) {
             body.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}?playsinline=1&start=${Math.floor(startPos)}" allowfullscreen></iframe>`;
         }
     } else {
-        renderRichContentInto(body, kind, data.url, data.name, false);
+        renderRichContentInto(body, kind, data.url, data.name, false, !!data.use_proxy);
         if (kind === 'video' || kind === 'audio') {
             const mediaEl = body.querySelector('video, audio');
             bindHtml5SyncEvents(mediaEl, startPos, shouldPlay, (action, curTime) => {
@@ -1265,7 +1386,7 @@ function createBoardMediaDOM(data) {
     card.addEventListener('pointerdown', e => e.stopPropagation());
 }
 
-function spawnBoardMediaCard(kind, url, name) {
+function spawnBoardMediaCard(kind, url, name, useProxy) {
     const id = 'bmedia_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
     const offset = (boardMediaContainer.children.length % 5) * 30;
@@ -1276,12 +1397,13 @@ function spawnBoardMediaCard(kind, url, name) {
         id: id,
         kind: kind,
         url: url,
+        use_proxy: !!useProxy,
         name: name || 'Tài liệu',
         owner: window.USERNAME,
         x: x,
         y: y,
-        w: 420,
-        h: 340
+        w: 440,
+        h: 360
     };
     createBoardMediaDOM(payload);
     socket.emit('new_board_media', payload);
@@ -1305,28 +1427,56 @@ window.loadBoardMediaHistory = function(list) {
 };
 
 window.bindSafeButton(document.getElementById('btn-play-yt'), () => {
-    const url = document.getElementById('youtube-link').value.trim();
-    if (!url) return;
-    const vid = extractYoutubeId(url);
-    if (!vid) {
-        if (window.showToast) window.showToast('Vui lòng nhập đúng định dạng link YouTube!');
+    const rawInput = document.getElementById('youtube-link').value.trim();
+    if (!rawInput) {
+        if (window.showToast) window.showToast('Hãy nhập link YouTube hoặc địa chỉ URL Trang Web!');
         return;
     }
     openMediaHubAtCenter(false);
-    const item = {
-        type: 'youtube',
-        kind: 'youtube',
-        url: url,
-        name: 'YouTube (' + vid + ')',
+    const vid = extractYoutubeId(rawInput);
+    if (vid) {
+        const item = {
+            type: 'youtube',
+            kind: 'youtube',
+            url: rawInput,
+            name: 'YouTube (' + vid + ')',
+            sender: window.USERNAME
+        };
+        renderMediaInHub(item);
+        socket.emit('media_share', {
+            room_id: ROOM_ID,
+            type: 'youtube',
+            kind: 'youtube',
+            url: rawInput,
+            name: item.name,
+            sender: window.USERNAME,
+            x: parseFloat(mediaContainer.style.left) || 1920,
+            y: parseFloat(mediaContainer.style.top) || 2220
+        });
+        return;
+    }
+
+    const webUrl = normalizeWebUrl(rawInput);
+    let hostLabel = webUrl;
+    try {
+        hostLabel = new URL(webUrl).hostname;
+    } catch (e) {}
+    const webItem = {
+        type: 'website',
+        kind: 'website',
+        url: webUrl,
+        use_proxy: true,
+        name: 'Web: ' + hostLabel,
         sender: window.USERNAME
     };
-    renderMediaInHub(item);
+    renderMediaInHub(webItem);
     socket.emit('media_share', {
         room_id: ROOM_ID,
-        type: 'youtube',
-        kind: 'youtube',
-        url: url,
-        name: item.name,
+        type: 'website',
+        kind: 'website',
+        url: webUrl,
+        use_proxy: true,
+        name: webItem.name,
         sender: window.USERNAME,
         x: parseFloat(mediaContainer.style.left) || 1920,
         y: parseFloat(mediaContainer.style.top) || 2220
@@ -1364,7 +1514,7 @@ function performFileUpload(pinDirectlyToBoard) {
                 const kind = data.kind || resolveKind(data.type, data.url, data.name || file.name);
                 const name = data.name || file.name;
                 if (pinDirectlyToBoard) {
-                    spawnBoardMediaCard(kind, data.url, name);
+                    spawnBoardMediaCard(kind, data.url, name, false);
                 } else {
                     openMediaHubAtCenter(false);
                     const item = { type: data.type, kind: kind, url: data.url, name: name, sender: window.USERNAME };

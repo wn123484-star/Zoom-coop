@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import sqlite3
 import time
@@ -7,7 +8,10 @@ import threading
 import uuid
 import random
 import mimetypes
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory
+import urllib.request
+import urllib.parse
+import ssl
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory, Response
 from flask_socketio import SocketIO, join_room, emit
 from dotenv import load_dotenv
 
@@ -24,7 +28,9 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='threading',
-    max_http_buffer_size=10 * 1024 * 1024
+    max_http_buffer_size=10 * 1024 * 1024,
+    ping_timeout=25,
+    ping_interval=10
 )
 
 SERVER_START_TIME = time.time()
@@ -47,8 +53,13 @@ def get_client_ip():
 
 def get_db():
     os.makedirs('database', exist_ok=True)
-    conn = sqlite3.connect('database/app.db', timeout=20)
+    conn = sqlite3.connect('database/app.db', timeout=25, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA synchronous=NORMAL')
+    except Exception:
+        pass
     return conn
 
 def init_db():
@@ -93,7 +104,7 @@ def collect_system_metrics():
 
     if psutil:
         try:
-            cpu_percent = round(psutil.cpu_percent(interval=0.1), 1)
+            cpu_percent = round(psutil.cpu_percent(interval=None), 1)
             vm = psutil.virtual_memory()
             ram_percent = round(vm.percent, 1)
             ram_used_mb = round((vm.total - vm.available) / (1024 * 1024), 1)
@@ -215,6 +226,8 @@ def default_room_state():
 def detect_media_kind(filename, content_type):
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     ct = (content_type or '').lower()
+    if ct == 'website' or filename.startswith('http://') or filename.startswith('https://'):
+        return 'website'
     if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico') or ct.startswith('image/'):
         return 'image'
     if ext in ('mp4', 'webm', 'ogg', 'mov', 'mkv', 'm4v') or ct.startswith('video/'):
@@ -250,7 +263,7 @@ def mark_room_dirty(room_id):
 
 def flush_dirty_rooms():
     while True:
-        time.sleep(2.0)
+        time.sleep(2.5)
         if not dirty_rooms:
             continue
         to_save = list(dirty_rooms)
@@ -258,18 +271,20 @@ def flush_dirty_rooms():
         for room_id in to_save:
             if room_id not in room_states:
                 continue
-            state_data = room_states[room_id]
-            if room_id in chess_games:
-                state_data['chess_game'] = chess_games[room_id]
-            if room_id in memory_games:
-                state_data['memory_game'] = memory_games[room_id]
-            xo_data = xo_games.get(room_id, init_xo_game())
             try:
+                state_data = room_states[room_id]
+                if room_id in chess_games:
+                    state_data['chess_game'] = chess_games[room_id]
+                if room_id in memory_games:
+                    state_data['memory_game'] = memory_games[room_id]
+                xo_data = xo_games.get(room_id, init_xo_game())
+                state_str = json.dumps(state_data)
+                xo_str = json.dumps(xo_data)
                 with db_lock:
                     conn = get_db()
                     conn.execute(
                         'INSERT OR REPLACE INTO room_data (room_id, state_json, xo_json, updated_at) VALUES (?, ?, ?, ?)',
-                        (room_id, json.dumps(state_data), json.dumps(xo_data), time.time())
+                        (room_id, state_str, xo_str, time.time())
                     )
                     conn.commit()
                     conn.close()
@@ -279,18 +294,20 @@ def flush_dirty_rooms():
 def save_room_immediately(room_id):
     if room_id not in room_states:
         return
-    state_data = room_states[room_id]
-    if room_id in chess_games:
-        state_data['chess_game'] = chess_games[room_id]
-    if room_id in memory_games:
-        state_data['memory_game'] = memory_games[room_id]
-    xo_data = xo_games.get(room_id, init_xo_game())
     try:
+        state_data = room_states[room_id]
+        if room_id in chess_games:
+            state_data['chess_game'] = chess_games[room_id]
+        if room_id in memory_games:
+            state_data['memory_game'] = memory_games[room_id]
+        xo_data = xo_games.get(room_id, init_xo_game())
+        state_str = json.dumps(state_data)
+        xo_str = json.dumps(xo_data)
         with db_lock:
             conn = get_db()
             conn.execute(
                 'INSERT OR REPLACE INTO room_data (room_id, state_json, xo_json, updated_at) VALUES (?, ?, ?, ?)',
-                (room_id, json.dumps(state_data), json.dumps(xo_data), time.time())
+                (room_id, state_str, xo_str, time.time())
             )
             conn.commit()
             conn.close()
@@ -342,12 +359,12 @@ def get_room_state(room_id):
 def get_room_users(room_id):
     seen_clients = set()
     users = []
-    for u in connected_users.values():
-        if u['room'] == room_id:
+    for u in list(connected_users.values()):
+        if u.get('room') == room_id:
             cid = u.get('client_id') or u.get('sid')
             if cid not in seen_clients:
                 seen_clients.add(cid)
-                users.append(u['username'])
+                users.append(u.get('username', 'Thành viên'))
     return users
 
 def check_win(board, r, c, val):
@@ -397,6 +414,11 @@ def schedule_auto_restart(room_id):
     t.start()
 
 init_db()
+if psutil:
+    try:
+        psutil.cpu_percent(interval=None)
+    except Exception:
+        pass
 saver_thread = threading.Thread(target=flush_dirty_rooms, daemon=True)
 saver_thread.start()
 
@@ -437,6 +459,59 @@ def serve_uploaded_file(filename):
     if ext in ('html', 'htm'):
         return send_from_directory(upload_dir, filename, mimetype='text/html')
     return send_from_directory(upload_dir, filename)
+
+@app.route('/web-proxy')
+def web_proxy():
+    target_url = request.args.get('url', '').strip()
+    if not target_url:
+        return "Thiếu địa chỉ URL", 400
+    if not target_url.startswith('http://') and not target_url.startswith('https://'):
+        target_url = 'https://' + target_url
+    parsed = urllib.parse.urlparse(target_url)
+    host = (parsed.hostname or '').lower()
+    if not host or host in ('localhost', '127.0.0.1', '0.0.0.0') or host.startswith('192.168.') or host.startswith('10.'):
+        return "URL nội bộ không được phép truy cập qua Proxy.", 403
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        req = urllib.request.Request(
+            target_url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            content_type = resp.headers.get('Content-Type', 'text/html; charset=utf-8')
+            raw_bytes = resp.read(6 * 1024 * 1024)
+            if 'text/html' in content_type.lower():
+                charset = 'utf-8'
+                m = re.search(r'charset=([\w-]+)', content_type, re.I)
+                if m:
+                    charset = m.group(1)
+                html_str = raw_bytes.decode(charset, errors='replace')
+                base_url = f"{parsed.scheme}://{parsed.netloc}/"
+                base_tag = f'<base href="{base_url}">'
+                if re.search(r'<head[^>]*>', html_str, re.I):
+                    html_str = re.sub(r'(<head[^>]*>)', r'\1' + base_tag, html_str, count=1, flags=re.I)
+                else:
+                    html_str = base_tag + html_str
+                return Response(html_str, mimetype='text/html')
+            return Response(raw_bytes, content_type=content_type)
+    except Exception as e:
+        fallback_html = f"""<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><style>
+        body {{ font-family: system-ui, sans-serif; background: #14161f; color: #eee; padding: 24px; text-align: center; }}
+        .box {{ max-width: 480px; margin: 20px auto; background: rgba(255,255,255,0.06); padding: 20px; border-radius: 12px; border: 1px solid rgba(0,210,255,0.3); }}
+        a.btn {{ display: inline-block; margin-top: 12px; padding: 10px 16px; background: #00d2ff; color: #000; font-weight: 700; border-radius: 8px; text-decoration: none; }}
+        </style></head><body><div class="box">
+        <h3>🌐 Trang web yêu cầu xác thực trình duyệt trực tiếp</h3>
+        <p style="font-size:13px; color:#aaa;">Trang <b>{target_url}</b> chặn kết nối tự động hoặc yêu cầu đăng nhập tài khoản cá nhân.</p>
+        <p style="font-size:13px; color:#55efc4;">💡 Mẹo: Bạn hãy nhấn nút <b>"📡 Chiếu Tab Đăng Nhập"</b> trên thanh công cụ khung Web để mở trang này và phát trực tiếp màn hình đã đăng nhập cho cả phòng cùng xem!</p>
+        <a class="btn" href="{target_url}" target="_blank">↗ Mở trang này ở Tab mới</a>
+        </div></body></html>"""
+        return Response(fallback_html, mimetype='text/html')
 
 @app.route('/secret-admin', methods=['GET', 'POST'])
 def admin():
@@ -635,131 +710,155 @@ def upload_file():
 
 @socketio.on('ping_check')
 def handle_ping_check(data):
-    emit('pong_check', {'t': data.get('t', 0)}, to=request.sid)
+    try:
+        t_val = data.get('t', 0) if isinstance(data, dict) else 0
+        emit('pong_check', {'t': t_val}, to=request.sid)
+    except Exception:
+        pass
 
 @socketio.on('join_room')
 def handle_join(data):
-    room_id = str(data.get('room_id', 'default')).strip()
-    username = str(data.get('username', '')).strip() or 'Thành viên'
-    client_id = str(data.get('client_id', '')).strip() or request.sid
-    client_ip = get_client_ip()
+    try:
+        if not isinstance(data, dict):
+            return
+        room_id = str(data.get('room_id', 'default')).strip()
+        username = str(data.get('username', '')).strip() or 'Thành viên'
+        client_id = str(data.get('client_id', '')).strip() or request.sid
+        client_ip = get_client_ip()
 
-    stale_sids = [
-        sid for sid, u in list(connected_users.items())
-        if u.get('room') == room_id and u.get('client_id') == client_id and sid != request.sid
-    ]
-    for old_sid in stale_sids:
-        connected_users.pop(old_sid, None)
-        emit('remove_cursor', {'sid': old_sid}, to=room_id)
+        stale_sids = [
+            sid for sid, u in list(connected_users.items())
+            if u.get('room') == room_id and u.get('client_id') == client_id and sid != request.sid
+        ]
+        for old_sid in stale_sids:
+            connected_users.pop(old_sid, None)
+            emit('remove_cursor', {'sid': old_sid}, to=room_id)
 
-    active_with_users = [r for r in active_rooms if len(get_room_users(r)) > 0]
-    if room_id not in active_rooms and len(active_with_users) >= 15:
-        emit('room_error', {'msg': 'Máy chủ đã đạt giới hạn phòng hoạt động cùng lúc. Vui lòng thử lại sau.'})
-        return
-    if room_id not in active_rooms:
-        active_rooms[room_id] = {'created_at': time.time()}
-    join_room(room_id)
-    connected_users[request.sid] = {
-        'sid': request.sid,
-        'client_id': client_id,
-        'room': room_id,
-        'username': username,
-        'ip': client_ip,
-        'joined_at': time.time()
-    }
-    state = get_room_state(room_id)
-    users_list = get_room_users(room_id)
-    live_bmedia = [compute_live_media(bm) for bm in state.get('board_media', {}).values()]
-    emit('room_state', {
-        'draw_history': state['draw_history'],
-        'texts': list(state.get('texts', {}).values()),
-        'stickies': list(state['stickies'].values()),
-        'board_media': live_bmedia,
-        'media': compute_live_media(state['media']),
-        'media_list': state.get('media_list', [])[-30:],
-        'xo_game': xo_games[room_id],
-        'chess_game': chess_games[room_id],
-        'memory_game': memory_games[room_id],
-        'screen_share': screen_shares.get(room_id),
-        'chat': state['chat'][-50:],
-        'settings': state['settings'],
-        'widgets': state['widgets'],
-        'users': users_list
-    }, to=request.sid)
-    emit('room_users', {'users': users_list, 'joined': username, 'sid': request.sid}, to=room_id)
+        active_with_users = [r for r in active_rooms if len(get_room_users(r)) > 0]
+        if room_id not in active_rooms and len(active_with_users) >= 15:
+            emit('room_error', {'msg': 'Máy chủ đã đạt giới hạn phòng hoạt động cùng lúc. Vui lòng thử lại sau.'})
+            return
+        if room_id not in active_rooms:
+            active_rooms[room_id] = {'created_at': time.time()}
+        join_room(room_id)
+        connected_users[request.sid] = {
+            'sid': request.sid,
+            'client_id': client_id,
+            'room': room_id,
+            'username': username,
+            'ip': client_ip,
+            'joined_at': time.time()
+        }
+        state = get_room_state(room_id)
+        users_list = get_room_users(room_id)
+        live_bmedia = [compute_live_media(bm) for bm in state.get('board_media', {}).values()]
+        emit('room_state', {
+            'draw_history': state['draw_history'],
+            'texts': list(state.get('texts', {}).values()),
+            'stickies': list(state['stickies'].values()),
+            'board_media': live_bmedia,
+            'media': compute_live_media(state['media']),
+            'media_list': state.get('media_list', [])[-30:],
+            'xo_game': xo_games[room_id],
+            'chess_game': chess_games[room_id],
+            'memory_game': memory_games[room_id],
+            'screen_share': screen_shares.get(room_id),
+            'chat': state['chat'][-50:],
+            'settings': state['settings'],
+            'widgets': state['widgets'],
+            'users': users_list
+        }, to=request.sid)
+        emit('room_users', {'users': users_list, 'joined': username, 'sid': request.sid}, to=room_id)
 
-    active_screen = screen_shares.get(room_id)
-    if active_screen and active_screen.get('sid') != request.sid:
-        emit('screen_viewer_joined', {'viewer_sid': request.sid, 'username': username}, to=active_screen['sid'])
-        if active_screen.get('last_frame'):
-            emit('screen_frame', {
-                'frame': active_screen['last_frame'],
-                'username': active_screen.get('username', 'Thành viên'),
-                'mode_label': active_screen.get('mode_label', 'Màn hình')
-            }, to=request.sid)
+        active_screen = screen_shares.get(room_id)
+        if active_screen and active_screen.get('sid') != request.sid:
+            emit('screen_viewer_joined', {'viewer_sid': request.sid, 'username': username}, to=active_screen['sid'])
+            if active_screen.get('last_frame'):
+                emit('screen_frame', {
+                    'frame': active_screen['last_frame'],
+                    'username': active_screen.get('username', 'Thành viên'),
+                    'mode_label': active_screen.get('mode_label', 'Màn hình')
+                }, to=request.sid)
+    except Exception:
+        pass
 
 @socketio.on('update_username')
 def handle_update_username(data):
-    new_name = str(data.get('username', '')).strip()
-    if not new_name or request.sid not in connected_users:
-        return
-    connected_users[request.sid]['username'] = new_name[:35]
-    room_id = connected_users[request.sid]['room']
-    users_list = get_room_users(room_id)
-    emit('room_users', {'users': users_list, 'renamed': new_name[:35], 'sid': request.sid}, to=room_id)
+    try:
+        new_name = str(data.get('username', '')).strip()
+        if not new_name or request.sid not in connected_users:
+            return
+        connected_users[request.sid]['username'] = new_name[:35]
+        room_id = connected_users[request.sid]['room']
+        users_list = get_room_users(room_id)
+        emit('room_users', {'users': users_list, 'renamed': new_name[:35], 'sid': request.sid}, to=room_id)
+    except Exception:
+        pass
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    user_data = connected_users.pop(request.sid, None)
-    if user_data:
-        room_id = user_data['room']
-        if room_id in screen_shares and screen_shares[room_id].get('sid') == request.sid:
-            screen_shares.pop(room_id, None)
-            emit('screen_share_stopped', {}, to=room_id)
-        save_room_immediately(room_id)
-        users_list = get_room_users(room_id)
-        emit('user_disconnected', {'sid': request.sid, 'username': user_data['username'], 'users': users_list}, to=room_id)
+    try:
+        user_data = connected_users.pop(request.sid, None)
+        if user_data:
+            room_id = user_data['room']
+            if room_id in screen_shares and screen_shares[room_id].get('sid') == request.sid:
+                screen_shares.pop(room_id, None)
+                emit('screen_share_stopped', {}, to=room_id)
+            mark_room_dirty(room_id)
+            users_list = get_room_users(room_id)
+            emit('user_disconnected', {'sid': request.sid, 'username': user_data['username'], 'users': users_list}, to=room_id)
+    except Exception:
+        pass
 
 @socketio.on('screen_share_start')
 def handle_screen_share_start(data):
-    room_id = data.get('room_id')
-    if not room_id:
-        return
-    info = {
-        'sid': request.sid,
-        'username': data.get('username', 'Thành viên'),
-        'mode': data.get('mode', 'screen'),
-        'mode_label': data.get('mode_label', 'Toàn màn hình'),
-        'x': data.get('x', 1960),
-        'y': data.get('y', 2180),
-        'w': data.get('w', 640),
-        'h': data.get('h', 440),
-        'last_frame': None
-    }
-    screen_shares[room_id] = info
-    emit('screen_share_started', info, to=room_id, include_self=False)
-    for sid, u in connected_users.items():
-        if u.get('room') == room_id and sid != request.sid:
-            emit('screen_viewer_joined', {'viewer_sid': sid, 'username': u.get('username', '')}, to=request.sid)
+    try:
+        room_id = data.get('room_id')
+        if not room_id:
+            return
+        info = {
+            'sid': request.sid,
+            'username': data.get('username', 'Thành viên'),
+            'mode': data.get('mode', 'screen'),
+            'mode_label': data.get('mode_label', 'Toàn màn hình'),
+            'x': data.get('x', 1960),
+            'y': data.get('y', 2180),
+            'w': data.get('w', 640),
+            'h': data.get('h', 440),
+            'last_frame': None
+        }
+        screen_shares[room_id] = info
+        emit('screen_share_started', info, to=room_id, include_self=False)
+        for sid, u in list(connected_users.items()):
+            if u.get('room') == room_id and sid != request.sid:
+                emit('screen_viewer_joined', {'viewer_sid': sid, 'username': u.get('username', '')}, to=request.sid)
+    except Exception:
+        pass
 
 @socketio.on('screen_share_stop')
 def handle_screen_share_stop(data):
-    room_id = data.get('room_id')
-    if not room_id:
-        return
-    if room_id in screen_shares and screen_shares[room_id].get('sid') == request.sid:
-        screen_shares.pop(room_id, None)
-    emit('screen_share_stopped', {}, to=room_id, include_self=False)
+    try:
+        room_id = data.get('room_id')
+        if not room_id:
+            return
+        if room_id in screen_shares and screen_shares[room_id].get('sid') == request.sid:
+            screen_shares.pop(room_id, None)
+        emit('screen_share_stopped', {}, to=room_id, include_self=False)
+    except Exception:
+        pass
 
 @socketio.on('screen_widget_move')
 def handle_screen_widget_move(data):
-    room_id = data.get('room_id')
-    if not room_id or room_id not in screen_shares:
-        return
-    for k in ('x', 'y', 'w', 'h'):
-        if k in data:
-            screen_shares[room_id][k] = data[k]
-    emit('screen_widget_moved', data, to=room_id, include_self=False)
+    try:
+        room_id = data.get('room_id')
+        if not room_id or room_id not in screen_shares:
+            return
+        for k in ('x', 'y', 'w', 'h'):
+            if k in data:
+                screen_shares[room_id][k] = data[k]
+        emit('screen_widget_moved', data, to=room_id, include_self=False)
+    except Exception:
+        pass
 
 @socketio.on('webrtc_offer')
 def handle_webrtc_offer(data):
@@ -792,27 +891,33 @@ def handle_webrtc_ice(data):
 
 @socketio.on('screen_frame')
 def handle_screen_frame(data):
-    room_id = data.get('room_id')
-    frame = data.get('frame')
-    if not room_id or not frame:
-        return
-    if room_id in screen_shares:
-        screen_shares[room_id]['last_frame'] = frame
-    emit('screen_frame', {
-        'frame': frame,
-        'username': data.get('username', 'Thành viên'),
-        'mode_label': data.get('mode_label', 'Màn hình')
-    }, to=room_id, include_self=False)
+    try:
+        room_id = data.get('room_id')
+        frame = data.get('frame')
+        if not room_id or not frame:
+            return
+        if room_id in screen_shares:
+            screen_shares[room_id]['last_frame'] = frame
+        emit('screen_frame', {
+            'frame': frame,
+            'username': data.get('username', 'Thành viên'),
+            'mode_label': data.get('mode_label', 'Màn hình')
+        }, to=room_id, include_self=False)
+    except Exception:
+        pass
 
 @socketio.on('mouse_move')
 def handle_mouse_move(data):
-    room_id = data.get('room_id')
-    if not room_id:
-        return
-    data['sid'] = request.sid
-    if request.sid in connected_users:
-        data['username'] = connected_users[request.sid]['username']
-    emit('mouse_update', data, to=room_id, include_self=False)
+    try:
+        room_id = data.get('room_id')
+        if not room_id:
+            return
+        data['sid'] = request.sid
+        if request.sid in connected_users:
+            data['username'] = connected_users[request.sid]['username']
+        emit('mouse_update', data, to=room_id, include_self=False)
+    except Exception:
+        pass
 
 @socketio.on('place_stamp')
 def handle_place_stamp(data):
@@ -845,79 +950,111 @@ def handle_draw_segment(data):
 
 @socketio.on('draw_stroke')
 def handle_draw_stroke(data):
-    room_id = data.get('room_id')
-    stroke = data.get('stroke')
-    if not room_id or not stroke:
-        return
-    state = get_room_state(room_id)
-    state['draw_history'].append(stroke)
-    if len(state['draw_history']) > 1000:
-        state['draw_history'] = state['draw_history'][-1000:]
-    mark_room_dirty(room_id)
-    stroke['sid'] = request.sid
-    emit('draw_stroke', stroke, to=room_id, include_self=False)
+    try:
+        room_id = data.get('room_id')
+        stroke = data.get('stroke')
+        if not room_id or not isinstance(stroke, dict):
+            return
+        state = get_room_state(room_id)
+        state['draw_history'].append(stroke)
+        if len(state['draw_history']) > 1200:
+            state['draw_history'] = state['draw_history'][-1200:]
+        mark_room_dirty(room_id)
+        stroke['sid'] = request.sid
+        emit('draw_stroke', stroke, to=room_id, include_self=False)
+    except Exception:
+        pass
 
 @socketio.on('delete_stroke')
 def handle_delete_stroke(data):
-    room_id = data.get('room_id')
-    stroke_id = data.get('stroke_id')
-    if not room_id or not stroke_id:
-        return
-    state = get_room_state(room_id)
-    before_len = len(state['draw_history'])
-    state['draw_history'] = [s for s in state['draw_history'] if s.get('id') != stroke_id]
-    if len(state['draw_history']) != before_len:
-        mark_room_dirty(room_id)
-        emit('stroke_deleted', {'stroke_id': stroke_id}, to=room_id, include_self=False)
+    try:
+        room_id = data.get('room_id')
+        stroke_id = data.get('stroke_id')
+        if not room_id or not stroke_id:
+            return
+        state = get_room_state(room_id)
+        before_len = len(state['draw_history'])
+        state['draw_history'] = [s for s in state['draw_history'] if s.get('id') != stroke_id]
+        if len(state['draw_history']) != before_len:
+            mark_room_dirty(room_id)
+            emit('stroke_deleted', {'stroke_id': stroke_id, 'stroke_ids': [stroke_id]}, to=room_id, include_self=False)
+    except Exception:
+        pass
+
+@socketio.on('delete_strokes_batch')
+def handle_delete_strokes_batch(data):
+    try:
+        room_id = data.get('room_id')
+        stroke_ids = data.get('stroke_ids')
+        if not room_id or not isinstance(stroke_ids, list) or not stroke_ids:
+            return
+        id_set = set(stroke_ids)
+        state = get_room_state(room_id)
+        before_len = len(state['draw_history'])
+        state['draw_history'] = [s for s in state['draw_history'] if s.get('id') not in id_set]
+        if len(state['draw_history']) != before_len:
+            mark_room_dirty(room_id)
+            emit('stroke_deleted', {'stroke_ids': list(id_set)}, to=room_id, include_self=False)
+    except Exception:
+        pass
 
 @socketio.on('undo_stroke')
 def handle_undo_stroke(data):
-    room_id = data.get('room_id')
-    if not room_id:
-        return
-    client_id = data.get('client_id')
-    username = data.get('username')
-    state = get_room_state(room_id)
-    history = state['draw_history']
-    if not history:
-        return
-    target_idx = -1
-    for i in range(len(history) - 1, -1, -1):
-        st = history[i]
-        if (client_id and st.get('owner_id') == client_id) or (username and st.get('owner') == username):
-            target_idx = i
-            break
-    if target_idx == -1 and not client_id and not username:
-        target_idx = len(history) - 1
-    if target_idx != -1:
-        history.pop(target_idx)
-        mark_room_dirty(room_id)
-        emit('board_sync', {'draw_history': history}, to=room_id)
+    try:
+        room_id = data.get('room_id')
+        if not room_id:
+            return
+        client_id = data.get('client_id')
+        username = data.get('username')
+        state = get_room_state(room_id)
+        history = state['draw_history']
+        if not history:
+            return
+        target_idx = -1
+        for i in range(len(history) - 1, -1, -1):
+            st = history[i]
+            if (client_id and st.get('owner_id') == client_id) or (username and st.get('owner') == username):
+                target_idx = i
+                break
+        if target_idx == -1 and not client_id and not username:
+            target_idx = len(history) - 1
+        if target_idx != -1:
+            removed = history.pop(target_idx)
+            mark_room_dirty(room_id)
+            if removed and removed.get('id'):
+                emit('stroke_deleted', {'stroke_ids': [removed['id']]}, to=room_id)
+            else:
+                emit('board_sync', {'draw_history': history}, to=room_id)
+    except Exception:
+        pass
 
 @socketio.on('clear_board')
 def handle_clear(data):
-    room_id = data.get('room_id')
-    if not room_id:
-        return
-    client_id = data.get('client_id')
-    username = data.get('username')
-    state = get_room_state(room_id)
+    try:
+        room_id = data.get('room_id')
+        if not room_id:
+            return
+        client_id = data.get('client_id')
+        username = data.get('username')
+        state = get_room_state(room_id)
 
-    def belongs_to_sender(item):
-        if client_id and item.get('owner_id') == client_id:
-            return True
-        if username and item.get('owner') == username:
-            return True
-        return False
+        def belongs_to_sender(item):
+            if client_id and item.get('owner_id') == client_id:
+                return True
+            if username and item.get('owner') == username:
+                return True
+            return False
 
-    state['draw_history'] = [s for s in state['draw_history'] if not belongs_to_sender(s)]
-    if 'texts' in state and isinstance(state['texts'], dict):
-        state['texts'] = {tid: tbox for tid, tbox in state['texts'].items() if not belongs_to_sender(tbox)}
-    mark_room_dirty(room_id)
-    emit('board_sync', {
-        'draw_history': state['draw_history'],
-        'texts': list(state.get('texts', {}).values())
-    }, to=room_id)
+        state['draw_history'] = [s for s in state['draw_history'] if not belongs_to_sender(s)]
+        if 'texts' in state and isinstance(state['texts'], dict):
+            state['texts'] = {tid: tbox for tid, tbox in state['texts'].items() if not belongs_to_sender(tbox)}
+        mark_room_dirty(room_id)
+        emit('board_sync', {
+            'draw_history': state['draw_history'],
+            'texts': list(state.get('texts', {}).values())
+        }, to=room_id)
+    except Exception:
+        pass
 
 @socketio.on('new_text_box')
 def handle_new_text_box(data):
@@ -1265,7 +1402,8 @@ def handle_media_share(data):
         'type': data.get('type'),
         'kind': data.get('kind') or detect_media_kind(data.get('name', ''), data.get('type', '')),
         'url': data.get('url'),
-        'name': data.get('name') or ('YouTube Video' if data.get('type') == 'youtube' else 'Tài liệu / Media'),
+        'use_proxy': bool(data.get('use_proxy', False)),
+        'name': data.get('name') or ('YouTube Video' if data.get('type') == 'youtube' else 'Trang Web / Tài liệu'),
         'sender': data.get('sender', 'Thành viên'),
         'time': time.strftime('%H:%M'),
         'playing': True,
