@@ -18,27 +18,26 @@ const chatMessages = document.getElementById('chat-messages');
 const chatBadge = document.getElementById('chat-badge');
 let unreadChat = 0;
 
-fabSettings.addEventListener('click', (e) => {
-    e.stopPropagation();
+window.bindSafeButton(fabSettings, () => {
     settingsOverlay.classList.toggle('active');
     fabSettings.classList.toggle('active', settingsOverlay.classList.contains('active'));
 });
 
-closeSettings.addEventListener('click', () => {
+window.bindSafeButton(closeSettings, () => {
     settingsOverlay.classList.remove('active');
     fabSettings.classList.remove('active');
 });
 
-document.addEventListener('mousedown', (e) => {
+document.addEventListener('pointerdown', (e) => {
     if (settingsOverlay.classList.contains('active')) {
-        if (!settingsOverlay.contains(e.target) && e.target !== fabSettings) {
+        if (!settingsOverlay.contains(e.target) && !fabSettings.contains(e.target)) {
             settingsOverlay.classList.remove('active');
             fabSettings.classList.remove('active');
         }
     }
 });
 
-fabFocus.addEventListener('click', () => {
+window.bindSafeButton(fabFocus, () => {
     const isFocus = document.body.classList.toggle('focus-mode');
     fabFocus.innerText = isFocus ? '🙈' : '👁️';
     if (window.showToast) {
@@ -46,7 +45,7 @@ fabFocus.addEventListener('click', () => {
     }
 });
 
-btnCopyLink.addEventListener('click', () => {
+window.bindSafeButton(btnCopyLink, () => {
     const inviteUrl = window.location.origin + '/room/' + encodeURIComponent(ROOM_ID);
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(inviteUrl).then(() => {
@@ -68,8 +67,8 @@ function applyBackgroundTheme(themeStr) {
 }
 
 bgBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        const themeStr = e.currentTarget.getAttribute('data-bg');
+    window.bindSafeButton(btn, () => {
+        const themeStr = btn.getAttribute('data-bg');
         applyBackgroundTheme(themeStr);
         if (toggleSyncBg && toggleSyncBg.checked) {
             socket.emit('change_bg', { room_id: ROOM_ID, bg: themeStr });
@@ -82,6 +81,35 @@ window.loadRoomSettings = function(settings) {
         applyBackgroundTheme(settings.bg);
     }
 };
+
+function applySingleWidgetState(wName, st) {
+    if (!st) return;
+    const container = document.getElementById(wName === 'xo' ? 'xo-container' : 'media-container');
+    const btn = document.getElementById(wName === 'xo' ? 'tool-xo' : 'tool-media');
+    if (!container) return;
+    if (typeof st.x === 'number') container.style.left = st.x + 'px';
+    if (typeof st.y === 'number') container.style.top = st.y + 'px';
+    if (st.open) {
+        container.style.display = 'flex';
+        if (btn) btn.classList.add('active');
+    } else {
+        container.style.display = 'none';
+        if (btn) btn.classList.remove('active');
+    }
+    container.classList.toggle('minimized', !!st.minimized);
+}
+
+window.loadWidgetsState = function(widgets) {
+    if (!widgets) return;
+    if (widgets.xo) applySingleWidgetState('xo', widgets.xo);
+    if (widgets.media) applySingleWidgetState('media', widgets.media);
+};
+
+socket.on('widget_updated', (data) => {
+    if (data && data.widget && data.state) {
+        applySingleWidgetState(data.widget, data.state);
+    }
+});
 
 socket.on('bg_updated', (data) => {
     if (data && data.bg) {
@@ -97,7 +125,7 @@ document.getElementById('toggle-names').addEventListener('change', (e) => {
     document.body.classList.toggle('hide-names', !e.target.checked);
 });
 
-chatBtn.addEventListener('click', () => {
+window.bindSafeButton(chatBtn, () => {
     if (chatContainer.style.display === 'none' || !chatContainer.style.display) {
         chatContainer.style.display = 'flex';
         chatContainer.classList.remove('minimized');
@@ -112,11 +140,11 @@ chatBtn.addEventListener('click', () => {
     }
 });
 
-chatMinBtn.addEventListener('click', () => {
+window.bindSafeButton(chatMinBtn, () => {
     chatContainer.classList.toggle('minimized');
 });
 
-chatCloseBtn.addEventListener('click', () => {
+window.bindSafeButton(chatCloseBtn, () => {
     chatContainer.style.display = 'none';
     chatBtn.classList.remove('active');
 });
@@ -125,8 +153,9 @@ let isChatDragging = false;
 let chatOffsetX = 0;
 let chatOffsetY = 0;
 
-chatHeader.addEventListener('mousedown', (e) => {
+chatHeader.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return;
+    e.stopPropagation();
     isChatDragging = true;
     const rect = chatContainer.getBoundingClientRect();
     chatOffsetX = e.clientX - rect.left;
@@ -135,19 +164,30 @@ chatHeader.addEventListener('mousedown', (e) => {
     chatContainer.style.bottom = 'auto';
     chatContainer.style.left = rect.left + 'px';
     chatContainer.style.top = rect.top + 'px';
+    if (chatHeader.setPointerCapture) {
+        try { chatHeader.setPointerCapture(e.pointerId); } catch (err) {}
+    }
 });
 
-window.addEventListener('mousemove', (e) => {
+chatHeader.addEventListener('pointermove', (e) => {
     if (!isChatDragging) return;
+    e.stopPropagation();
     const nx = Math.max(0, Math.min(window.innerWidth - 120, e.clientX - chatOffsetX));
     const ny = Math.max(0, Math.min(window.innerHeight - 60, e.clientY - chatOffsetY));
     chatContainer.style.left = nx + 'px';
     chatContainer.style.top = ny + 'px';
 });
 
-window.addEventListener('mouseup', () => {
+const stopChatDrag = (e) => {
+    if (!isChatDragging) return;
     isChatDragging = false;
-});
+    if (e && chatHeader.releasePointerCapture) {
+        try { chatHeader.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+};
+
+chatHeader.addEventListener('pointerup', stopChatDrag);
+chatHeader.addEventListener('pointercancel', stopChatDrag);
 
 function appendChatMessage(msg) {
     if (!msg) return;

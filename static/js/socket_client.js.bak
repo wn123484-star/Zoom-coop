@@ -1,5 +1,26 @@
-const socket = io({ reconnection: true, reconnectionAttempts: 15, reconnectionDelay: 1000 });
+const socket = io({ reconnection: true, reconnectionAttempts: 20, reconnectionDelay: 800 });
 let cachedRoomState = null;
+
+window.bindSafeButton = function(el, handler) {
+    if (!el) return;
+    let lastTrigger = 0;
+    const stopOnly = (e) => {
+        e.stopPropagation();
+    };
+    el.addEventListener('pointerdown', stopOnly);
+    el.addEventListener('mousedown', stopOnly);
+    el.addEventListener('touchstart', stopOnly, { passive: true });
+    const runHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const now = Date.now();
+        if (now - lastTrigger < 220) return;
+        lastTrigger = now;
+        handler(e);
+    };
+    el.addEventListener('click', runHandler);
+    el.addEventListener('touchend', runHandler, { passive: false });
+};
 
 window.showToast = function(text) {
     const container = document.getElementById('toast-container');
@@ -10,7 +31,7 @@ window.showToast = function(text) {
     container.appendChild(el);
     setTimeout(() => {
         el.remove();
-    }, 2600);
+    }, 2500);
 };
 
 function applyFullRoomState(state) {
@@ -18,6 +39,7 @@ function applyFullRoomState(state) {
     if (window.loadRoomSettings && state.settings) window.loadRoomSettings(state.settings);
     if (window.loadDrawHistory) window.loadDrawHistory(state.draw_history || []);
     if (window.loadStickiesHistory) window.loadStickiesHistory(state.stickies || []);
+    if (window.loadWidgetsState && state.widgets) window.loadWidgetsState(state.widgets);
     if (window.loadMediaState) window.loadMediaState(state.media);
     if (window.loadXoState && state.xo_game) window.loadXoState(state.xo_game);
     if (window.loadChatHistory && state.chat) window.loadChatHistory(state.chat);

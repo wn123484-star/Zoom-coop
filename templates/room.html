@@ -12,11 +12,12 @@
 <div id="workspace">
 <canvas id="board" width="5000" height="5000"></canvas>
 <canvas id="laser-board" width="5000" height="5000"></canvas>
+<div id="board-media-container"></div>
 <div id="sticky-container"></div>
 
-<div id="xo-container" class="board-widget xo-widget glass-effect" style="display: none; left: 2580px; top: 2260px;">
+<div id="xo-container" class="board-widget xo-widget glass-effect" style="display: none; left: 2550px; top: 2250px;">
 <div id="xo-header" class="widget-header">
-<span class="widget-title">🎮 Caro XO 20x20 (Chung)</span>
+<span class="widget-title">🎮 Cờ Caro XO 20x20 (Chung)</span>
 <div class="widget-controls">
 <button type="button" id="xo-reset-btn" class="widget-btn" title="Tạo ván mới">🔄 Ván mới</button>
 <button type="button" id="xo-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
@@ -31,12 +32,13 @@
 </div>
 </div>
 
-<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1980px; top: 2260px;">
+<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1950px; top: 2250px;">
 <div id="media-header" class="widget-header">
-<span class="widget-title">🎬 Media Hub (Chung)</span>
+<span class="widget-title">🎬 Trạm Media Chung (YouTube / Ảnh / Video / MP3 / PDF)</span>
 <div class="widget-controls">
-<button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện thanh nhập link">🔽 Nhập</button>
-<button type="button" id="btn-clear-media" class="widget-btn" title="Gỡ Media hiện tại">🗑️ Gỡ</button>
+<button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện khung tải lên">🔽 Ẩn/Hiện Nhập</button>
+<button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Media đang phát thành thẻ trên mặt bảng">📌 Ghim lên bảng</button>
+<button type="button" id="btn-clear-media" class="widget-btn" title="Dừng phát">🗑️ Dừng</button>
 <button type="button" id="media-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
 <button type="button" id="media-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
 </div>
@@ -44,16 +46,20 @@
 <div id="media-body" class="widget-body">
 <div id="media-controls-box" class="media-controls">
 <div class="media-input-row">
-<input type="text" id="youtube-link" placeholder="Dán link YouTube (watch, shorts, youtu.be)...">
-<button type="button" id="btn-play-yt">Phát YT</button>
+<input type="text" id="youtube-link" placeholder="Dán link YouTube (watch, shorts, youtu.be) để xem chung...">
+<button type="button" id="btn-play-yt">▶️ Phát YouTube</button>
 </div>
-<div class="media-input-row">
-<input type="file" id="file-upload" accept="image/*,video/*,audio/*,application/pdf">
-<button type="button" id="btn-upload">Tải lên</button>
+<div class="media-input-row upload-row">
+<input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,application/pdf">
+<button type="button" id="btn-upload">📤 Phát Chung</button>
+<button type="button" id="btn-upload-board" class="pin-btn" title="Tải tệp lên và đặt trực tiếp lên mặt bảng">📌 Đặt lên Bảng</button>
 </div>
+<div id="media-history-bar" class="media-history-bar"></div>
 </div>
 <div id="media-content" class="media-content">
-<p class="empty-media-text">Chia sẻ video YouTube, ảnh, nhạc hoặc PDF gắn trực tiếp trên bảng chung</p>
+<div class="empty-media-box">
+<p class="empty-media-text">🎬 Chọn <b>Ảnh, Video, Nhạc MP3, Tài liệu PDF</b> hoặc dán link <b>YouTube</b> ở trên để mọi người trong phòng cùng xem và nghe trực tiếp!</p>
+</div>
 </div>
 </div>
 </div>
@@ -73,9 +79,9 @@
 <button type="button" id="tool-pen" class="tool-btn active" title="Bút vẽ mượt">✏️<span>Bút</span></button>
 <button type="button" id="tool-highlighter" class="tool-btn" title="Bút dạ quang">🖍️<span>Dạ quang</span></button>
 <button type="button" id="tool-neon" class="tool-btn" title="Bút Neon phát sáng">✨<span>Neon</span></button>
-<button type="button" id="tool-rainbow" class="tool-btn" title="Bút Cầu vồng đổi màu">🌈<span>Cầu vồng</span></button>
+<button type="button" id="tool-rainbow" class="tool-btn" title="Bút Cầu vồng">🌈<span>Cầu vồng</span></button>
 <button type="button" id="tool-dashed" class="tool-btn" title="Bút nét đứt">➖<span>Nét đứt</span></button>
-<button type="button" id="tool-laser" class="tool-btn" title="Đèn Laser chỉ điểm (Tự mờ)">🔦<span>Laser</span></button>
+<button type="button" id="tool-laser" class="tool-btn" title="Đèn Laser chỉ điểm">🔦<span>Laser</span></button>
 <button type="button" id="tool-line" class="tool-btn" title="Vẽ đường thẳng">📏<span>Đường</span></button>
 <button type="button" id="tool-arrow" class="tool-btn" title="Vẽ mũi tên">➡️<span>Mũi tên</span></button>
 <button type="button" id="tool-rect" class="tool-btn" title="Vẽ khung chữ nhật">▭<span>Khung</span></button>
@@ -97,14 +103,18 @@
 </div>
 <div class="divider"></div>
 <button type="button" id="tool-undo" class="icon-action-btn" title="Hoàn tác nét vẽ (Ctrl+Z)">↩️<span>Hoàn tác</span></button>
-<button type="button" id="tool-center" class="icon-action-btn" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
-<button type="button" id="tool-sticky" class="action-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
-<button type="button" id="tool-media" class="action-btn" title="Mở Media Hub trên bảng">🎬<span>Media</span></button>
-<button type="button" id="tool-xo" class="action-btn" title="Mở bàn cờ Caro trên bảng">🎮<span>Caro</span></button>
-<button type="button" id="tool-chat" class="action-btn" title="Mở khung trò chuyện">💬<span>Chat</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
+<button type="button" id="tool-clear" class="danger-btn" title="Xóa toàn bộ nét vẽ">🗑️<span>Xóa bảng</span></button>
+</div>
+
+<div id="bottom-dock" class="bottom-dock glass-effect">
+<button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
+<button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Đăng Ảnh, Video, Nhạc MP3 hoặc PDF lên xem chung">📤<span>Đăng Ảnh/Video/PDF</span></button>
+<button type="button" id="tool-media" class="dock-btn" title="Bật/Tắt Trạm xem Video & YouTube chung">🎬<span>Xem Video / YT</span></button>
+<button type="button" id="tool-xo" class="dock-btn" title="Bật/Tắt bàn cờ Caro XO 20x20">🎮<span>Cờ Caro XO</span></button>
+<button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <div class="divider"></div>
-<button type="button" id="tool-export" class="icon-action-btn" title="Lưu ảnh chụp bảng">💾<span>Lưu ảnh</span></button>
-<button type="button" id="tool-clear" class="danger-btn" title="Xóa toàn bộ nét vẽ">🗑️<span>Xóa</span></button>
+<button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
+<button type="button" id="tool-export" class="dock-btn secondary" title="Lưu ảnh chụp bảng">💾<span>Lưu ảnh</span></button>
 </div>
 
 <button type="button" id="fab-settings" class="fab-btn glass-effect" title="Tùy chỉnh giao diện">⚙️</button>
@@ -153,7 +163,7 @@
 
 <div id="chat-container" class="floating-widget chat-widget glass-effect" style="display: none;">
 <div id="chat-header" class="widget-header">
-<span class="widget-title">💬 Trò chuyện Phòng</span>
+<span class="widget-title">💬 Trò chuyện Phòng ({{ room_id }})</span>
 <div class="widget-controls">
 <button type="button" id="chat-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
 <button type="button" id="chat-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>

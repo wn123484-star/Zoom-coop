@@ -4,6 +4,7 @@ import sqlite3
 import time
 import threading
 import uuid
+import mimetypes
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, join_room, emit
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret')
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 connected_users = {}
@@ -54,14 +55,29 @@ def default_room_state():
     return {
         'draw_history': [],
         'stickies': {},
+        'board_media': {},
         'media': None,
+        'media_list': [],
         'chat': [],
         'settings': {'bg': 'bg-magical'},
         'widgets': {
-            'xo': {'x': 2580, 'y': 2260, 'open': False, 'minimized': False},
-            'media': {'x': 1980, 'y': 2260, 'open': False, 'minimized': False}
+            'xo': {'x': 2550, 'y': 2250, 'open': False, 'minimized': False},
+            'media': {'x': 1950, 'y': 2250, 'open': False, 'minimized': False}
         }
     }
+
+def detect_media_kind(filename, content_type):
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    ct = (content_type or '').lower()
+    if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg') or ct.startswith('image/'):
+        return 'image'
+    if ext in ('mp4', 'webm', 'ogg', 'mov', 'mkv') or ct.startswith('video/'):
+        return 'video'
+    if ext in ('mp3', 'wav', 'flac', 'aac', 'm4a', 'oga') or ct.startswith('audio/'):
+        return 'audio'
+    if ext == 'pdf' or ct == 'application/pdf':
+        return 'pdf'
+    return 'file'
 
 def mark_room_dirty(room_id):
     if room_id:
@@ -243,13 +259,16 @@ def admin_delete_room(room_id):
         return redirect(url_for('admin'))
     socketio.emit('force_leave', {'msg': 'Phòng đã bị Quản trị viên đóng và xóa dữ liệu.'}, to=room_id)
     state = room_states.get(room_id)
-    if state and state.get('media') and state['media'].get('url', '').startswith('/static/uploads/'):
-        rel_path = state['media']['url'].lstrip('/')
-        if os.path.exists(rel_path):
-            try:
-                os.remove(rel_path)
-            except Exception:
-                pass
+    if state:
+        for item in state.get('media_list', []):
+            url = item.get('url', '')
+            if url.startswith('/static/uploads/'):
+                rel_path = url.lstrip('/')
+                if os.path.exists(rel_path):
+                    try:
+                        os.remove(rel_path)
+                    except Exception:
+                        pass
     active_rooms.pop(room_id, None)
     xo_games.pop(room_id, None)
     room_states.pop(room_id, None)
@@ -264,16 +283,25 @@ def admin_delete_room(room_id):
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+        return jsonify({'error': 'Không tìm thấy tệp tải lên'}), 400
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    if not file or file.filename == '':
+        return jsonify({'error': 'Chưa chọn tệp'}), 400
     os.makedirs('static/uploads', exist_ok=True)
-    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'bin'
+    orig_name = file.filename
+    ext = orig_name.rsplit('.', 1)[-1].lower() if '.' in orig_name else 'bin'
     filename = f"{uuid.uuid4().hex}.{ext}"
     filepath = os.path.join('static/uploads', filename)
     file.save(filepath)
-    return jsonify({'url': f'/static/uploads/{filename}', 'type': file.content_type or 'application/octet-stream'})
+    guessed_mime, _ = mimetypes.guess_type(filepath)
+    content_type = file.content_type or guessed_mime or 'application/octet-stream'
+    kind = detect_media_kind(orig_name, content_type)
+    return jsonify({
+        'url': f'/static/uploads/{filename}',
+        'type': content_type,
+        'kind': kind,
+        'name': orig_name[:60]
+    })
 
 @socketio.on('join_room')
 def handle_join(data):
@@ -292,7 +320,9 @@ def handle_join(data):
     emit('room_state', {
         'draw_history': state['draw_history'],
         'stickies': list(state['stickies'].values()),
+        'board_media': list(state.get('board_media', {}).values()),
         'media': state['media'],
+        'media_list': state.get('media_list', [])[-30:],
         'xo_game': xo_games[room_id],
         'chat': state['chat'][-50:],
         'settings': state['settings'],
@@ -441,6 +471,45 @@ def handle_color_sticky(data):
         mark_room_dirty(room_id)
     emit('sticky_colored', data, to=room_id, include_self=False)
 
+@socketio.on('new_board_media')
+def handle_new_board_media(data):
+    room_id = data.get('room_id')
+    if not room_id or 'id' not in data:
+        return
+    state = get_room_state(room_id)
+    if 'board_media' not in state:
+        state['board_media'] = {}
+    state['board_media'][data['id']] = data
+    mark_room_dirty(room_id)
+    emit('board_media_added', data, to=room_id, include_self=False)
+
+@socketio.on('move_board_media')
+def handle_move_board_media(data):
+    room_id = data.get('room_id')
+    if not room_id or 'id' not in data:
+        return
+    state = get_room_state(room_id)
+    bm = state.get('board_media', {})
+    if data['id'] in bm:
+        bm[data['id']]['x'] = data['x']
+        bm[data['id']]['y'] = data['y']
+        if 'w' in data:
+            bm[data['id']]['w'] = data['w']
+        mark_room_dirty(room_id)
+    emit('board_media_moved', data, to=room_id, include_self=False)
+
+@socketio.on('delete_board_media')
+def handle_delete_board_media(data):
+    room_id = data.get('room_id')
+    if not room_id or 'id' not in data:
+        return
+    state = get_room_state(room_id)
+    bm = state.get('board_media', {})
+    if data['id'] in bm:
+        del bm[data['id']]
+        mark_room_dirty(room_id)
+    emit('board_media_deleted', data, to=room_id, include_self=False)
+
 @socketio.on('xo_click')
 def handle_xo_click(data):
     room_id = data.get('room_id')
@@ -500,13 +569,30 @@ def handle_media_share(data):
     if not room_id:
         return
     state = get_room_state(room_id)
+    if 'media_list' not in state:
+        state['media_list'] = []
     if data.get('type') == 'clear':
         state['media'] = None
-    else:
-        state['media'] = {'type': data.get('type'), 'url': data.get('url'), 'sender': data.get('sender', '')}
-        state['widgets']['media']['open'] = True
+        mark_room_dirty(room_id)
+        emit('media_shared', {'type': 'clear', 'media_list': state['media_list'][-30:]}, to=room_id)
+        return
+    item = {
+        'id': uuid.uuid4().hex[:8],
+        'type': data.get('type'),
+        'kind': data.get('kind') or detect_media_kind(data.get('name', ''), data.get('type', '')),
+        'url': data.get('url'),
+        'name': data.get('name') or ('YouTube Video' if data.get('type') == 'youtube' else 'Media File'),
+        'sender': data.get('sender', 'Khách'),
+        'time': time.strftime('%H:%M')
+    }
+    state['media'] = item
+    if not any(m.get('url') == item['url'] for m in state['media_list']):
+        state['media_list'].append(item)
+        if len(state['media_list']) > 30:
+            state['media_list'] = state['media_list'][-30:]
+    state['widgets']['media']['open'] = True
     mark_room_dirty(room_id)
-    emit('media_shared', state['media'] or {'type': 'clear'}, to=room_id, include_self=False)
+    emit('media_shared', {'media': item, 'media_list': state['media_list'][-30:]}, to=room_id)
 
 @socketio.on('chat_message')
 def handle_chat_message(data):

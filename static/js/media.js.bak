@@ -8,22 +8,26 @@ const mediaContent = document.getElementById('media-content');
 const mediaControlsBox = document.getElementById('media-controls-box');
 const btnToggleControls = document.getElementById('btn-toggle-media-controls');
 
-let isMediaDragging = false;
-let mediaOffsetX = 0;
-let mediaOffsetY = 0;
+function syncMediaWidgetState() {
+    socket.emit('widget_state', {
+        room_id: ROOM_ID,
+        widget: 'media',
+        x: parseFloat(mediaContainer.style.left) || 1980,
+        y: parseFloat(mediaContainer.style.top) || 2260,
+        open: mediaContainer.style.display !== 'none',
+        minimized: mediaContainer.classList.contains('minimized')
+    });
+}
 
-btnToggleControls.addEventListener('click', () => {
-    if (mediaControlsBox.classList.contains('collapsed')) {
-        mediaControlsBox.classList.remove('collapsed');
-        btnToggleControls.innerText = '🔽 Ẩn nhập';
-    } else {
-        mediaControlsBox.classList.add('collapsed');
-        btnToggleControls.innerText = '🔼 Hiện nhập';
-    }
+window.bindSafeButton(btnToggleControls, () => {
+    mediaControlsBox.classList.toggle('collapsed');
 });
 
-mediaBtn.addEventListener('click', () => {
+window.bindSafeButton(mediaBtn, () => {
     if (mediaContainer.style.display === 'none' || !mediaContainer.style.display) {
+        const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
+        mediaContainer.style.left = Math.round(center.x - 220) + 'px';
+        mediaContainer.style.top = Math.round(center.y - 180) + 'px';
         mediaContainer.style.display = 'flex';
         mediaContainer.classList.remove('minimized');
         mediaBtn.classList.add('active');
@@ -31,42 +35,71 @@ mediaBtn.addEventListener('click', () => {
         mediaContainer.style.display = 'none';
         mediaBtn.classList.remove('active');
     }
+    syncMediaWidgetState();
 });
 
-mediaMinBtn.addEventListener('click', () => {
+window.bindSafeButton(mediaMinBtn, () => {
     mediaContainer.classList.toggle('minimized');
+    syncMediaWidgetState();
 });
 
-mediaCloseBtn.addEventListener('click', () => {
+window.bindSafeButton(mediaCloseBtn, () => {
     mediaContainer.style.display = 'none';
     mediaBtn.classList.remove('active');
+    syncMediaWidgetState();
 });
 
-btnClearMedia.addEventListener('click', () => {
+window.bindSafeButton(btnClearMedia, () => {
     clearMediaView();
     socket.emit('media_share', { room_id: ROOM_ID, type: 'clear' });
 });
 
-mediaHeader.addEventListener('mousedown', (e) => {
+let isMediaDragging = false;
+let mediaStartClientX = 0;
+let mediaStartClientY = 0;
+let mediaInitialLeft = 1980;
+let mediaInitialTop = 2260;
+
+mediaHeader.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return;
+    e.stopPropagation();
     isMediaDragging = true;
-    const rect = mediaContainer.getBoundingClientRect();
-    mediaOffsetX = e.clientX - rect.left;
-    mediaOffsetY = e.clientY - rect.top;
-    mediaContainer.style.left = rect.left + 'px';
-    mediaContainer.style.top = rect.top + 'px';
+    mediaStartClientX = e.clientX;
+    mediaStartClientY = e.clientY;
+    mediaInitialLeft = parseFloat(mediaContainer.style.left) || 1980;
+    mediaInitialTop = parseFloat(mediaContainer.style.top) || 2260;
+    mediaContainer.style.zIndex = 35;
+    if (mediaHeader.setPointerCapture) {
+        try { mediaHeader.setPointerCapture(e.pointerId); } catch (err) {}
+    }
 });
 
-window.addEventListener('mousemove', (e) => {
+mediaHeader.addEventListener('pointermove', (e) => {
     if (!isMediaDragging) return;
-    const nx = Math.max(0, Math.min(window.innerWidth - 120, e.clientX - mediaOffsetX));
-    const ny = Math.max(0, Math.min(window.innerHeight - 60, e.clientY - mediaOffsetY));
+    e.stopPropagation();
+    const scale = window.workspaceScale || 1;
+    const nx = Math.round(mediaInitialLeft + (e.clientX - mediaStartClientX) / scale);
+    const ny = Math.round(mediaInitialTop + (e.clientY - mediaStartClientY) / scale);
     mediaContainer.style.left = nx + 'px';
     mediaContainer.style.top = ny + 'px';
+    syncMediaWidgetState();
 });
 
-window.addEventListener('mouseup', () => {
+const stopMediaDrag = (e) => {
+    if (!isMediaDragging) return;
     isMediaDragging = false;
+    mediaContainer.style.zIndex = 15;
+    if (e && mediaHeader.releasePointerCapture) {
+        try { mediaHeader.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    syncMediaWidgetState();
+};
+
+mediaHeader.addEventListener('pointerup', stopMediaDrag);
+mediaHeader.addEventListener('pointercancel', stopMediaDrag);
+
+mediaContainer.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
 });
 
 function extractYoutubeId(url) {
@@ -77,9 +110,8 @@ function extractYoutubeId(url) {
 }
 
 function clearMediaView() {
-    mediaContent.innerHTML = '<p class="empty-media-text">Chia sẻ video YouTube, ảnh, nhạc hoặc PDF cùng mọi người trong phòng</p>';
+    mediaContent.innerHTML = '<p class="empty-media-text">Chia sẻ video YouTube, ảnh, nhạc hoặc PDF gắn trực tiếp trên bảng chung</p>';
     mediaControlsBox.classList.remove('collapsed');
-    btnToggleControls.innerText = '🔽 Ẩn nhập';
 }
 
 function renderMedia(type, url) {
@@ -104,7 +136,6 @@ function renderMedia(type, url) {
         mediaContent.innerHTML = `<embed src="${url}" type="application/pdf" width="100%" height="100%">`;
     }
     mediaControlsBox.classList.add('collapsed');
-    btnToggleControls.innerText = '🔼 Hiện nhập';
     if (mediaContainer.style.display === 'none' || !mediaContainer.style.display) {
         mediaContainer.style.display = 'flex';
         mediaBtn.classList.add('active');
@@ -117,7 +148,7 @@ window.loadMediaState = function(mediaData) {
     }
 };
 
-document.getElementById('btn-play-yt').addEventListener('click', () => {
+window.bindSafeButton(document.getElementById('btn-play-yt'), () => {
     const url = document.getElementById('youtube-link').value.trim();
     if (!url) return;
     const vid = extractYoutubeId(url);
@@ -129,7 +160,7 @@ document.getElementById('btn-play-yt').addEventListener('click', () => {
     socket.emit('media_share', { room_id: ROOM_ID, type: 'youtube', url: url, sender: USERNAME });
 });
 
-document.getElementById('btn-upload').addEventListener('click', () => {
+window.bindSafeButton(document.getElementById('btn-upload'), () => {
     const fileInput = document.getElementById('file-upload');
     if (!fileInput.files || fileInput.files.length === 0) {
         if (window.showToast) window.showToast('Vui lòng chọn tệp trước khi tải lên!');
