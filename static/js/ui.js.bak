@@ -9,6 +9,9 @@ const fabFocus = document.getElementById('fab-focus');
 const toggleSyncBg = document.getElementById('toggle-sync-bg');
 const btnCopyLink = document.getElementById('btn-copy-link');
 
+const groupTriggers = document.querySelectorAll('.group-trigger-btn');
+const popovers = document.querySelectorAll('.tool-popover');
+
 const chatContainer = document.getElementById('chat-container');
 const chatBtn = document.getElementById('tool-chat');
 const chatMinBtn = document.getElementById('chat-min-btn');
@@ -19,6 +22,119 @@ const chatInput = document.getElementById('chat-input');
 const chatMessages = document.getElementById('chat-messages');
 const chatBadge = document.getElementById('chat-badge');
 let unreadChat = 0;
+
+window.closeAllPopovers = function() {
+    popovers.forEach(p => p.classList.remove('open'));
+};
+
+function openPopoverNearButton(popoverEl, triggerBtn) {
+    if (!popoverEl || !triggerBtn) return;
+    const isAlreadyOpen = popoverEl.classList.contains('open');
+    window.closeAllPopovers();
+    if (isAlreadyOpen) return;
+
+    const rect = triggerBtn.getBoundingClientRect();
+    popoverEl.classList.add('open');
+    const popW = popoverEl.offsetWidth || 280;
+    let leftPos = rect.left + rect.width / 2 - popW / 2;
+    leftPos = Math.max(10, Math.min(window.innerWidth - popW - 10, leftPos));
+    popoverEl.style.left = leftPos + 'px';
+    popoverEl.style.top = (rect.bottom + 8) + 'px';
+    popoverEl.style.transform = 'none';
+}
+
+groupTriggers.forEach(btn => {
+    window.bindSafeButton(btn, () => {
+        const popId = btn.getAttribute('data-popover');
+        const popEl = document.getElementById(popId);
+        if (popId === 'popover-pen') {
+            const activeSub = document.querySelector('#popover-pen .sub-tool-btn.active');
+            if (activeSub && window.selectDrawingTool) {
+                window.selectDrawingTool(activeSub.getAttribute('data-tool'));
+            }
+        } else if (popId === 'popover-shape') {
+            const activeShape = document.querySelector('#popover-shape .sub-shape-btn.active') || document.querySelector('#popover-shape .sub-shape-btn');
+            if (activeShape && window.selectDrawingTool) {
+                activeShape.classList.add('active');
+                window.selectDrawingTool(activeShape.getAttribute('data-tool'));
+            }
+        } else if (popId === 'popover-eraser') {
+            if (window.selectDrawingTool) window.selectDrawingTool('eraser');
+        }
+        openPopoverNearButton(popEl, btn);
+    });
+});
+
+document.querySelectorAll('.sub-tool-btn').forEach(btn => {
+    window.bindSafeButton(btn, () => {
+        document.querySelectorAll('.sub-tool-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tool = btn.getAttribute('data-tool');
+        const icon = btn.getAttribute('data-icon');
+        const label = btn.getAttribute('data-label');
+        const iconEl = document.getElementById('active-pen-icon');
+        const labelEl = document.getElementById('active-pen-label');
+        if (iconEl && icon) iconEl.innerText = icon;
+        if (labelEl && label) labelEl.innerText = label;
+        if (window.selectDrawingTool) window.selectDrawingTool(tool);
+        window.closeAllPopovers();
+    });
+});
+
+document.querySelectorAll('.sub-shape-btn').forEach(btn => {
+    window.bindSafeButton(btn, () => {
+        document.querySelectorAll('.sub-shape-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tool = btn.getAttribute('data-tool');
+        const icon = btn.getAttribute('data-icon');
+        const label = btn.getAttribute('data-label');
+        const iconEl = document.getElementById('active-shape-icon');
+        const labelEl = document.getElementById('active-shape-label');
+        if (iconEl && icon) iconEl.innerText = icon;
+        if (labelEl && label) labelEl.innerText = label;
+        if (window.selectDrawingTool) window.selectDrawingTool(tool);
+        window.closeAllPopovers();
+    });
+});
+
+function setupScrollStrip(stripId) {
+    const strip = document.getElementById(stripId);
+    if (!strip) return;
+    const leftBtn = document.querySelector(`.scroll-arrow-btn.left[data-target="${stripId}"]`);
+    const rightBtn = document.querySelector(`.scroll-arrow-btn.right[data-target="${stripId}"]`);
+
+    function updateArrows() {
+        const maxScroll = strip.scrollWidth - strip.clientWidth;
+        if (maxScroll <= 4) {
+            if (leftBtn) leftBtn.style.display = 'none';
+            if (rightBtn) rightBtn.style.display = 'none';
+            return;
+        }
+        if (leftBtn) leftBtn.style.display = strip.scrollLeft > 6 ? 'inline-flex' : 'none';
+        if (rightBtn) rightBtn.style.display = strip.scrollLeft < maxScroll - 6 ? 'inline-flex' : 'none';
+    }
+
+    if (leftBtn) {
+        window.bindSafeButton(leftBtn, () => {
+            strip.scrollBy({ left: -220, behavior: 'smooth' });
+            setTimeout(updateArrows, 260);
+        });
+    }
+    if (rightBtn) {
+        window.bindSafeButton(rightBtn, () => {
+            strip.scrollBy({ left: 220, behavior: 'smooth' });
+            setTimeout(updateArrows, 260);
+        });
+    }
+
+    strip.addEventListener('scroll', updateArrows, { passive: true });
+    window.addEventListener('resize', updateArrows);
+    setTimeout(updateArrows, 150);
+    setTimeout(updateArrows, 600);
+}
+
+setupScrollStrip('top-strip');
+setupScrollStrip('bottom-strip');
 
 function updateEraserModeUI(mode) {
     window.eraserMode = mode === 'stroke' ? 'stroke' : 'point';
@@ -40,13 +156,15 @@ eraserBtns.forEach(btn => {
         if (window.selectDrawingTool) {
             window.selectDrawingTool('eraser');
         }
+        window.closeAllPopovers();
         if (window.showToast) {
-            window.showToast(mode === 'stroke' ? 'Đã bật: ✂️ Tẩy theo nét (Chạm vào nét vẽ để xóa cả nét)' : 'Đã bật: 🧽 Tẩy theo điểm (Chà tới đâu xóa tới đó)');
+            window.showToast(mode === 'stroke' ? 'Đã bật: ✂️ Tẩy theo nét (Chạm nhẹ xóa nguyên nét)' : 'Đã bật: 🧽 Tẩy theo điểm (Chà tới đâu xóa tới đó)');
         }
     });
 });
 
 window.bindSafeButton(fabSettings, () => {
+    window.closeAllPopovers();
     settingsOverlay.classList.toggle('active');
     fabSettings.classList.toggle('active', settingsOverlay.classList.contains('active'));
 });
@@ -63,9 +181,20 @@ document.addEventListener('pointerdown', (e) => {
             fabSettings.classList.remove('active');
         }
     }
+    let clickedInsidePopover = false;
+    popovers.forEach(p => {
+        if (p.contains(e.target)) clickedInsidePopover = true;
+    });
+    groupTriggers.forEach(t => {
+        if (t.contains(e.target)) clickedInsidePopover = true;
+    });
+    if (!clickedInsidePopover) {
+        window.closeAllPopovers();
+    }
 });
 
 window.bindSafeButton(fabFocus, () => {
+    window.closeAllPopovers();
     const isFocus = document.body.classList.toggle('focus-mode');
     fabFocus.innerText = isFocus ? '🙈' : '👁️';
     if (window.showToast) {

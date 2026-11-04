@@ -1,4 +1,5 @@
 const cursorsContainer = document.getElementById('cursors-container');
+const stampsLayer = document.getElementById('stamps-layer');
 const cursors = {};
 let lastSend = 0;
 let localTouchEl = null;
@@ -18,6 +19,26 @@ function showLocalTouchIndicator(wx, wy) {
         if (localTouchEl) localTouchEl.style.display = 'none';
     }, 1200);
 }
+
+window.spawnFloatingStamp = function(x, y, emoji, sender) {
+    if (!stampsLayer) return;
+    const el = document.createElement('div');
+    el.className = 'floating-stamp';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    const em = document.createElement('div');
+    em.className = 'stamp-emoji';
+    em.innerText = emoji || '❤️';
+    const s = document.createElement('div');
+    s.className = 'stamp-sender';
+    s.innerText = sender || 'Thành viên';
+    el.appendChild(em);
+    el.appendChild(s);
+    stampsLayer.appendChild(el);
+    setTimeout(() => {
+        el.remove();
+    }, 2800);
+};
 
 function broadcastPointerPosition(clientX, clientY, isTouch) {
     if (!socket || !socket.connected) return;
@@ -53,18 +74,6 @@ document.addEventListener('pointerdown', (e) => {
     }
 });
 
-document.addEventListener('touchstart', (e) => {
-    if (e.touches && e.touches.length > 0) {
-        broadcastPointerPosition(e.touches[0].clientX, e.touches[0].clientY, true);
-    }
-}, { passive: true });
-
-document.addEventListener('touchmove', (e) => {
-    if (e.touches && e.touches.length > 0) {
-        broadcastPointerPosition(e.touches[0].clientX, e.touches[0].clientY, true);
-    }
-}, { passive: true });
-
 socket.on('mouse_update', (data) => {
     if (!cursors[data.sid]) {
         const el = document.createElement('div');
@@ -87,6 +96,13 @@ socket.on('mouse_update', (data) => {
     cursorEl.style.transform = `translate3d(${data.x}px, ${data.y}px, 0)`;
 });
 
+socket.on('remove_cursor', (data) => {
+    if (data && data.sid && cursors[data.sid]) {
+        cursors[data.sid].remove();
+        delete cursors[data.sid];
+    }
+});
+
 socket.on('user_disconnected', (data) => {
     if (data && data.users) {
         const countEl = document.getElementById('online-count');
@@ -95,5 +111,11 @@ socket.on('user_disconnected', (data) => {
     if (cursors[data.sid]) {
         cursors[data.sid].remove();
         delete cursors[data.sid];
+    }
+});
+
+socket.on('stamp_placed', (data) => {
+    if (data) {
+        window.spawnFloatingStamp(data.x, data.y, data.emoji, data.sender);
     }
 });

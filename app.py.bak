@@ -54,6 +54,7 @@ def init_xo_game():
 def default_room_state():
     return {
         'draw_history': [],
+        'texts': {},
         'stickies': {},
         'board_media': {},
         'media': None,
@@ -351,6 +352,7 @@ def handle_join(data):
     users_list = get_room_users(room_id)
     emit('room_state', {
         'draw_history': state['draw_history'],
+        'texts': list(state.get('texts', {}).values()),
         'stickies': list(state['stickies'].values()),
         'board_media': list(state.get('board_media', {}).values()),
         'media': compute_live_media(state['media']),
@@ -399,6 +401,14 @@ def handle_laser_point(data):
         return
     emit('laser_point', data, to=room_id, include_self=False)
 
+@socketio.on('draw_live')
+def handle_draw_live(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    data['sid'] = request.sid
+    emit('draw_live', data, to=room_id, include_self=False)
+
 @socketio.on('draw_segment')
 def handle_draw_segment(data):
     room_id = data.get('room_id')
@@ -417,6 +427,7 @@ def handle_draw_stroke(data):
     if len(state['draw_history']) > 1000:
         state['draw_history'] = state['draw_history'][-1000:]
     mark_room_dirty(room_id)
+    stroke['sid'] = request.sid
     emit('draw_stroke', stroke, to=room_id, include_self=False)
 
 @socketio.on('delete_stroke')
@@ -450,8 +461,51 @@ def handle_clear(data):
         return
     state = get_room_state(room_id)
     state['draw_history'] = []
+    state['texts'] = {}
     mark_room_dirty(room_id)
     emit('board_cleared', {}, to=room_id)
+
+@socketio.on('new_text_box')
+def handle_new_text_box(data):
+    room_id = data.get('room_id')
+    if not room_id or 'id' not in data:
+        return
+    state = get_room_state(room_id)
+    if 'texts' not in state:
+        state['texts'] = {}
+    state['texts'][data['id']] = data
+    mark_room_dirty(room_id)
+    emit('text_box_added', data, to=room_id, include_self=False)
+
+@socketio.on('update_text_box')
+def handle_update_text_box(data):
+    room_id = data.get('room_id')
+    tid = data.get('id')
+    if not room_id or not tid:
+        return
+    state = get_room_state(room_id)
+    if 'texts' not in state:
+        state['texts'] = {}
+    if tid not in state['texts']:
+        state['texts'][tid] = data
+    else:
+        for k in ('x', 'y', 'w', 'h', 'text', 'color', 'fontSize', 'owner'):
+            if k in data:
+                state['texts'][tid][k] = data[k]
+    mark_room_dirty(room_id)
+    emit('text_box_updated', data, to=room_id, include_self=False)
+
+@socketio.on('delete_text_box')
+def handle_delete_text_box(data):
+    room_id = data.get('room_id')
+    tid = data.get('id')
+    if not room_id or not tid:
+        return
+    state = get_room_state(room_id)
+    if 'texts' in state and tid in state['texts']:
+        del state['texts'][tid]
+        mark_room_dirty(room_id)
+    emit('text_box_deleted', {'id': tid}, to=room_id, include_self=False)
 
 @socketio.on('widget_state')
 def handle_widget_state(data):

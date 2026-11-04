@@ -23,6 +23,8 @@ const chatMessages = document.getElementById('chat-messages');
 const chatBadge = document.getElementById('chat-badge');
 let unreadChat = 0;
 
+window.makeWidgetResizable(chatContainer, 260, 220, false, null);
+
 window.closeAllPopovers = function() {
     popovers.forEach(p => p.classList.remove('open'));
 };
@@ -35,11 +37,17 @@ function openPopoverNearButton(popoverEl, triggerBtn) {
 
     const rect = triggerBtn.getBoundingClientRect();
     popoverEl.classList.add('open');
-    const popW = popoverEl.offsetWidth || 280;
+    const popW = popoverEl.offsetWidth || 290;
+    const popH = popoverEl.offsetHeight || 220;
     let leftPos = rect.left + rect.width / 2 - popW / 2;
     leftPos = Math.max(10, Math.min(window.innerWidth - popW - 10, leftPos));
     popoverEl.style.left = leftPos + 'px';
-    popoverEl.style.top = (rect.bottom + 8) + 'px';
+
+    if (rect.top > window.innerHeight / 2) {
+        popoverEl.style.top = Math.max(10, rect.top - popH - 10) + 'px';
+    } else {
+        popoverEl.style.top = (rect.bottom + 8) + 'px';
+    }
     popoverEl.style.transform = 'none';
 }
 
@@ -58,6 +66,8 @@ groupTriggers.forEach(btn => {
                 activeShape.classList.add('active');
                 window.selectDrawingTool(activeShape.getAttribute('data-tool'));
             }
+        } else if (popId === 'popover-stamp') {
+            if (window.selectDrawingTool) window.selectDrawingTool('stamp');
         } else if (popId === 'popover-eraser') {
             if (window.selectDrawingTool) window.selectDrawingTool('eraser');
         }
@@ -94,6 +104,20 @@ document.querySelectorAll('.sub-shape-btn').forEach(btn => {
         if (labelEl && label) labelEl.innerText = label;
         if (window.selectDrawingTool) window.selectDrawingTool(tool);
         window.closeAllPopovers();
+    });
+});
+
+document.querySelectorAll('.stamp-opt-btn').forEach(btn => {
+    window.bindSafeButton(btn, () => {
+        document.querySelectorAll('.stamp-opt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const emoji = btn.getAttribute('data-stamp') || '❤️';
+        window.currentStamp = emoji;
+        const iconEl = document.getElementById('active-stamp-icon');
+        if (iconEl) iconEl.innerText = emoji;
+        if (window.selectDrawingTool) window.selectDrawingTool('stamp');
+        window.closeAllPopovers();
+        if (window.showToast) window.showToast(`Chạm lên mặt bảng để thả ${emoji}`);
     });
 });
 
@@ -239,27 +263,42 @@ window.loadRoomSettings = function(settings) {
     }
 };
 
+const widgetMap = {
+    xo: 'xo-container',
+    chess: 'chess-container',
+    memory: 'memory-container',
+    media: 'media-container'
+};
+
 function applySingleWidgetState(wName, st) {
-    if (!st) return;
-    const container = document.getElementById(wName === 'xo' ? 'xo-container' : 'media-container');
-    const btn = document.getElementById(wName === 'xo' ? 'tool-xo' : 'tool-media');
+    if (!st || !widgetMap[wName]) return;
+    const container = document.getElementById(widgetMap[wName]);
     if (!container) return;
     if (typeof st.x === 'number') container.style.left = st.x + 'px';
     if (typeof st.y === 'number') container.style.top = st.y + 'px';
+    if (typeof st.w === 'number') container.style.width = st.w + 'px';
+    if (typeof st.h === 'number') container.style.height = st.h + 'px';
     if (st.open) {
         container.style.display = 'flex';
-        if (btn) btn.classList.add('active');
+        if (wName === 'media') {
+            const mBtn = document.getElementById('tool-media');
+            if (mBtn) mBtn.classList.add('active');
+        }
     } else {
         container.style.display = 'none';
-        if (btn) btn.classList.remove('active');
+        if (wName === 'media') {
+            const mBtn = document.getElementById('tool-media');
+            if (mBtn) mBtn.classList.remove('active');
+        }
     }
     container.classList.toggle('minimized', !!st.minimized);
 }
 
 window.loadWidgetsState = function(widgets) {
     if (!widgets) return;
-    if (widgets.xo) applySingleWidgetState('xo', widgets.xo);
-    if (widgets.media) applySingleWidgetState('media', widgets.media);
+    ['xo', 'chess', 'memory', 'media'].forEach(k => {
+        if (widgets[k]) applySingleWidgetState(k, widgets[k]);
+    });
 };
 
 socket.on('widget_updated', (data) => {

@@ -1,13 +1,12 @@
 const stickyContainer = document.getElementById('sticky-container');
 const stickyColors = { y: '#ffeaa7', g: '#55efc4', p: '#fd79a8', b: '#74b9ff' };
 
-document.getElementById('tool-sticky').addEventListener('click', () => {
+window.bindSafeButton(document.getElementById('tool-sticky'), () => {
     const id = 'note_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-    const rect = document.getElementById('workspace').getBoundingClientRect();
-    const scale = window.workspaceScale || 1;
-    const offset = (stickyContainer.children.length % 6) * 24;
-    const startX = Math.round((window.innerWidth / 2 - rect.left) / scale - 110 + offset);
-    const startY = Math.round((window.innerHeight / 2 - rect.top) / scale - 70 + offset);
+    const centerPos = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
+    const offset = (stickyContainer.children.length % 6) * 26;
+    const startX = Math.round(centerPos.x - 115 + offset);
+    const startY = Math.round(centerPos.y - 75 + offset);
     createSticky(id, startX + 'px', startY + 'px', '', 'y', USERNAME, true);
     socket.emit('new_sticky', {
         room_id: ROOM_ID,
@@ -45,9 +44,7 @@ function createSticky(id, x, y, text, colorCode, owner, autoFocus) {
     ['y', 'g', 'p', 'b'].forEach(c => {
         const dot = document.createElement('div');
         dot.className = 'scolor ' + c;
-        dot.dataset.c = c;
-        dot.addEventListener('click', (e) => {
-            e.stopPropagation();
+        window.bindSafeButton(dot, () => {
             el.style.backgroundColor = stickyColors[c];
             socket.emit('color_sticky', { room_id: ROOM_ID, id: id, color: c });
         });
@@ -64,11 +61,11 @@ function createSticky(id, x, y, text, colorCode, owner, autoFocus) {
     rightControls.appendChild(ownerSpan);
 
     const delBtn = document.createElement('button');
+    delBtn.type = 'button';
     delBtn.className = 'sticky-del';
     delBtn.innerText = '✕';
     delBtn.title = 'Xóa ghi chú';
-    delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
+    window.bindSafeButton(delBtn, () => {
         el.remove();
         socket.emit('delete_sticky', { room_id: ROOM_ID, id: id });
     });
@@ -87,47 +84,55 @@ function createSticky(id, x, y, text, colorCode, owner, autoFocus) {
     stickyContainer.appendChild(el);
 
     if (autoFocus) {
-        setTimeout(() => content.focus(), 50);
+        setTimeout(() => content.focus(), 60);
     }
 
     let isDragging = false;
-    let dragStartClientX = 0;
-    let dragStartClientY = 0;
+    let dragStartX = 0;
+    let dragStartY = 0;
     let initialLeft = 0;
     let initialTop = 0;
 
-    header.addEventListener('mousedown', (e) => {
+    header.addEventListener('pointerdown', (e) => {
         if (e.target.closest('.sticky-del') || e.target.closest('.scolor')) return;
         e.stopPropagation();
         isDragging = true;
-        dragStartClientX = e.clientX;
-        dragStartClientY = e.clientY;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
         initialLeft = parseFloat(el.style.left) || 0;
         initialTop = parseFloat(el.style.top) || 0;
         el.classList.add('dragging');
         el.style.zIndex = 100;
-    });
-
-    window.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        const scale = window.workspaceScale || 1;
-        const newX = Math.round(initialLeft + (e.clientX - dragStartClientX) / scale);
-        const newY = Math.round(initialTop + (e.clientY - dragStartClientY) / scale);
-        el.style.left = newX + 'px';
-        el.style.top = newY + 'px';
-        socket.emit('move_sticky', { room_id: ROOM_ID, id: id, x: el.style.left, y: el.style.top, save: false });
-    });
-
-    window.addEventListener('mouseup', () => {
-        if (isDragging) {
-            isDragging = false;
-            el.classList.remove('dragging');
-            el.style.zIndex = '';
-            socket.emit('move_sticky', { room_id: ROOM_ID, id: id, x: el.style.left, y: el.style.top, save: true });
+        if (header.setPointerCapture) {
+            try { header.setPointerCapture(e.pointerId); } catch (err) {}
         }
     });
 
-    content.addEventListener('mousedown', (e) => {
+    header.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        e.stopPropagation();
+        const scale = window.workspaceScale || 1;
+        const newX = Math.round(initialLeft + (e.clientX - dragStartX) / scale);
+        const newY = Math.round(initialTop + (e.clientY - dragStartY) / scale);
+        el.style.left = newX + 'px';
+        el.style.top = newY + 'px';
+        socket.emit('move_sticky', { room_id: ROOM_ID, id: id, x: el.style.left, y: el.style.top });
+    });
+
+    const stopStickyDrag = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        el.classList.remove('dragging');
+        el.style.zIndex = '';
+        if (e && header.releasePointerCapture) {
+            try { header.releasePointerCapture(e.pointerId); } catch (err) {}
+        }
+    };
+
+    header.addEventListener('pointerup', stopStickyDrag);
+    header.addEventListener('pointercancel', stopStickyDrag);
+
+    content.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
     });
 

@@ -1,6 +1,13 @@
 const socket = io({ reconnection: true, reconnectionAttempts: 25, reconnectionDelay: 800, autoConnect: false });
 let cachedRoomState = null;
 
+let localClientId = localStorage.getItem('syncspace_client_id');
+if (!localClientId) {
+    localClientId = 'cid_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('syncspace_client_id', localClientId);
+}
+window.CLIENT_ID = localClientId;
+
 window.bindSafeButton = function(el, handler) {
     if (!el) return;
     let lastTrigger = 0;
@@ -20,6 +27,59 @@ window.bindSafeButton = function(el, handler) {
     };
     el.addEventListener('click', runHandler);
     el.addEventListener('touchend', runHandler, { passive: false });
+};
+
+window.makeWidgetResizable = function(widgetEl, minW, minH, isBoardSpace, onResizeEnd) {
+    if (!widgetEl) return;
+    let resizer = widgetEl.querySelector('.widget-resizer');
+    if (!resizer) {
+        resizer = document.createElement('div');
+        resizer.className = 'widget-resizer';
+        resizer.title = 'Kéo để thay đổi kích thước';
+        widgetEl.appendChild(resizer);
+    }
+    let resizing = false;
+    let startX = 0;
+    let startY = 0;
+    let initW = 0;
+    let initH = 0;
+
+    resizer.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizing = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initW = parseFloat(widgetEl.style.width) || widgetEl.offsetWidth || minW;
+        initH = parseFloat(widgetEl.style.height) || widgetEl.offsetHeight || minH;
+        if (resizer.setPointerCapture) {
+            try { resizer.setPointerCapture(e.pointerId); } catch (err) {}
+        }
+    });
+
+    resizer.addEventListener('pointermove', (e) => {
+        if (!resizing) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const scale = isBoardSpace ? (window.workspaceScale || 1) : 1;
+        const nw = Math.max(minW, Math.round(initW + (e.clientX - startX) / scale));
+        const nh = Math.max(minH, Math.round(initH + (e.clientY - startY) / scale));
+        widgetEl.style.width = nw + 'px';
+        widgetEl.style.height = nh + 'px';
+    });
+
+    const stopResize = (e) => {
+        if (!resizing) return;
+        resizing = false;
+        if (e && resizer.releasePointerCapture) {
+            try { resizer.releasePointerCapture(e.pointerId); } catch (err) {}
+        }
+        if (typeof onResizeEnd === 'function') {
+            onResizeEnd(parseFloat(widgetEl.style.width) || widgetEl.offsetWidth, parseFloat(widgetEl.style.height) || widgetEl.offsetHeight);
+        }
+    };
+    resizer.addEventListener('pointerup', stopResize);
+    resizer.addEventListener('pointercancel', stopResize);
 };
 
 window.showToast = function(text) {
@@ -44,6 +104,8 @@ function applyFullRoomState(state) {
     if (window.loadWidgetsState && state.widgets) window.loadWidgetsState(state.widgets);
     if (window.loadMediaState) window.loadMediaState(state.media, state.media_list || []);
     if (window.loadXoState && state.xo_game) window.loadXoState(state.xo_game);
+    if (window.loadChessState && state.chess_game) window.loadChessState(state.chess_game);
+    if (window.loadMemoryState && state.memory_game) window.loadMemoryState(state.memory_game);
     if (window.loadChatHistory && state.chat) window.loadChatHistory(state.chat);
     if (state.users) {
         const countEl = document.getElementById('online-count');
@@ -67,7 +129,11 @@ window.connectWithUsername = function(nameStr) {
 };
 
 socket.on('connect', () => {
-    socket.emit('join_room', { room_id: ROOM_ID, username: window.USERNAME || 'Thành viên' });
+    socket.emit('join_room', {
+        room_id: ROOM_ID,
+        username: window.USERNAME || 'Thành viên',
+        client_id: window.CLIENT_ID
+    });
 });
 
 socket.on('room_state', (state) => {

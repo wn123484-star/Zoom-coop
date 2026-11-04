@@ -38,6 +38,7 @@ function applyFullRoomState(state) {
     if (!state) return;
     if (window.loadRoomSettings && state.settings) window.loadRoomSettings(state.settings);
     if (window.loadDrawHistory) window.loadDrawHistory(state.draw_history || []);
+    if (window.loadTextsHistory) window.loadTextsHistory(state.texts || []);
     if (window.loadStickiesHistory) window.loadStickiesHistory(state.stickies || []);
     if (window.loadBoardMediaHistory) window.loadBoardMediaHistory(state.board_media || []);
     if (window.loadWidgetsState && state.widgets) window.loadWidgetsState(state.widgets);

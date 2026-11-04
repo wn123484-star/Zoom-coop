@@ -10,6 +10,7 @@ const zoomIndicator = document.getElementById('zoom-indicator');
 
 window.workspaceScale = 1;
 window.eraserMode = localStorage.getItem('syncspace_eraser_mode') || 'point';
+window.currentStamp = '❤️';
 let panX = -(5000 - window.innerWidth) / 2;
 let panY = -(5000 - window.innerHeight) / 2;
 let targetScale = 1;
@@ -44,7 +45,7 @@ let isPanning = false;
 let spacePressed = false;
 let panStartX = 0;
 let panStartY = 0;
-let currentTool = 'pen';
+let currentTool = 'pan';
 let currentColor = '#00d2ff';
 let currentWidth = 4;
 let currentOpacity = 1.0;
@@ -59,7 +60,7 @@ let laserTrails = [];
 const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowdown: false, arrowright: false };
 
 window.addEventListener('keydown', (e) => {
-    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.isContentEditable)) return;
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) return;
     if (e.code === 'Space' && !spacePressed) {
         spacePressed = true;
         canvas.classList.add('pan-mode');
@@ -128,7 +129,7 @@ function mainAnimationLoop() {
 mainAnimationLoop();
 
 window.addEventListener('wheel', (e) => {
-    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.scroll-strip') || e.target.closest('.media-content') || e.target.closest('.board-media-body') || e.target.closest('.tool-popover')) {
+    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.scroll-strip') || e.target.closest('.media-content') || e.target.closest('.board-media-body') || e.target.closest('.tool-popover') || e.target.closest('.text-box-editor') || e.target.closest('.sticky-content')) {
         return;
     }
     e.preventDefault();
@@ -146,7 +147,7 @@ const SHAPE_TOOLS = ['line', 'arrow', 'darrow', 'rect', 'circle', 'triangle', 'd
 
 window.selectDrawingTool = function(toolName) {
     currentTool = toolName;
-    document.querySelectorAll('.tool-btn, .group-trigger-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tool-btn, #top-strip .group-trigger-btn').forEach(b => b.classList.remove('active'));
     if (toolName === 'pan') {
         const panBtn = document.getElementById('tool-pan');
         if (panBtn) panBtn.classList.add('active');
@@ -157,6 +158,9 @@ window.selectDrawingTool = function(toolName) {
     if (toolName === 'text') {
         const tBtn = document.getElementById('tool-text');
         if (tBtn) tBtn.classList.add('active');
+    } else if (toolName === 'stamp') {
+        const stBtn = document.getElementById('group-stamp-btn');
+        if (stBtn) stBtn.classList.add('active');
     } else if (toolName === 'eraser') {
         const eBtn = document.getElementById('group-eraser-btn');
         if (eBtn) eBtn.classList.add('active');
@@ -177,7 +181,7 @@ window.bindSafeButton(document.getElementById('tool-pan'), () => {
 window.bindSafeButton(document.getElementById('tool-text'), () => {
     window.selectDrawingTool('text');
     if (window.closeAllPopovers) window.closeAllPopovers();
-    if (window.showToast) window.showToast('🔤 Kéo chuột hoặc ngón tay trên bảng để tạo Khung Chữ trong suốt!');
+    if (window.showToast) window.showToast('🔤 Kéo thả hoặc chạm trên bảng để tạo Khung Chữ!');
 });
 
 const colorPicker = document.getElementById('color-picker');
@@ -247,7 +251,7 @@ window.bindSafeButton(document.getElementById('tool-export'), () => {
     exportCanvas.width = window.innerWidth;
     exportCanvas.height = window.innerHeight;
     const eCtx = exportCanvas.getContext('2d');
-    eCtx.fillStyle = document.body.classList.contains('light-theme') ? '#f4f5f9' : '#0f0f13';
+    eCtx.fillStyle = document.body.classList.contains('light-theme') ? '#f5f7fb' : '#0f0f13';
     eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
     eCtx.save();
     eCtx.translate(panX, panY);
@@ -592,17 +596,12 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         bar.appendChild(btnColor);
         bar.appendChild(btnDel);
 
-        const editor = document.createElement('div');
+        const editor = document.createElement('textarea');
         editor.className = 'text-box-editor';
-        editor.contentEditable = 'true';
-        editor.setAttribute('data-placeholder', 'Nhập văn bản...');
-
-        const resizer = document.createElement('div');
-        resizer.className = 'tbox-resizer';
+        editor.placeholder = 'Nhập văn bản vào đây...';
 
         box.appendChild(bar);
         box.appendChild(editor);
-        box.appendChild(resizer);
         textLayer.appendChild(box);
 
         const emitBoxUpdate = () => {
@@ -611,14 +610,18 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
                 id: data.id,
                 x: parseFloat(box.style.left) || 0,
                 y: parseFloat(box.style.top) || 0,
-                w: parseFloat(box.style.width) || 220,
-                h: parseFloat(box.style.minHeight) || 50,
-                text: editor.innerText,
+                w: parseFloat(box.style.width) || 240,
+                h: parseFloat(box.style.height) || 70,
+                text: editor.value,
                 color: editor.style.color || '#00d2ff',
                 fontSize: parseInt(editor.style.fontSize, 10) || 20,
                 owner: window.USERNAME
             });
         };
+
+        window.makeWidgetResizable(box, 140, 50, true, () => {
+            emitBoxUpdate();
+        });
 
         window.bindSafeButton(btnSmaller, () => {
             const cur = parseInt(editor.style.fontSize, 10) || 20;
@@ -642,13 +645,22 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
             socket.emit('delete_text_box', { room_id: ROOM_ID, id: data.id });
         });
 
+        const stopBubble = (e) => {
+            e.stopPropagation();
+        };
+        editor.addEventListener('pointerdown', stopBubble);
+        editor.addEventListener('mousedown', stopBubble);
+        editor.addEventListener('touchstart', stopBubble, { passive: true });
+        editor.addEventListener('click', (e) => {
+            e.stopPropagation();
+            editor.focus();
+        });
         editor.addEventListener('focus', () => box.classList.add('editing'));
         editor.addEventListener('blur', () => {
             box.classList.remove('editing');
             emitBoxUpdate();
         });
         editor.addEventListener('input', () => emitBoxUpdate());
-        editor.addEventListener('pointerdown', e => e.stopPropagation());
 
         let isMoving = false;
         let moveStartX = 0;
@@ -657,6 +669,7 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         let origTop = 0;
 
         dragHandle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
             e.stopPropagation();
             isMoving = true;
             moveStartX = e.clientX;
@@ -687,64 +700,27 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         };
         dragHandle.addEventListener('pointerup', endMove);
         dragHandle.addEventListener('pointercancel', endMove);
-
-        let isResizing = false;
-        let resStartX = 0;
-        let resStartY = 0;
-        let origW = 220;
-        let origH = 50;
-
-        resizer.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            isResizing = true;
-            resStartX = e.clientX;
-            resStartY = e.clientY;
-            origW = parseFloat(box.style.width) || box.offsetWidth || 220;
-            origH = parseFloat(box.style.minHeight) || box.offsetHeight || 50;
-            if (resizer.setPointerCapture) {
-                try { resizer.setPointerCapture(e.pointerId); } catch (err) {}
-            }
-        });
-
-        resizer.addEventListener('pointermove', (e) => {
-            if (!isResizing) return;
-            e.stopPropagation();
-            const scale = window.workspaceScale || 1;
-            box.style.width = Math.max(120, Math.round(origW + (e.clientX - resStartX) / scale)) + 'px';
-            box.style.minHeight = Math.max(40, Math.round(origH + (e.clientY - resStartY) / scale)) + 'px';
-            emitBoxUpdate();
-        });
-
-        const endResize = (e) => {
-            if (!isResizing) return;
-            isResizing = false;
-            if (e && resizer.releasePointerCapture) {
-                try { resizer.releasePointerCapture(e.pointerId); } catch (err) {}
-            }
-            emitBoxUpdate();
-        };
-        resizer.addEventListener('pointerup', endResize);
-        resizer.addEventListener('pointercancel', endResize);
-        box.addEventListener('pointerdown', e => e.stopPropagation());
+        box.addEventListener('pointerdown', stopBubble);
+        box.addEventListener('mousedown', stopBubble);
     }
 
     if (typeof data.x === 'number') box.style.left = data.x + 'px';
     if (typeof data.y === 'number') box.style.top = data.y + 'px';
     if (typeof data.w === 'number') box.style.width = data.w + 'px';
-    if (typeof data.h === 'number') box.style.minHeight = data.h + 'px';
+    if (typeof data.h === 'number') box.style.height = data.h + 'px';
 
     const editor = box.querySelector('.text-box-editor');
     if (editor) {
         if (data.color) editor.style.color = data.color;
-        editor.style.fontSize = (data.fontSize || 22) + 'px';
+        editor.style.fontSize = (data.fontSize || 20) + 'px';
         if (data.text !== undefined && document.activeElement !== editor) {
-            editor.innerText = data.text;
+            editor.value = data.text;
         }
         if (autoFocus) {
             setTimeout(() => {
                 box.classList.add('editing');
                 editor.focus();
-            }, 40);
+            }, 60);
         }
     }
 };
@@ -766,6 +742,23 @@ window.getWorkspaceCoords = function(clientX, clientY) {
 
 function startPointerAction(clientX, clientY, button) {
     if (window.closeAllPopovers) window.closeAllPopovers();
+    const pos = window.getWorkspaceCoords(clientX, clientY);
+
+    if (button === 0 && currentTool === 'stamp') {
+        const emoji = window.currentStamp || '❤️';
+        if (window.spawnFloatingStamp) {
+            window.spawnFloatingStamp(pos.x, pos.y, emoji, window.USERNAME || 'Thành viên');
+        }
+        socket.emit('place_stamp', {
+            room_id: ROOM_ID,
+            x: pos.x,
+            y: pos.y,
+            emoji: emoji,
+            sender: window.USERNAME || 'Thành viên'
+        });
+        return;
+    }
+
     if (button === 1 || button === 2 || spacePressed || currentTool === 'pan') {
         isPanning = true;
         panStartX = clientX - targetPanX;
@@ -773,7 +766,6 @@ function startPointerAction(clientX, clientY, button) {
         return;
     }
     if (button !== 0) return;
-    const pos = window.getWorkspaceCoords(clientX, clientY);
 
     if (currentTool === 'text') {
         drawing = true;
@@ -912,8 +904,8 @@ function endPointerAction() {
     if (currentTool === 'text' && textDragBox) {
         const x = Math.round(Math.min(textDragBox.x0, textDragBox.x1));
         const y = Math.round(Math.min(textDragBox.y0, textDragBox.y1));
-        const w = Math.max(180, Math.round(Math.abs(textDragBox.x1 - textDragBox.x0)));
-        const h = Math.max(52, Math.round(Math.abs(textDragBox.y1 - textDragBox.y0)));
+        const w = Math.max(220, Math.round(Math.abs(textDragBox.x1 - textDragBox.x0)));
+        const h = Math.max(68, Math.round(Math.abs(textDragBox.y1 - textDragBox.y0)));
         textDragBox = null;
         redrawDraftCanvas();
         const newBox = {
@@ -930,6 +922,7 @@ function endPointerAction() {
         };
         window.createOrUpdateTextBox(newBox, true);
         socket.emit('new_text_box', newBox);
+        window.selectDrawingTool('pan');
         return;
     }
 
@@ -947,6 +940,7 @@ function endPointerAction() {
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('mousedown', (e) => {
+    if (e.target !== canvas) return;
     e.preventDefault();
     startPointerAction(e.clientX, e.clientY, e.button);
 });
@@ -965,6 +959,7 @@ let pinchStartScale = 1;
 let pinchCenter = { x: 0, y: 0 };
 
 canvas.addEventListener('touchstart', (e) => {
+    if (e.target !== canvas) return;
     if (e.touches.length === 2) {
         e.preventDefault();
         drawing = false;

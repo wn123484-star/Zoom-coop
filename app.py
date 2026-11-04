@@ -4,6 +4,7 @@ import sqlite3
 import time
 import threading
 import uuid
+import random
 import mimetypes
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory
 from flask_socketio import SocketIO, join_room, emit
@@ -19,6 +20,8 @@ connected_users = {}
 active_rooms = {}
 room_states = {}
 xo_games = {}
+chess_games = {}
+memory_games = {}
 xo_timers = {}
 dirty_rooms = set()
 db_lock = threading.Lock()
@@ -51,6 +54,28 @@ def init_xo_game():
         'last_activity': time.time()
     }
 
+def init_chess_game():
+    return {
+        'fen': 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        'turn': 'w',
+        'players': {'w': None, 'b': None},
+        'last_move': None,
+        'history': [],
+        'status': 'playing',
+        'winner_text': ''
+    }
+
+def init_memory_game():
+    icons = ['🍎', '🍌', '🍇', '🍉', '🍓', '🍒', '🍍', '🥝'] * 2
+    random.shuffle(icons)
+    return {
+        'cards': icons,
+        'matched': [],
+        'flipped': [],
+        'scores': {},
+        'turn_user': None
+    }
+
 def default_room_state():
     return {
         'draw_history': [],
@@ -60,10 +85,14 @@ def default_room_state():
         'media': None,
         'media_list': [],
         'chat': [],
-        'settings': {'bg': 'bg-magical'},
+        'settings': {'bg': 'bg-light-dots'},
+        'chess_game': init_chess_game(),
+        'memory_game': init_memory_game(),
         'widgets': {
-            'xo': {'x': 2550, 'y': 2250, 'open': False, 'minimized': False},
-            'media': {'x': 1950, 'y': 2250, 'open': False, 'minimized': False}
+            'xo': {'x': 2520, 'y': 2220, 'w': 500, 'h': 560, 'open': False, 'minimized': False},
+            'chess': {'x': 2380, 'y': 2180, 'w': 480, 'h': 580, 'open': False, 'minimized': False},
+            'memory': {'x': 2450, 'y': 2250, 'w': 380, 'h': 440, 'open': False, 'minimized': False},
+            'media': {'x': 1920, 'y': 2220, 'w': 580, 'h': 440, 'open': False, 'minimized': False}
         }
     }
 
@@ -114,6 +143,10 @@ def flush_dirty_rooms():
             if room_id not in room_states:
                 continue
             state_data = room_states[room_id]
+            if room_id in chess_games:
+                state_data['chess_game'] = chess_games[room_id]
+            if room_id in memory_games:
+                state_data['memory_game'] = memory_games[room_id]
             xo_data = xo_games.get(room_id, init_xo_game())
             try:
                 with db_lock:
@@ -131,6 +164,10 @@ def save_room_immediately(room_id):
     if room_id not in room_states:
         return
     state_data = room_states[room_id]
+    if room_id in chess_games:
+        state_data['chess_game'] = chess_games[room_id]
+    if room_id in memory_games:
+        state_data['memory_game'] = memory_games[room_id]
     xo_data = xo_games.get(room_id, init_xo_game())
     try:
         with db_lock:
@@ -165,6 +202,10 @@ def get_room_state(room_id):
                     loaded_state[k] = v
             if 'widgets' not in loaded_state or not isinstance(loaded_state['widgets'], dict):
                 loaded_state['widgets'] = base['widgets']
+            else:
+                for wk, wv in base['widgets'].items():
+                    if wk not in loaded_state['widgets']:
+                        loaded_state['widgets'][wk] = wv
             room_states[room_id] = loaded_state
         else:
             room_states[room_id] = base
@@ -172,12 +213,26 @@ def get_room_state(room_id):
             xo_games[room_id] = loaded_xo
         elif room_id not in xo_games:
             xo_games[room_id] = init_xo_game()
+        chess_games[room_id] = room_states[room_id].get('chess_game') or init_chess_game()
+        memory_games[room_id] = room_states[room_id].get('memory_game') or init_memory_game()
     if room_id not in xo_games:
         xo_games[room_id] = init_xo_game()
+    if room_id not in chess_games:
+        chess_games[room_id] = init_chess_game()
+    if room_id not in memory_games:
+        memory_games[room_id] = init_memory_game()
     return room_states[room_id]
 
 def get_room_users(room_id):
-    return [u['username'] for u in connected_users.values() if u['room'] == room_id]
+    seen_clients = set()
+    users = []
+    for u in connected_users.values():
+        if u['room'] == room_id:
+            cid = u.get('client_id') or u.get('sid')
+            if cid not in seen_clients:
+                seen_clients.add(cid)
+                users.append(u['username'])
+    return users
 
 def check_win(board, r, c, val):
     directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
@@ -261,6 +316,9 @@ def room(room_id):
 @app.route('/uploads/<path:filename>')
 def serve_uploaded_file(filename):
     upload_dir = os.path.join(app.root_path, 'static', 'uploads')
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    if ext in ('html', 'htm'):
+        return send_from_directory(upload_dir, filename, mimetype='text/html')
     return send_from_directory(upload_dir, filename)
 
 @app.route('/secret-admin', methods=['GET', 'POST'])
@@ -303,6 +361,8 @@ def admin_delete_room(room_id):
                         pass
     active_rooms.pop(room_id, None)
     xo_games.pop(room_id, None)
+    chess_games.pop(room_id, None)
+    memory_games.pop(room_id, None)
     room_states.pop(room_id, None)
     dirty_rooms.discard(room_id)
     with db_lock:
@@ -340,6 +400,16 @@ def upload_file():
 def handle_join(data):
     room_id = str(data.get('room_id', 'default')).strip()
     username = str(data.get('username', '')).strip() or 'Thành viên'
+    client_id = str(data.get('client_id', '')).strip() or request.sid
+
+    stale_sids = [
+        sid for sid, u in list(connected_users.items())
+        if u.get('room') == room_id and u.get('client_id') == client_id and sid != request.sid
+    ]
+    for old_sid in stale_sids:
+        connected_users.pop(old_sid, None)
+        emit('remove_cursor', {'sid': old_sid}, to=room_id)
+
     active_with_users = [r for r in active_rooms if len(get_room_users(r)) > 0]
     if room_id not in active_rooms and len(active_with_users) >= 15:
         emit('room_error', {'msg': 'Máy chủ đã đạt giới hạn phòng hoạt động cùng lúc. Vui lòng thử lại sau.'})
@@ -347,17 +417,25 @@ def handle_join(data):
     if room_id not in active_rooms:
         active_rooms[room_id] = {'created_at': time.time()}
     join_room(room_id)
-    connected_users[request.sid] = {'room': room_id, 'username': username}
+    connected_users[request.sid] = {
+        'sid': request.sid,
+        'client_id': client_id,
+        'room': room_id,
+        'username': username
+    }
     state = get_room_state(room_id)
     users_list = get_room_users(room_id)
+    live_bmedia = [compute_live_media(bm) for bm in state.get('board_media', {}).values()]
     emit('room_state', {
         'draw_history': state['draw_history'],
         'texts': list(state.get('texts', {}).values()),
         'stickies': list(state['stickies'].values()),
-        'board_media': list(state.get('board_media', {}).values()),
+        'board_media': live_bmedia,
         'media': compute_live_media(state['media']),
         'media_list': state.get('media_list', [])[-30:],
         'xo_game': xo_games[room_id],
+        'chess_game': chess_games[room_id],
+        'memory_game': memory_games[room_id],
         'chat': state['chat'][-50:],
         'settings': state['settings'],
         'widgets': state['widgets'],
@@ -393,6 +471,13 @@ def handle_mouse_move(data):
     if request.sid in connected_users:
         data['username'] = connected_users[request.sid]['username']
     emit('mouse_update', data, to=room_id, include_self=False)
+
+@socketio.on('place_stamp')
+def handle_place_stamp(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('stamp_placed', data, to=room_id, include_self=False)
 
 @socketio.on('laser_point')
 def handle_laser_point(data):
@@ -511,14 +596,13 @@ def handle_delete_text_box(data):
 def handle_widget_state(data):
     room_id = data.get('room_id')
     w_name = data.get('widget')
-    if not room_id or w_name not in ('xo', 'media'):
+    if not room_id or w_name not in ('xo', 'chess', 'memory', 'media'):
         return
     state = get_room_state(room_id)
     w_info = state['widgets'].get(w_name, {})
-    if 'x' in data:
-        w_info['x'] = data['x']
-    if 'y' in data:
-        w_info['y'] = data['y']
+    for k in ('x', 'y', 'w', 'h'):
+        if k in data and isinstance(data[k], (int, float)):
+            w_info[k] = data[k]
     if 'open' in data:
         w_info['open'] = bool(data['open'])
     if 'minimized' in data:
@@ -544,8 +628,9 @@ def handle_move_sticky(data):
         return
     state = get_room_state(room_id)
     if data['id'] in state['stickies']:
-        state['stickies'][data['id']]['x'] = data['x']
-        state['stickies'][data['id']]['y'] = data['y']
+        for k in ('x', 'y', 'w', 'h', 'fontSize', 'locked'):
+            if k in data:
+                state['stickies'][data['id']][k] = data[k]
         mark_room_dirty(room_id)
     emit('sticky_moved', data, to=room_id, include_self=False)
 
@@ -590,6 +675,9 @@ def handle_new_board_media(data):
     state = get_room_state(room_id)
     if 'board_media' not in state:
         state['board_media'] = {}
+    data['playing'] = True
+    data['position'] = 0.0
+    data['updated_at'] = time.time()
     state['board_media'][data['id']] = data
     mark_room_dirty(room_id)
     emit('board_media_added', data, to=room_id, include_self=False)
@@ -602,12 +690,52 @@ def handle_move_board_media(data):
     state = get_room_state(room_id)
     bm = state.get('board_media', {})
     if data['id'] in bm:
-        bm[data['id']]['x'] = data['x']
-        bm[data['id']]['y'] = data['y']
-        if 'w' in data:
-            bm[data['id']]['w'] = data['w']
+        for k in ('x', 'y', 'w', 'h'):
+            if k in data:
+                bm[data['id']][k] = data[k]
         mark_room_dirty(room_id)
     emit('board_media_moved', data, to=room_id, include_self=False)
+
+@socketio.on('board_media_playback_sync')
+def handle_board_media_playback_sync(data):
+    room_id = data.get('room_id')
+    card_id = data.get('id')
+    if not room_id or not card_id:
+        return
+    state = get_room_state(room_id)
+    bm = state.get('board_media', {}).get(card_id)
+    if not bm:
+        return
+    action = data.get('action', 'play')
+    pos = max(0.0, float(data.get('currentTime', 0.0)))
+    bm['playing'] = (action == 'play')
+    bm['position'] = pos
+    bm['updated_at'] = time.time()
+    mark_room_dirty(room_id)
+    emit('board_media_playback_sync', {
+        'id': card_id,
+        'action': action,
+        'currentTime': pos,
+        'playing': bm['playing']
+    }, to=room_id, include_self=False)
+
+@socketio.on('request_board_media_sync')
+def handle_request_board_media_sync(data):
+    room_id = data.get('room_id')
+    card_id = data.get('id')
+    if not room_id or not card_id:
+        return
+    state = get_room_state(room_id)
+    bm = state.get('board_media', {}).get(card_id)
+    if bm:
+        live_bm = compute_live_media(bm)
+        emit('board_media_playback_sync', {
+            'id': card_id,
+            'action': 'play' if live_bm.get('playing') else 'pause',
+            'currentTime': live_bm.get('current_pos', 0.0),
+            'playing': live_bm.get('playing', False),
+            'force': True
+        }, to=request.sid)
 
 @socketio.on('delete_board_media')
 def handle_delete_board_media(data):
@@ -672,7 +800,82 @@ def handle_xo_manual_reset(data):
         return
     xo_games[room_id] = init_xo_game()
     mark_room_dirty(room_id)
-    socketio.emit('xo_update', {'game': xo_games[room_id], 'notice': 'Bàn cờ đã được làm mới!'}, to=room_id)
+    socketio.emit('xo_update', {'game': xo_games[room_id], 'notice': 'Bàn cờ Caro đã được làm mới!'}, to=room_id)
+
+@socketio.on('chess_move')
+def handle_chess_move(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    get_room_state(room_id)
+    game = chess_games[room_id]
+    username = data.get('username', 'Thành viên')
+    moved_color = data.get('color', 'w')
+    other_color = 'b' if moved_color == 'w' else 'w'
+    if game['players'].get(moved_color) is None:
+        if game['players'].get(other_color) != username or len(get_room_users(room_id)) <= 1:
+            game['players'][moved_color] = username
+    game['fen'] = data.get('fen', game['fen'])
+    game['turn'] = data.get('turn', other_color)
+    game['last_move'] = data.get('last_move')
+    if data.get('san'):
+        game['history'].append(data['san'])
+        game['history'] = game['history'][-60:]
+    game['status'] = data.get('status', 'playing')
+    game['winner_text'] = data.get('winner_text', '')
+    mark_room_dirty(room_id)
+    emit('chess_update', {'game': game, 'notice': data.get('notice', '')}, to=room_id)
+
+@socketio.on('chess_reset')
+def handle_chess_reset(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    get_room_state(room_id)
+    chess_games[room_id] = init_chess_game()
+    mark_room_dirty(room_id)
+    emit('chess_update', {'game': chess_games[room_id], 'notice': 'Ván Cờ Vua mới đã bắt đầu!'}, to=room_id)
+
+@socketio.on('memory_flip')
+def handle_memory_flip(data):
+    room_id = data.get('room_id')
+    idx = int(data.get('index', -1))
+    username = data.get('username', 'Thành viên')
+    if not room_id or idx < 0 or idx >= 16:
+        return
+    get_room_state(room_id)
+    game = memory_games[room_id]
+    if idx in game['matched'] or idx in game['flipped'] or len(game['flipped']) >= 2:
+        return
+    game['flipped'].append(idx)
+    game['turn_user'] = username
+    if len(game['flipped']) == 2:
+        i1, i2 = game['flipped'][0], game['flipped'][1]
+        if game['cards'][i1] == game['cards'][i2]:
+            game['matched'].extend([i1, i2])
+            game['flipped'] = []
+            game['scores'][username] = game['scores'].get(username, 0) + 1
+            mark_room_dirty(room_id)
+            emit('memory_update', {'game': game, 'notice': f'🎯 {username} đã ghép đúng cặp {game["cards"][i1]}!'}, to=room_id)
+        else:
+            emit('memory_update', {'game': game, 'notice': f'{username} đang lật thẻ...'}, to=room_id)
+            def hide_unmatched(rid, g_ref):
+                time.sleep(0.9)
+                g_ref['flipped'] = []
+                socketio.emit('memory_update', {'game': g_ref}, to=rid)
+            threading.Thread(target=hide_unmatched, args=(room_id, game), daemon=True).start()
+    else:
+        emit('memory_update', {'game': game}, to=room_id)
+
+@socketio.on('memory_reset')
+def handle_memory_reset(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    get_room_state(room_id)
+    memory_games[room_id] = init_memory_game()
+    mark_room_dirty(room_id)
+    emit('memory_update', {'game': memory_games[room_id], 'notice': 'Đã xáo bài mới!'}, to=room_id)
 
 @socketio.on('media_share')
 def handle_media_share(data):
