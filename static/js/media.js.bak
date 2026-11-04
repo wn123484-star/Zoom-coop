@@ -19,7 +19,9 @@ let activeHubMedia = null;
 let ytPlayer = null;
 let ytApiReady = false;
 let isApplyingRemoteSync = false;
+let lastYtBufferingTime = 0;
 let pendingSyncState = null;
+const boardYtPlayers = {};
 
 window.onYouTubeIframeAPIReady = function() {
     ytApiReady = true;
@@ -29,12 +31,18 @@ function syncMediaWidgetState() {
     socket.emit('widget_state', {
         room_id: ROOM_ID,
         widget: 'media',
-        x: parseFloat(mediaContainer.style.left) || 1950,
-        y: parseFloat(mediaContainer.style.top) || 2250,
+        x: parseFloat(mediaContainer.style.left) || 1920,
+        y: parseFloat(mediaContainer.style.top) || 2220,
+        w: parseFloat(mediaContainer.style.width) || mediaContainer.offsetWidth || 580,
+        h: parseFloat(mediaContainer.style.height) || mediaContainer.offsetHeight || 440,
         open: mediaContainer.style.display !== 'none',
         minimized: mediaContainer.classList.contains('minimized')
     });
 }
+
+window.makeWidgetResizable(mediaContainer, 340, 280, true, () => {
+    syncMediaWidgetState();
+});
 
 function openMediaHubAtCenter(showControls) {
     const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
@@ -57,7 +65,7 @@ window.bindSafeButton(btnToggleControls, () => {
 
 window.bindSafeButton(btnSyncNow, () => {
     socket.emit('request_media_sync', { room_id: ROOM_ID });
-    if (window.showToast) window.showToast('Đang đồng bộ thời gian phát với phòng...');
+    if (window.showToast) window.showToast('🔄 Đang đồng bộ thời gian phát với phòng...');
 });
 
 window.bindSafeButton(btnUnlockAudio, () => {
@@ -129,8 +137,8 @@ window.bindSafeButton(btnPinCurrentMedia, () => {
 let isMediaDragging = false;
 let mediaStartClientX = 0;
 let mediaStartClientY = 0;
-let mediaInitialLeft = 1950;
-let mediaInitialTop = 2250;
+let mediaInitialLeft = 1920;
+let mediaInitialTop = 2220;
 
 mediaHeader.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return;
@@ -138,8 +146,8 @@ mediaHeader.addEventListener('pointerdown', (e) => {
     isMediaDragging = true;
     mediaStartClientX = e.clientX;
     mediaStartClientY = e.clientY;
-    mediaInitialLeft = parseFloat(mediaContainer.style.left) || 1950;
-    mediaInitialTop = parseFloat(mediaContainer.style.top) || 2250;
+    mediaInitialLeft = parseFloat(mediaContainer.style.left) || 1920;
+    mediaInitialTop = parseFloat(mediaContainer.style.top) || 2220;
     mediaContainer.style.zIndex = 35;
     if (mediaHeader.setPointerCapture) {
         try { mediaHeader.setPointerCapture(e.pointerId); } catch (err) {}
@@ -169,10 +177,7 @@ const stopMediaDrag = (e) => {
 
 mediaHeader.addEventListener('pointerup', stopMediaDrag);
 mediaHeader.addEventListener('pointercancel', stopMediaDrag);
-
-mediaContainer.addEventListener('pointerdown', (e) => {
-    e.stopPropagation();
-});
+mediaContainer.addEventListener('pointerdown', e => e.stopPropagation());
 
 function extractYoutubeId(url) {
     if (!url) return null;
@@ -212,12 +217,12 @@ function getKindIcon(k) {
 function renderRichContentInto(targetEl, kind, url, name, isHub) {
     const safeName = (name || 'Tài liệu').replace(/[<>]/g, '');
     if (kind === 'image') {
-        targetEl.innerHTML = `<div class="doc-viewer-wrapper" style="background:#0b0b10; height:auto; max-height:380px;"><div class="doc-toolbar-bar"><span>🖼️ ${safeName}</span><a href="${url}" target="_blank">🔍 Mở ảnh gốc</a></div><div style="padding:8px; text-align:center; overflow:auto;"><img src="${url}" alt="${safeName}" style="max-width:100%; max-height:320px; border-radius:6px;"></div></div>`;
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper" style="background:#0b0b10;"><div class="doc-toolbar-bar"><span>🖼️ ${safeName}</span><a href="${url}" target="_blank">🔍 Mở ảnh gốc</a></div><div style="padding:8px; flex:1; display:flex; align-items:center; justify-content:center; overflow:auto;"><img src="${url}" alt="${safeName}" style="max-width:100%; max-height:100%; border-radius:6px;"></div></div>`;
         return;
     }
     if (kind === 'video') {
         const idAttr = isHub ? 'id="hub-html5-media"' : '';
-        targetEl.innerHTML = `<video ${idAttr} src="${url}" controls autoplay playsinline style="width:100%; max-height:340px; background:#000;"></video>`;
+        targetEl.innerHTML = `<video ${idAttr} src="${url}" controls autoplay playsinline style="width:100%; height:100%; background:#000;"></video>`;
         return;
     }
     if (kind === 'audio') {
@@ -230,7 +235,16 @@ function renderRichContentInto(targetEl, kind, url, name, isHub) {
         return;
     }
     if (kind === 'html') {
-        targetEl.innerHTML = `<div class="doc-viewer-wrapper"><div class="doc-toolbar-bar"><span>🌐 Trang HTML: ${safeName}</span><a href="${url}" target="_blank">↗ Mở toàn trang</a></div><iframe src="${url}" class="html-preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe></div>`;
+        targetEl.innerHTML = `<div class="doc-viewer-wrapper"><div class="doc-toolbar-bar"><span>🌐 Trang HTML trực tiếp: ${safeName}</span><a href="${url}" target="_blank">↗ Mở tab mới</a></div><iframe class="html-preview-frame"></iframe></div>`;
+        const frame = targetEl.querySelector('.html-preview-frame');
+        fetch(url)
+            .then(r => r.text())
+            .then(htmlText => {
+                frame.srcdoc = htmlText;
+            })
+            .catch(() => {
+                frame.src = url;
+            });
         return;
     }
     if (kind === 'excel') {
@@ -331,7 +345,7 @@ function applyPlaybackSyncState(syncData) {
         isApplyingRemoteSync = true;
         try {
             const cur = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
-            if (Math.abs(cur - targetTime) > 1.8 || syncData.force) {
+            if (Math.abs(cur - targetTime) > 2.2 || syncData.force) {
                 ytPlayer.seekTo(targetTime, true);
             }
             if (shouldPlay) {
@@ -340,14 +354,14 @@ function applyPlaybackSyncState(syncData) {
                 ytPlayer.pauseVideo();
             }
         } catch (e) {}
-        setTimeout(() => { isApplyingRemoteSync = false; }, 450);
+        setTimeout(() => { isApplyingRemoteSync = false; }, 650);
         return;
     }
 
     const htmlMedia = document.getElementById('hub-html5-media');
     if (htmlMedia) {
         isApplyingRemoteSync = true;
-        if (Math.abs((htmlMedia.currentTime || 0) - targetTime) > 1.5 || syncData.force) {
+        if (Math.abs((htmlMedia.currentTime || 0) - targetTime) > 2.0 || syncData.force) {
             try { htmlMedia.currentTime = targetTime; } catch (e) {}
         }
         if (shouldPlay) {
@@ -359,12 +373,25 @@ function applyPlaybackSyncState(syncData) {
         } else {
             htmlMedia.pause();
         }
-        setTimeout(() => { isApplyingRemoteSync = false; }, 400);
+        setTimeout(() => { isApplyingRemoteSync = false; }, 550);
     }
 }
 
-function bindHtml5SyncEvents(mediaEl, startPos, shouldPlay) {
+function bindHtml5SyncEvents(mediaEl, startPos, shouldPlay, customEmitFn) {
     if (!mediaEl) return;
+    let isBuffering = false;
+    let isSeeking = false;
+
+    mediaEl.addEventListener('waiting', () => {
+        isBuffering = true;
+    });
+    mediaEl.addEventListener('playing', () => {
+        isBuffering = false;
+    });
+    mediaEl.addEventListener('seeking', () => {
+        isSeeking = true;
+    });
+
     mediaEl.addEventListener('loadedmetadata', () => {
         if (startPos > 0.5) {
             try { mediaEl.currentTime = startPos; } catch (e) {}
@@ -373,52 +400,53 @@ function bindHtml5SyncEvents(mediaEl, startPos, shouldPlay) {
             mediaEl.play().catch(() => {
                 mediaEl.muted = true;
                 mediaEl.play().catch(() => {});
-                btnUnlockAudio.style.display = 'block';
+                if (!customEmitFn) btnUnlockAudio.style.display = 'block';
             });
         }
     }, { once: true });
 
+    const sendSync = (action) => {
+        if (typeof customEmitFn === 'function') {
+            customEmitFn(action, mediaEl.currentTime || 0);
+        } else {
+            socket.emit('media_playback_sync', {
+                room_id: ROOM_ID,
+                action: action,
+                currentTime: mediaEl.currentTime || 0,
+                sender: window.USERNAME
+            });
+        }
+    };
+
     mediaEl.addEventListener('play', () => {
         if (isApplyingRemoteSync) return;
-        socket.emit('media_playback_sync', {
-            room_id: ROOM_ID,
-            action: 'play',
-            currentTime: mediaEl.currentTime || 0,
-            sender: window.USERNAME
-        });
+        sendSync('play');
     });
 
     mediaEl.addEventListener('pause', () => {
-        if (isApplyingRemoteSync || mediaEl.ended) return;
-        socket.emit('media_playback_sync', {
-            room_id: ROOM_ID,
-            action: 'pause',
-            currentTime: mediaEl.currentTime || 0,
-            sender: window.USERNAME
-        });
+        if (isApplyingRemoteSync || mediaEl.ended || isBuffering || isSeeking || document.hidden || mediaEl.readyState < 3) {
+            return;
+        }
+        sendSync('pause');
     });
 
     mediaEl.addEventListener('seeked', () => {
+        isSeeking = false;
         if (isApplyingRemoteSync) return;
-        socket.emit('media_playback_sync', {
-            room_id: ROOM_ID,
-            action: mediaEl.paused ? 'pause' : 'play',
-            currentTime: mediaEl.currentTime || 0,
-            sender: window.USERNAME
-        });
+        sendSync(mediaEl.paused ? 'pause' : 'play');
     });
 }
 
 function createSyncedYoutubePlayer(videoId, startPos, shouldPlay) {
     destroyYtPlayer();
-    mediaContent.innerHTML = '<div id="yt-sync-mount" style="width:100%; height:340px;"></div>';
+    mediaContent.innerHTML = '<div id="yt-sync-mount" style="width:100%; height:100%; min-height:310px;"></div>';
     if (!window.YT || !window.YT.Player) {
         mediaContent.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&start=${Math.floor(startPos)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
         return;
     }
     ytPlayer = new YT.Player('yt-sync-mount', {
         width: '100%',
-        height: '340',
+        height: '100%',
         videoId: videoId,
         playerVars: {
             autoplay: 1,
@@ -452,7 +480,11 @@ function createSyncedYoutubePlayer(videoId, startPos, shouldPlay) {
                 }
             },
             onStateChange: function(ev) {
-                if (isApplyingRemoteSync) return;
+                if (ev.data === YT.PlayerState.BUFFERING) {
+                    lastYtBufferingTime = Date.now();
+                    return;
+                }
+                if (isApplyingRemoteSync || document.hidden) return;
                 if (ev.data === YT.PlayerState.PLAYING) {
                     socket.emit('media_playback_sync', {
                         room_id: ROOM_ID,
@@ -461,6 +493,7 @@ function createSyncedYoutubePlayer(videoId, startPos, shouldPlay) {
                         sender: window.USERNAME
                     });
                 } else if (ev.data === YT.PlayerState.PAUSED) {
+                    if (Date.now() - lastYtBufferingTime < 1400) return;
                     socket.emit('media_playback_sync', {
                         room_id: ROOM_ID,
                         action: 'pause',
@@ -503,7 +536,7 @@ function renderMediaInHub(item) {
         renderRichContentInto(mediaContent, kind, item.url, item.name, true);
         if (kind === 'video' || kind === 'audio') {
             const mediaEl = document.getElementById('hub-html5-media');
-            bindHtml5SyncEvents(mediaEl, startPos, shouldPlay);
+            bindHtml5SyncEvents(mediaEl, startPos, shouldPlay, null);
         }
     }
     mediaControlsBox.classList.add('collapsed');
@@ -541,6 +574,8 @@ function createBoardMediaDOM(data) {
     if (existing) {
         existing.style.left = typeof data.x === 'number' ? data.x + 'px' : data.x;
         existing.style.top = typeof data.y === 'number' ? data.y + 'px' : data.y;
+        if (data.w) existing.style.width = data.w + 'px';
+        if (data.h) existing.style.height = data.h + 'px';
         return;
     }
     const kind = resolveKind(data.kind || data.type, data.url, data.name);
@@ -549,6 +584,8 @@ function createBoardMediaDOM(data) {
     card.id = data.id;
     card.style.left = typeof data.x === 'number' ? data.x + 'px' : data.x;
     card.style.top = typeof data.y === 'number' ? data.y + 'px' : data.y;
+    if (data.w) card.style.width = data.w + 'px';
+    if (data.h) card.style.height = data.h + 'px';
 
     const header = document.createElement('div');
     header.className = 'widget-header';
@@ -559,6 +596,20 @@ function createBoardMediaDOM(data) {
 
     const controls = document.createElement('div');
     controls.className = 'widget-controls';
+
+    if (kind === 'video' || kind === 'audio' || kind === 'youtube') {
+        const syncCardBtn = document.createElement('button');
+        syncCardBtn.type = 'button';
+        syncCardBtn.className = 'widget-btn';
+        syncCardBtn.innerText = '🔄 Đồng bộ';
+        syncCardBtn.title = 'Đồng bộ thời gian phát với mọi người';
+        window.bindSafeButton(syncCardBtn, () => {
+            socket.emit('request_board_media_sync', { room_id: ROOM_ID, id: data.id });
+            if (window.showToast) window.showToast('🔄 Đang đồng bộ thẻ Media...');
+        });
+        controls.appendChild(syncCardBtn);
+    }
+
     if (kind !== 'youtube') {
         const openLink = document.createElement('a');
         openLink.href = data.url;
@@ -576,6 +627,10 @@ function createBoardMediaDOM(data) {
     delBtn.innerText = '✕';
     delBtn.title = 'Xóa thẻ này khỏi bảng';
     window.bindSafeButton(delBtn, () => {
+        if (boardYtPlayers[data.id]) {
+            try { boardYtPlayers[data.id].destroy(); } catch (e) {}
+            delete boardYtPlayers[data.id];
+        }
         card.remove();
         socket.emit('delete_board_media', { room_id: ROOM_ID, id: data.id });
     });
@@ -586,16 +641,92 @@ function createBoardMediaDOM(data) {
 
     const body = document.createElement('div');
     body.className = 'board-media-body';
-    if (kind === 'youtube') {
-        const vid = extractYoutubeId(data.url);
-        body.innerHTML = vid ? `<iframe src="https://www.youtube.com/embed/${vid}?playsinline=1" allowfullscreen></iframe>` : '<p>Link lỗi</p>';
-    } else {
-        renderRichContentInto(body, kind, data.url, data.name, false);
-    }
-
     card.appendChild(header);
     card.appendChild(body);
     boardMediaContainer.appendChild(card);
+
+    const startPos = parseFloat(data.current_pos || data.position || 0);
+    const shouldPlay = data.playing !== undefined ? !!data.playing : true;
+
+    if (kind === 'youtube') {
+        const vid = extractYoutubeId(data.url);
+        const mountId = 'yt_card_' + data.id;
+        body.innerHTML = `<div id="${mountId}" style="width:100%; height:100%;"></div>`;
+        if (vid && window.YT && window.YT.Player) {
+            let cardBufferingTime = 0;
+            boardYtPlayers[data.id] = new YT.Player(mountId, {
+                width: '100%',
+                height: '100%',
+                videoId: vid,
+                playerVars: {
+                    autoplay: 1,
+                    playsinline: 1,
+                    rel: 0,
+                    start: Math.floor(startPos || 0),
+                    origin: window.location.origin
+                },
+                events: {
+                    onReady: function(ev) {
+                        if (startPos > 0.5) ev.target.seekTo(startPos, true);
+                        if (shouldPlay) ev.target.playVideo();
+                    },
+                    onStateChange: function(ev) {
+                        if (ev.data === YT.PlayerState.BUFFERING) {
+                            cardBufferingTime = Date.now();
+                            return;
+                        }
+                        if (isApplyingRemoteSync || document.hidden) return;
+                        if (ev.data === YT.PlayerState.PLAYING) {
+                            socket.emit('board_media_playback_sync', {
+                                room_id: ROOM_ID,
+                                id: data.id,
+                                action: 'play',
+                                currentTime: ev.target.getCurrentTime() || 0
+                            });
+                        } else if (ev.data === YT.PlayerState.PAUSED) {
+                            if (Date.now() - cardBufferingTime < 1400) return;
+                            socket.emit('board_media_playback_sync', {
+                                room_id: ROOM_ID,
+                                id: data.id,
+                                action: 'pause',
+                                currentTime: ev.target.getCurrentTime() || 0
+                            });
+                        }
+                    }
+                }
+            });
+        } else if (vid) {
+            body.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}?playsinline=1&start=${Math.floor(startPos)}" allowfullscreen></iframe>`;
+        }
+    } else {
+        renderRichContentInto(body, kind, data.url, data.name, false);
+        if (kind === 'video' || kind === 'audio') {
+            const mediaEl = body.querySelector('video, audio');
+            bindHtml5SyncEvents(mediaEl, startPos, shouldPlay, (action, curTime) => {
+                socket.emit('board_media_playback_sync', {
+                    room_id: ROOM_ID,
+                    id: data.id,
+                    action: action,
+                    currentTime: curTime
+                });
+            });
+        }
+    }
+
+    const emitCardMove = () => {
+        socket.emit('move_board_media', {
+            room_id: ROOM_ID,
+            id: data.id,
+            x: card.style.left,
+            y: card.style.top,
+            w: parseFloat(card.style.width) || 420,
+            h: parseFloat(card.style.height) || 340
+        });
+    };
+
+    window.makeWidgetResizable(card, 260, 180, true, () => {
+        emitCardMove();
+    });
 
     let dragging = false;
     let startX = 0;
@@ -625,7 +756,7 @@ function createBoardMediaDOM(data) {
         const ny = Math.round(initT + (e.clientY - startY) / scale);
         card.style.left = nx + 'px';
         card.style.top = ny + 'px';
-        socket.emit('move_board_media', { room_id: ROOM_ID, id: data.id, x: card.style.left, y: card.style.top });
+        emitCardMove();
     });
 
     const endCardDrag = (e) => {
@@ -635,6 +766,7 @@ function createBoardMediaDOM(data) {
         if (e && header.releasePointerCapture) {
             try { header.releasePointerCapture(e.pointerId); } catch (err) {}
         }
+        emitCardMove();
     };
     header.addEventListener('pointerup', endCardDrag);
     header.addEventListener('pointercancel', endCardDrag);
@@ -646,7 +778,7 @@ function spawnBoardMediaCard(kind, url, name) {
     const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
     const offset = (boardMediaContainer.children.length % 5) * 30;
     const x = Math.round(center.x - 210 + offset) + 'px';
-    const y = Math.round(center.y - 160 + offset) + 'px';
+    const y = Math.round(center.y - 170 + offset) + 'px';
     const payload = {
         room_id: ROOM_ID,
         id: id,
@@ -655,11 +787,13 @@ function spawnBoardMediaCard(kind, url, name) {
         name: name || 'Tài liệu',
         owner: window.USERNAME,
         x: x,
-        y: y
+        y: y,
+        w: 420,
+        h: 340
     };
     createBoardMediaDOM(payload);
     socket.emit('new_board_media', payload);
-    if (window.showToast) window.showToast('Đã ghim "' + (name || 'Tài liệu') + '" lên mặt bảng!');
+    if (window.showToast) window.showToast('📌 Đã ghim "' + (name || 'Tài liệu') + '" lên mặt bảng!');
 }
 
 window.loadMediaState = function(mediaData, mediaList) {
@@ -702,8 +836,8 @@ window.bindSafeButton(document.getElementById('btn-play-yt'), () => {
         url: url,
         name: item.name,
         sender: window.USERNAME,
-        x: parseFloat(mediaContainer.style.left) || 1950,
-        y: parseFloat(mediaContainer.style.top) || 2250
+        x: parseFloat(mediaContainer.style.left) || 1920,
+        y: parseFloat(mediaContainer.style.top) || 2220
     });
 });
 
@@ -750,8 +884,8 @@ function performFileUpload(pinDirectlyToBoard) {
                         url: data.url,
                         name: name,
                         sender: window.USERNAME,
-                        x: parseFloat(mediaContainer.style.left) || 1950,
-                        y: parseFloat(mediaContainer.style.top) || 2250
+                        x: parseFloat(mediaContainer.style.left) || 1920,
+                        y: parseFloat(mediaContainer.style.top) || 2220
                     });
                 }
                 fileUploadInput.value = '';
@@ -794,12 +928,55 @@ socket.on('media_playback_sync', (data) => {
     applyPlaybackSyncState(data);
 });
 
-socket.on('board_media_added', (d) => createBoardMediaDOM(d));
-socket.on('board_media_moved', (d) => {
-    const el = document.getElementById(d.id);
-    if (el) { el.style.left = d.x; el.style.top = d.y; }
+socket.on('board_media_playback_sync', (data) => {
+    if (!data || !data.id) return;
+    const card = document.getElementById(data.id);
+    if (!card) return;
+    const targetTime = parseFloat(data.currentTime || 0);
+    const shouldPlay = !!data.playing;
+
+    if (boardYtPlayers[data.id] && typeof boardYtPlayers[data.id].seekTo === 'function') {
+        isApplyingRemoteSync = true;
+        try {
+            const p = boardYtPlayers[data.id];
+            const cur = p.getCurrentTime ? p.getCurrentTime() : 0;
+            if (Math.abs(cur - targetTime) > 2.2 || data.force) {
+                p.seekTo(targetTime, true);
+            }
+            if (shouldPlay) p.playVideo();
+            else p.pauseVideo();
+        } catch (e) {}
+        setTimeout(() => { isApplyingRemoteSync = false; }, 650);
+        return;
+    }
+
+    const mediaEl = card.querySelector('video, audio');
+    if (mediaEl) {
+        isApplyingRemoteSync = true;
+        if (Math.abs((mediaEl.currentTime || 0) - targetTime) > 2.0 || data.force) {
+            try { mediaEl.currentTime = targetTime; } catch (e) {}
+        }
+        if (shouldPlay) {
+            mediaEl.play().catch(() => {
+                mediaEl.muted = true;
+                mediaEl.play().catch(() => {});
+            });
+        } else {
+            mediaEl.pause();
+        }
+        setTimeout(() => { isApplyingRemoteSync = false; }, 550);
+    }
 });
+
+socket.on('board_media_added', (d) => createBoardMediaDOM(d));
+socket.on('board_media_moved', (d) => createBoardMediaDOM(d));
 socket.on('board_media_deleted', (d) => {
-    const el = document.getElementById(d.id);
-    if (el) el.remove();
+    if (d && d.id) {
+        if (boardYtPlayers[d.id]) {
+            try { boardYtPlayers[d.id].destroy(); } catch (e) {}
+            delete boardYtPlayers[d.id];
+        }
+        const el = document.getElementById(d.id);
+        if (el) el.remove();
+    }
 });

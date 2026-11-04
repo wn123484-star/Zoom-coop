@@ -1,5 +1,6 @@
 const socket = io({ reconnection: true, reconnectionAttempts: 25, reconnectionDelay: 800, autoConnect: false });
 let cachedRoomState = null;
+let pingIntervalId = null;
 
 let localClientId = localStorage.getItem('syncspace_client_id');
 if (!localClientId) {
@@ -103,6 +104,7 @@ function applyFullRoomState(state) {
     if (window.loadBoardMediaHistory) window.loadBoardMediaHistory(state.board_media || []);
     if (window.loadWidgetsState && state.widgets) window.loadWidgetsState(state.widgets);
     if (window.loadMediaState) window.loadMediaState(state.media, state.media_list || []);
+    if (window.loadScreenShareState && state.screen_share) window.loadScreenShareState(state.screen_share);
     if (window.loadXoState && state.xo_game) window.loadXoState(state.xo_game);
     if (window.loadChessState && state.chess_game) window.loadChessState(state.chess_game);
     if (window.loadMemoryState && state.memory_game) window.loadMemoryState(state.memory_game);
@@ -128,12 +130,35 @@ window.connectWithUsername = function(nameStr) {
     }
 };
 
+function startPingMonitor() {
+    if (pingIntervalId) clearInterval(pingIntervalId);
+    const sendPing = () => {
+        if (socket.connected) {
+            socket.emit('ping_check', { t: Date.now() });
+        }
+    };
+    sendPing();
+    pingIntervalId = setInterval(sendPing, 2500);
+}
+
+socket.on('pong_check', (data) => {
+    if (!data || !data.t) return;
+    const rtt = Math.max(1, Date.now() - data.t);
+    const valEl = document.getElementById('ping-val');
+    const dotEl = document.getElementById('ping-dot');
+    if (valEl) valEl.innerText = rtt + ' ms';
+    if (dotEl) {
+        dotEl.className = 'ping-dot ' + (rtt < 80 ? 'good' : rtt < 180 ? 'medium' : 'bad');
+    }
+});
+
 socket.on('connect', () => {
     socket.emit('join_room', {
         room_id: ROOM_ID,
         username: window.USERNAME || 'Thành viên',
         client_id: window.CLIENT_ID
     });
+    startPingMonitor();
 });
 
 socket.on('room_state', (state) => {

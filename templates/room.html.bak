@@ -6,20 +6,21 @@
 <title>SyncSpace - Phòng {{ room_id }}</title>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body class="fade-in">
-<div id="dynamic-bg" class="bg-magical"></div>
+<body class="fade-in light-theme">
+<div id="dynamic-bg" class="bg-light-dots"></div>
 
 <div id="workspace">
-<canvas id="board" width="5000" height="5000"></canvas>
+<canvas id="board" class="pan-mode" width="5000" height="5000"></canvas>
 <canvas id="draft-board" width="5000" height="5000"></canvas>
 <canvas id="laser-board" width="5000" height="5000"></canvas>
 <div id="text-layer"></div>
 <div id="board-media-container"></div>
 <div id="sticky-container"></div>
+<div id="stamps-layer"></div>
 
-<div id="xo-container" class="board-widget xo-widget glass-effect" style="display: none; left: 2550px; top: 2250px;">
+<div id="xo-container" class="board-widget xo-widget glass-effect" style="display: none; left: 2520px; top: 2220px; width: 500px; height: 560px;">
 <div id="xo-header" class="widget-header">
-<span class="widget-title">🎮 Cờ Caro XO 20x20 (Chung)</span>
+<span class="widget-title">⭕ Cờ Caro XO 20x20</span>
 <div class="widget-controls">
 <button type="button" id="xo-reset-btn" class="widget-btn" title="Tạo ván mới">🔄 Ván mới</button>
 <button type="button" id="xo-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
@@ -32,9 +33,52 @@
 <div id="xo-board" class="xo-board"></div>
 </div>
 </div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước khung"></div>
 </div>
 
-<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1950px; top: 2250px;">
+<div id="chess-container" class="board-widget chess-widget glass-effect" style="display: none; left: 2380px; top: 2180px; width: 480px; height: 580px;">
+<div id="chess-header" class="widget-header">
+<span class="widget-title">♟️ Cờ Vua Quốc Tế (Chess.com)</span>
+<div class="widget-controls">
+<button type="button" id="chess-flip-btn" class="widget-btn" title="Xoay bàn cờ Trắng/Đen">🔃 Đổi góc</button>
+<button type="button" id="chess-reset-btn" class="widget-btn" title="Ván cờ mới">🔄 Ván mới</button>
+<button type="button" id="chess-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
+<button type="button" id="chess-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
+</div>
+</div>
+<div id="chess-body" class="widget-body">
+<div id="chess-status" class="xo-status">Trắng đi trước</div>
+<div class="chess-board-wrapper">
+<div id="chess-board" class="chess-board"></div>
+<div id="chess-promo-modal" class="chess-promo-modal" style="display:none;">
+<div class="promo-title">Chọn quân Phong Cấp:</div>
+<div id="chess-promo-choices" class="promo-choices"></div>
+</div>
+</div>
+<div id="chess-history" class="chess-history-bar">Chưa có nước đi</div>
+</div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước bàn cờ"></div>
+</div>
+
+<div id="memory-container" class="board-widget memory-widget glass-effect" style="display: none; left: 2450px; top: 2250px; width: 380px; height: 440px;">
+<div id="memory-header" class="widget-header">
+<span class="widget-title">🃏 Lật Thẻ Trí Nhớ</span>
+<div class="widget-controls">
+<button type="button" id="memory-reset-btn" class="widget-btn" title="Xáo thẻ mới">🔄 Ván mới</button>
+<button type="button" id="memory-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
+<button type="button" id="memory-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
+</div>
+</div>
+<div id="memory-body" class="widget-body">
+<div id="memory-status" class="xo-status">Lật 2 thẻ giống nhau!</div>
+<div class="memory-grid-wrap">
+<div id="memory-grid" class="memory-grid"></div>
+</div>
+</div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước"></div>
+</div>
+
+<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1920px; top: 2220px; width: 580px; height: 440px;">
 <div id="media-header" class="widget-header">
 <span class="widget-title">🎬 Trạm Media & Tài Liệu (YT / Ảnh / Video / Excel / Word / HTML / PDF)</span>
 <div class="widget-controls">
@@ -66,6 +110,7 @@
 </div>
 <button type="button" id="btn-unlock-audio" class="unlock-audio-banner" style="display: none;">🔊 Chạm vào đây để Bật tiếng & Đồng bộ Video với phòng</button>
 </div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước khung Media"></div>
 </div>
 
 <div id="cursors-container"></div>
@@ -79,11 +124,11 @@
 <span class="info-pill room-badge" title="Mã phòng hiện tại">🏠 <b>{{ room_id }}</b></span>
 <button type="button" id="btn-edit-name" class="info-pill user-pill" title="Nhấn để đổi tên hiển thị">👤 <b id="current-user-display">{{ username if username else 'Nhập tên...' }}</b> ✏️</button>
 <button type="button" id="btn-copy-link" class="info-pill mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
-<span id="online-badge" class="info-pill online-badge" title="Số người đang trực tuyến">👥 <b id="online-count">1</b></span>
+<span id="online-badge" class="info-pill online-badge" title="Số người đang trực tuyến thực tế">👥 <b id="online-count">1</b></span>
 
-<button type="button" id="tool-pan" class="tool-btn" title="Kéo di chuyển mặt bảng (Hoặc giữ Space / Chuột phải)">✋<span>Kéo bảng</span></button>
+<button type="button" id="tool-pan" class="tool-btn active" title="Kéo di chuyển mặt bảng (Mặc định)">✋<span>Kéo bảng</span></button>
 
-<button type="button" id="group-pen-btn" class="group-trigger-btn active" data-popover="popover-pen" title="Chọn loại bút vẽ">
+<button type="button" id="group-pen-btn" class="group-trigger-btn" data-popover="popover-pen" title="Chọn loại bút vẽ">
 <em id="active-pen-icon">✏️</em><span id="active-pen-label">Bút bi</span><small>▾</small>
 </button>
 
@@ -91,7 +136,11 @@
 <em id="active-shape-icon">📏</em><span id="active-shape-label">Hình học</span><small>▾</small>
 </button>
 
-<button type="button" id="tool-text" class="tool-btn" title="Kéo thả trên bảng để tạo Khung Chữ trong suốt">🔤<span>Khung chữ</span></button>
+<button type="button" id="tool-text" class="tool-btn" title="Kéo thả hoặc chạm trên bảng để tạo Khung Chữ trong suốt">🔤<span>Khung chữ</span></button>
+
+<button type="button" id="group-stamp-btn" class="group-trigger-btn" data-popover="popover-stamp" title="Chọn biểu tượng cảm xúc rồi chạm lên bảng để thả">
+<em id="active-stamp-icon">❤️</em><span id="active-stamp-label">Cảm xúc</span><small>▾</small>
+</button>
 
 <button type="button" id="group-eraser-btn" class="group-trigger-btn" data-popover="popover-eraser" title="Chọn chế độ tẩy">
 <em>🧽</em><span id="eraser-btn-label">Tẩy điểm</span><small>▾</small>
@@ -141,6 +190,24 @@
 </div>
 </div>
 
+<div id="popover-stamp" class="tool-popover glass-effect">
+<div class="popover-title">💖 Chọn Cảm Xúc (Chạm lên bảng để thả)</div>
+<div class="stamp-grid">
+<button type="button" class="stamp-opt-btn active" data-stamp="❤️">❤️</button>
+<button type="button" class="stamp-opt-btn" data-stamp="👍">👍</button>
+<button type="button" class="stamp-opt-btn" data-stamp="😂">😂</button>
+<button type="button" class="stamp-opt-btn" data-stamp="🔥">🔥</button>
+<button type="button" class="stamp-opt-btn" data-stamp="🎉">🎉</button>
+<button type="button" class="stamp-opt-btn" data-stamp="👏">👏</button>
+<button type="button" class="stamp-opt-btn" data-stamp="🤩">🤩</button>
+<button type="button" class="stamp-opt-btn" data-stamp="💯">💯</button>
+<button type="button" class="stamp-opt-btn" data-stamp="🚀">🚀</button>
+<button type="button" class="stamp-opt-btn" data-stamp="💡">💡</button>
+<button type="button" class="stamp-opt-btn" data-stamp="❓">❓</button>
+<button type="button" class="stamp-opt-btn" data-stamp="✅">✅</button>
+</div>
+</div>
+
 <div id="popover-eraser" class="tool-popover glass-effect">
 <div class="popover-title">🧽 Chế Độ Cục Tẩy</div>
 <div class="popover-grid single-col">
@@ -160,8 +227,8 @@
 <span class="qcolor" data-color="#ffa502" style="background:#ffa502;"></span>
 <span class="qcolor" data-color="#a55eea" style="background:#a55eea;"></span>
 <span class="qcolor" data-color="#ff6b81" style="background:#ff6b81;"></span>
-<span class="qcolor" data-color="#ffffff" style="background:#ffffff;"></span>
 <span class="qcolor" data-color="#1e272e" style="background:#1e272e;"></span>
+<span class="qcolor" data-color="#ffffff" style="background:#ffffff;"></span>
 </div>
 </div>
 <div class="style-slider-group">
@@ -174,6 +241,15 @@
 </div>
 </div>
 
+<div id="popover-games" class="tool-popover glass-effect">
+<div class="popover-title">🎮 Chọn Trò Chơi Chung Trên Bảng</div>
+<div class="popover-grid single-col">
+<button type="button" id="btn-game-chess" class="game-menu-btn">♟️ Cờ Vua Quốc Tế (Chuẩn Chess.com)</button>
+<button type="button" id="btn-game-xo" class="game-menu-btn">⭕ Cờ Caro XO 20x20</button>
+<button type="button" id="btn-game-memory" class="game-menu-btn">🃏 Lật Thẻ Trí Nhớ (Memory Match)</button>
+</div>
+</div>
+
 <div class="bottom-dock-container">
 <div class="scroll-strip-wrap" id="bottom-strip-wrap">
 <button type="button" class="scroll-arrow-btn left" data-target="bottom-strip" style="display:none;" title="Cuộn sang trái">◀</button>
@@ -181,7 +257,7 @@
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
 <button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn Ảnh, Video, PDF, Excel, Word, HTML từ máy để hiển thị ngay">📤<span>Đăng Ảnh / Tài Liệu</span></button>
 <button type="button" id="tool-media" class="dock-btn" title="Bật/Tắt Trạm Media & Tài liệu chung">🎬<span>Trạm Media / YT</span></button>
-<button type="button" id="tool-xo" class="dock-btn" title="Bật/Tắt bàn cờ Caro XO 20x20">🎮<span>Cờ Caro XO</span></button>
+<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Mở kho trò chơi tương tác">🎮<span>Trò Chơi ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
 <button type="button" id="tool-export" class="dock-btn secondary" title="Lưu ảnh chụp bảng">💾<span>Lưu ảnh</span></button>
@@ -204,21 +280,25 @@
 </div>
 </div>
 <div class="setting-group">
-<label>Hình nền Đặc biệt</label>
+<label>Hình nền Sáng (Mặc định)</label>
 <div class="bg-options">
-<button type="button" class="bg-opt-btn active" data-bg="bg-magical">✨ Huyền ảo</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-cyberpunk">🌆 Cyberpunk</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-stars">🌌 Trời sao</button>
+<button type="button" class="bg-opt-btn active" data-bg="bg-light-dots">⚪ Light Dots</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-grid">📐 Light Grid</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-paper">📜 Giấy Kraft ấm</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-pastel">🌈 Pastel Aurora</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-sakura">🌸 Anh Đào Sakura</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-mint">🌿 Bạc Hà Mint</button>
 </div>
 </div>
 <div class="setting-group">
-<label>Hình nền Cơ bản</label>
+<label>Hình nền Tối & Đặc biệt</label>
 <div class="bg-options">
-<button type="button" class="bg-opt-btn" data-bg="bg-dots">Dark Dots</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-grid">Dark Grid</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-solid">Dark Solid</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-dots">Light Dots</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-grid">Light Grid</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-magical">✨ Huyền ảo</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-blueprint">🗺️ Blueprint Kỹ thuật</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-cyberpunk">🌆 Cyberpunk</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-matrix">💻 Lưới Neon</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-stars">🌌 Trời sao</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-dots">🌑 Dark Dots</button>
 </div>
 </div>
 <div class="setting-group">
@@ -254,6 +334,7 @@
 <button type="submit">Gửi</button>
 </form>
 </div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước khung Chat"></div>
 </div>
 
 <div class="bottom-status-bar glass-effect">
@@ -266,7 +347,7 @@
 <div id="name-modal" class="name-modal-backdrop" style="display: none;">
 <div class="name-modal-box glass-effect">
 <h3>👋 Chào mừng vào phòng <span style="color:#00d2ff;">{{ room_id }}</span></h3>
-<p>Vui lòng nhập tên hiển thị của bạn để mọi người cùng nhận diện khi vẽ, bấm tay và trò chuyện:</p>
+<p>Vui lòng nhập tên hiển thị của bạn để mọi người cùng nhận diện khi vẽ, chơi cờ và trò chuyện:</p>
 <form id="name-modal-form">
 <input type="text" id="name-modal-input" placeholder="Nhập tên của bạn (VD: William, Minh...)" required maxlength="35" autocomplete="off">
 <button type="submit">Xác nhận & Vào phòng</button>
@@ -278,6 +359,7 @@
 <div id="toast-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>

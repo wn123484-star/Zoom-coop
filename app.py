@@ -22,6 +22,7 @@ room_states = {}
 xo_games = {}
 chess_games = {}
 memory_games = {}
+screen_shares = {}
 xo_timers = {}
 dirty_rooms = set()
 db_lock = threading.Lock()
@@ -363,6 +364,7 @@ def admin_delete_room(room_id):
     xo_games.pop(room_id, None)
     chess_games.pop(room_id, None)
     memory_games.pop(room_id, None)
+    screen_shares.pop(room_id, None)
     room_states.pop(room_id, None)
     dirty_rooms.discard(room_id)
     with db_lock:
@@ -395,6 +397,10 @@ def upload_file():
         'kind': kind,
         'name': orig_name[:70]
     })
+
+@socketio.on('ping_check')
+def handle_ping_check(data):
+    emit('pong_check', {'t': data.get('t', 0)}, to=request.sid)
 
 @socketio.on('join_room')
 def handle_join(data):
@@ -436,12 +442,17 @@ def handle_join(data):
         'xo_game': xo_games[room_id],
         'chess_game': chess_games[room_id],
         'memory_game': memory_games[room_id],
+        'screen_share': screen_shares.get(room_id),
         'chat': state['chat'][-50:],
         'settings': state['settings'],
         'widgets': state['widgets'],
         'users': users_list
     }, to=request.sid)
     emit('room_users', {'users': users_list, 'joined': username, 'sid': request.sid}, to=room_id)
+
+    active_screen = screen_shares.get(room_id)
+    if active_screen and active_screen.get('sid') != request.sid:
+        emit('screen_viewer_joined', {'viewer_sid': request.sid, 'username': username}, to=active_screen['sid'])
 
 @socketio.on('update_username')
 def handle_update_username(data):
@@ -458,9 +469,92 @@ def handle_disconnect():
     user_data = connected_users.pop(request.sid, None)
     if user_data:
         room_id = user_data['room']
+        if room_id in screen_shares and screen_shares[room_id].get('sid') == request.sid:
+            screen_shares.pop(room_id, None)
+            emit('screen_share_stopped', {}, to=room_id)
         save_room_immediately(room_id)
         users_list = get_room_users(room_id)
         emit('user_disconnected', {'sid': request.sid, 'username': user_data['username'], 'users': users_list}, to=room_id)
+
+@socketio.on('screen_share_start')
+def handle_screen_share_start(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    info = {
+        'sid': request.sid,
+        'username': data.get('username', 'Thành viên'),
+        'mode': data.get('mode', 'screen'),
+        'mode_label': data.get('mode_label', 'Toàn màn hình'),
+        'x': data.get('x', 1960),
+        'y': data.get('y', 2180),
+        'w': data.get('w', 640),
+        'h': data.get('h', 440)
+    }
+    screen_shares[room_id] = info
+    emit('screen_share_started', info, to=room_id, include_self=False)
+    for sid, u in connected_users.items():
+        if u.get('room') == room_id and sid != request.sid:
+            emit('screen_viewer_joined', {'viewer_sid': sid, 'username': u.get('username', '')}, to=request.sid)
+
+@socketio.on('screen_share_stop')
+def handle_screen_share_stop(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    if room_id in screen_shares and screen_shares[room_id].get('sid') == request.sid:
+        screen_shares.pop(room_id, None)
+    emit('screen_share_stopped', {}, to=room_id, include_self=False)
+
+@socketio.on('screen_widget_move')
+def handle_screen_widget_move(data):
+    room_id = data.get('room_id')
+    if not room_id or room_id not in screen_shares:
+        return
+    for k in ('x', 'y', 'w', 'h'):
+        if k in data:
+            screen_shares[room_id][k] = data[k]
+    emit('screen_widget_moved', data, to=room_id, include_self=False)
+
+@socketio.on('webrtc_offer')
+def handle_webrtc_offer(data):
+    target_sid = data.get('target_sid')
+    if target_sid:
+        emit('webrtc_offer', {
+            'from_sid': request.sid,
+            'sdp': data.get('sdp'),
+            'username': data.get('username', 'Thành viên'),
+            'mode_label': data.get('mode_label', 'Màn hình')
+        }, to=target_sid)
+
+@socketio.on('webrtc_answer')
+def handle_webrtc_answer(data):
+    target_sid = data.get('target_sid')
+    if target_sid:
+        emit('webrtc_answer', {
+            'from_sid': request.sid,
+            'sdp': data.get('sdp')
+        }, to=target_sid)
+
+@socketio.on('webrtc_ice')
+def handle_webrtc_ice(data):
+    target_sid = data.get('target_sid')
+    if target_sid:
+        emit('webrtc_ice', {
+            'from_sid': request.sid,
+            'candidate': data.get('candidate')
+        }, to=target_sid)
+
+@socketio.on('screen_frame')
+def handle_screen_frame(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('screen_frame', {
+        'frame': data.get('frame'),
+        'username': data.get('username', 'Thành viên'),
+        'mode_label': data.get('mode_label', 'Màn hình')
+    }, to=room_id, include_self=False)
 
 @socketio.on('mouse_move')
 def handle_mouse_move(data):
@@ -533,22 +627,49 @@ def handle_undo_stroke(data):
     room_id = data.get('room_id')
     if not room_id:
         return
+    client_id = data.get('client_id')
+    username = data.get('username')
     state = get_room_state(room_id)
-    if state['draw_history']:
-        state['draw_history'].pop()
+    history = state['draw_history']
+    if not history:
+        return
+    target_idx = -1
+    for i in range(len(history) - 1, -1, -1):
+        st = history[i]
+        if (client_id and st.get('owner_id') == client_id) or (username and st.get('owner') == username):
+            target_idx = i
+            break
+    if target_idx == -1 and not client_id and not username:
+        target_idx = len(history) - 1
+    if target_idx != -1:
+        history.pop(target_idx)
         mark_room_dirty(room_id)
-        emit('board_sync', {'draw_history': state['draw_history']}, to=room_id)
+        emit('board_sync', {'draw_history': history}, to=room_id)
 
 @socketio.on('clear_board')
 def handle_clear(data):
     room_id = data.get('room_id')
     if not room_id:
         return
+    client_id = data.get('client_id')
+    username = data.get('username')
     state = get_room_state(room_id)
-    state['draw_history'] = []
-    state['texts'] = {}
+
+    def belongs_to_sender(item):
+        if client_id and item.get('owner_id') == client_id:
+            return True
+        if username and item.get('owner') == username:
+            return True
+        return False
+
+    state['draw_history'] = [s for s in state['draw_history'] if not belongs_to_sender(s)]
+    if 'texts' in state and isinstance(state['texts'], dict):
+        state['texts'] = {tid: tbox for tid, tbox in state['texts'].items() if not belongs_to_sender(tbox)}
     mark_room_dirty(room_id)
-    emit('board_cleared', {}, to=room_id)
+    emit('board_sync', {
+        'draw_history': state['draw_history'],
+        'texts': list(state.get('texts', {}).values())
+    }, to=room_id)
 
 @socketio.on('new_text_box')
 def handle_new_text_box(data):
@@ -574,7 +695,7 @@ def handle_update_text_box(data):
     if tid not in state['texts']:
         state['texts'][tid] = data
     else:
-        for k in ('x', 'y', 'w', 'h', 'text', 'color', 'fontSize', 'owner'):
+        for k in ('x', 'y', 'w', 'h', 'text', 'color', 'fontSize', 'owner', 'owner_id'):
             if k in data:
                 state['texts'][tid][k] = data[k]
     mark_room_dirty(room_id)

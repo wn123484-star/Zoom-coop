@@ -78,6 +78,24 @@
 <div class="widget-resizer" title="Kéo để chỉnh kích thước"></div>
 </div>
 
+<div id="screen-container" class="board-widget screen-widget glass-effect" style="display: none; left: 1960px; top: 2180px; width: 640px; height: 440px;">
+<div id="screen-header" class="widget-header">
+<span id="screen-title" class="widget-title">🖥️ Chia Sẻ Màn Hình Trực Tiếp</span>
+<div class="widget-controls">
+<span id="screen-live-badge" class="live-stream-badge">● LIVE</span>
+<button type="button" id="screen-fullscreen-btn" class="widget-btn" title="Xem toàn màn hình">⛶ Phóng to</button>
+<button type="button" id="screen-stop-btn" class="widget-btn close" style="display:none;" title="Dừng chia sẻ màn hình">⏹️ Dừng phát</button>
+<button type="button" id="screen-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
+<button type="button" id="screen-close-btn" class="widget-btn close" title="Ẩn cửa sổ">✕</button>
+</div>
+</div>
+<div id="screen-body" class="widget-body screen-body">
+<video id="screen-video" autoplay playsinline></video>
+<img id="screen-fallback-img" alt="Screen Stream" style="display:none;">
+</div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước màn hình"></div>
+</div>
+
 <div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1920px; top: 2220px; width: 580px; height: 440px;">
 <div id="media-header" class="widget-header">
 <span class="widget-title">🎬 Trạm Media & Tài Liệu (YT / Ảnh / Video / Excel / Word / HTML / PDF)</span>
@@ -125,6 +143,7 @@
 <button type="button" id="btn-edit-name" class="info-pill user-pill" title="Nhấn để đổi tên hiển thị">👤 <b id="current-user-display">{{ username if username else 'Nhập tên...' }}</b> ✏️</button>
 <button type="button" id="btn-copy-link" class="info-pill mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
 <span id="online-badge" class="info-pill online-badge" title="Số người đang trực tuyến thực tế">👥 <b id="online-count">1</b></span>
+<span id="ping-badge" class="info-pill ping-badge" title="Độ trễ phản hồi máy chủ (Ping)"><i id="ping-dot" class="ping-dot good"></i> <b id="ping-val">-- ms</b></span>
 
 <button type="button" id="tool-pan" class="tool-btn active" title="Kéo di chuyển mặt bảng (Mặc định)">✋<span>Kéo bảng</span></button>
 
@@ -151,8 +170,8 @@
 <span id="line-width-val">4px</span><small>▾</small>
 </button>
 
-<button type="button" id="tool-undo" class="icon-action-btn" title="Hoàn tác nét vẽ (Ctrl+Z)">↩️<span>Hoàn tác</span></button>
-<button type="button" id="tool-clear" class="danger-btn" title="Xóa toàn bộ nét vẽ và khung chữ">🗑️<span>Xóa bảng</span></button>
+<button type="button" id="tool-undo" class="icon-action-btn" title="Hoàn tác nét vẽ của bạn (Ctrl+Z)">↩️<span>Hoàn tác</span></button>
+<button type="button" id="tool-clear" class="danger-btn" title="Chỉ xóa nét vẽ và khung chữ của bạn (giữ nguyên của người khác)">🗑️<span>Xóa của tôi</span></button>
 </div>
 <button type="button" class="scroll-arrow-btn right" data-target="top-strip" style="display:none;" title="Cuộn sang phải">▶</button>
 </div>
@@ -241,6 +260,16 @@
 </div>
 </div>
 
+<div id="popover-screen" class="tool-popover glass-effect">
+<div class="popover-title">🖥️ Chế Độ Chia Sẻ Màn Hình (Google Meet)</div>
+<div class="popover-grid single-col">
+<button type="button" class="screen-mode-btn" data-mode="browser" data-label="Thẻ trình duyệt">🌐 Thẻ trình duyệt (Tab + Kèm âm thanh)</button>
+<button type="button" class="screen-mode-btn" data-mode="window" data-label="Cửa sổ ứng dụng">🪟 Cửa sổ ứng dụng (Chỉ 1 phần mềm)</button>
+<button type="button" class="screen-mode-btn" data-mode="monitor" data-label="Toàn màn hình">🖥️ Toàn bộ màn hình (Entire Screen)</button>
+<button type="button" id="btn-stop-screen-menu" class="screen-mode-btn stop-mode" style="display:none;">⏹️ Dừng chia sẻ màn hình hiện tại</button>
+</div>
+</div>
+
 <div id="popover-games" class="tool-popover glass-effect">
 <div class="popover-title">🎮 Chọn Trò Chơi Chung Trên Bảng</div>
 <div class="popover-grid single-col">
@@ -256,6 +285,7 @@
 <div id="bottom-strip" class="scroll-strip bottom-dock">
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
 <button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn Ảnh, Video, PDF, Excel, Word, HTML từ máy để hiển thị ngay">📤<span>Đăng Ảnh / Tài Liệu</span></button>
+<button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
 <button type="button" id="tool-media" class="dock-btn" title="Bật/Tắt Trạm Media & Tài liệu chung">🎬<span>Trạm Media / YT</span></button>
 <button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Mở kho trò chơi tương tác">🎮<span>Trò Chơi ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
