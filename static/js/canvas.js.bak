@@ -54,20 +54,45 @@ let strokeHistory = [];
 let currentStroke = null;
 let remoteLiveStrokes = {};
 let textDragBox = null;
+let activeTextBoxId = null;
 let lastEmitTime = 0;
 let laserTrails = [];
 
 const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowdown: false, arrowright: false };
 
+function deselectAllTextBoxes(exceptId) {
+    document.querySelectorAll('.board-text-box.editing').forEach(el => {
+        if (el.id !== exceptId) {
+            el.classList.remove('editing');
+            const ed = el.querySelector('.text-box-editor');
+            if (ed && document.activeElement === ed) ed.blur();
+        }
+    });
+    if (!exceptId) activeTextBoxId = null;
+}
+
+document.addEventListener('pointerdown', (e) => {
+    const tb = e.target.closest('.board-text-box');
+    const stylePop = e.target.closest('#popover-style') || e.target.closest('#group-style-btn');
+    if (!tb && !stylePop) {
+        deselectAllTextBoxes(null);
+    }
+});
+
 window.addEventListener('keydown', (e) => {
-    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) return;
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) {
+        if (e.key === 'Escape') {
+            deselectAllTextBoxes(null);
+        }
+        return;
+    }
     if (e.code === 'Space' && !spacePressed) {
         spacePressed = true;
         canvas.classList.add('pan-mode');
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        socket.emit('undo_stroke', { room_id: ROOM_ID });
+        socket.emit('undo_stroke', { room_id: ROOM_ID, client_id: window.CLIENT_ID, username: window.USERNAME });
         return;
     }
     const k = e.key.toLowerCase();
@@ -184,11 +209,29 @@ window.bindSafeButton(document.getElementById('tool-text'), () => {
     if (window.showToast) window.showToast('🔤 Kéo thả hoặc chạm trên bảng để tạo Khung Chữ!');
 });
 
+function applyColorToActiveTextBox(newColor) {
+    if (!activeTextBoxId) return;
+    const box = document.getElementById(activeTextBoxId);
+    if (!box) return;
+    const editor = box.querySelector('.text-box-editor');
+    const cInput = box.querySelector('.tbox-color-input');
+    if (editor) {
+        editor.style.color = newColor;
+        if (cInput) cInput.value = newColor;
+        socket.emit('update_text_box', {
+            room_id: ROOM_ID,
+            id: activeTextBoxId,
+            color: newColor
+        });
+    }
+}
+
 const colorPicker = document.getElementById('color-picker');
 const styleColorDot = document.getElementById('style-color-dot');
 colorPicker.addEventListener('input', (e) => {
     currentColor = e.target.value;
     if (styleColorDot) styleColorDot.style.background = currentColor;
+    applyColorToActiveTextBox(currentColor);
 });
 
 document.querySelectorAll('.qcolor').forEach(dot => {
@@ -200,6 +243,7 @@ document.querySelectorAll('.qcolor').forEach(dot => {
             if (styleColorDot) styleColorDot.style.background = c;
             document.querySelectorAll('.qcolor').forEach(d => d.classList.remove('active'));
             dot.classList.add('active');
+            applyColorToActiveTextBox(c);
         }
     });
 });
@@ -224,7 +268,7 @@ if (lineOpacityInput) {
 }
 
 window.bindSafeButton(document.getElementById('tool-undo'), () => {
-    socket.emit('undo_stroke', { room_id: ROOM_ID });
+    socket.emit('undo_stroke', { room_id: ROOM_ID, client_id: window.CLIENT_ID, username: window.USERNAME });
 });
 
 window.bindSafeButton(document.getElementById('tool-center'), () => {
@@ -237,12 +281,13 @@ window.bindSafeButton(document.getElementById('btn-zoom-out'), () => window.zoom
 window.bindSafeButton(zoomIndicator, () => window.centerWorkspace());
 
 window.bindSafeButton(document.getElementById('tool-clear'), () => {
-    if (confirm('Bạn có chắc muốn xóa toàn bộ nét vẽ và khung chữ trên bảng không?')) {
-        strokeHistory = [];
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        draftCtx.clearRect(0, 0, draftCanvas.width, draftCanvas.height);
-        textLayer.innerHTML = '';
-        socket.emit('clear_board', { room_id: ROOM_ID });
+    if (confirm('Xóa toàn bộ nét vẽ và khung chữ CỦA BẠN (giữ nguyên phần của người khác)?')) {
+        socket.emit('clear_board', {
+            room_id: ROOM_ID,
+            client_id: window.CLIENT_ID,
+            username: window.USERNAME
+        });
+        if (window.showToast) window.showToast('🗑️ Đã xóa phần nét vẽ và khung chữ của bạn!');
     }
 });
 
@@ -561,6 +606,8 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         box = document.createElement('div');
         box.className = 'board-text-box';
         box.id = data.id;
+        box.dataset.ownerId = data.owner_id || '';
+        box.dataset.owner = data.owner || '';
 
         const bar = document.createElement('div');
         bar.className = 'text-box-toolbar';
@@ -579,11 +626,30 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         btnBigger.className = 'tbox-btn';
         btnBigger.innerText = 'A+';
 
-        const btnColor = document.createElement('button');
-        btnColor.type = 'button';
-        btnColor.className = 'tbox-btn';
-        btnColor.innerText = '🎨';
-        btnColor.title = 'Đổi sang màu bút hiện tại';
+        const colorWrap = document.createElement('div');
+        colorWrap.className = 'tbox-color-wrap';
+
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.className = 'tbox-color-input';
+        colorInput.title = 'Chọn màu chữ bất kỳ';
+        colorInput.value = data.color || currentColor || '#00d2ff';
+        colorWrap.appendChild(colorInput);
+
+        ['#00d2ff', '#ff4757', '#2ed573', '#ffa502', '#1e272e'].forEach(hex => {
+            const cDot = document.createElement('span');
+            cDot.className = 'tbox-color-dot';
+            cDot.style.background = hex;
+            window.bindSafeButton(cDot, () => {
+                editor.style.color = hex;
+                colorInput.value = hex;
+                currentColor = hex;
+                colorPicker.value = hex;
+                if (styleColorDot) styleColorDot.style.background = hex;
+                emitBoxUpdate();
+            });
+            colorWrap.appendChild(cDot);
+        });
 
         const btnDel = document.createElement('button');
         btnDel.type = 'button';
@@ -593,7 +659,7 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         bar.appendChild(dragHandle);
         bar.appendChild(btnSmaller);
         bar.appendChild(btnBigger);
-        bar.appendChild(btnColor);
+        bar.appendChild(colorWrap);
         bar.appendChild(btnDel);
 
         const editor = document.createElement('textarea');
@@ -615,9 +681,22 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
                 text: editor.value,
                 color: editor.style.color || '#00d2ff',
                 fontSize: parseInt(editor.style.fontSize, 10) || 20,
-                owner: window.USERNAME
+                owner: box.dataset.owner || window.USERNAME,
+                owner_id: box.dataset.ownerId || window.CLIENT_ID
             });
         };
+
+        colorInput.addEventListener('pointerdown', e => e.stopPropagation());
+        colorInput.addEventListener('click', e => e.stopPropagation());
+        colorInput.addEventListener('input', (e) => {
+            e.stopPropagation();
+            const val = e.target.value;
+            editor.style.color = val;
+            currentColor = val;
+            colorPicker.value = val;
+            if (styleColorDot) styleColorDot.style.background = val;
+            emitBoxUpdate();
+        });
 
         window.makeWidgetResizable(box, 140, 50, true, () => {
             emitBoxUpdate();
@@ -635,30 +714,30 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
             emitBoxUpdate();
         });
 
-        window.bindSafeButton(btnColor, () => {
-            editor.style.color = currentColor;
-            emitBoxUpdate();
-        });
-
         window.bindSafeButton(btnDel, () => {
+            if (activeTextBoxId === data.id) activeTextBoxId = null;
             box.remove();
             socket.emit('delete_text_box', { room_id: ROOM_ID, id: data.id });
         });
 
-        const stopBubble = (e) => {
+        const activateBox = (e) => {
             e.stopPropagation();
+            deselectAllTextBoxes(data.id);
+            activeTextBoxId = data.id;
+            box.classList.add('editing');
         };
-        editor.addEventListener('pointerdown', stopBubble);
-        editor.addEventListener('mousedown', stopBubble);
-        editor.addEventListener('touchstart', stopBubble, { passive: true });
+
+        editor.addEventListener('pointerdown', activateBox);
+        editor.addEventListener('mousedown', activateBox);
+        editor.addEventListener('touchstart', activateBox, { passive: true });
         editor.addEventListener('click', (e) => {
-            e.stopPropagation();
+            activateBox(e);
             editor.focus();
         });
-        editor.addEventListener('focus', () => box.classList.add('editing'));
-        editor.addEventListener('blur', () => {
-            box.classList.remove('editing');
-            emitBoxUpdate();
+        editor.addEventListener('focus', () => {
+            deselectAllTextBoxes(data.id);
+            activeTextBoxId = data.id;
+            box.classList.add('editing');
         });
         editor.addEventListener('input', () => emitBoxUpdate());
 
@@ -671,6 +750,9 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         dragHandle.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            deselectAllTextBoxes(data.id);
+            activeTextBoxId = data.id;
+            box.classList.add('editing');
             isMoving = true;
             moveStartX = e.clientX;
             moveStartY = e.clientY;
@@ -700,8 +782,8 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
         };
         dragHandle.addEventListener('pointerup', endMove);
         dragHandle.addEventListener('pointercancel', endMove);
-        box.addEventListener('pointerdown', stopBubble);
-        box.addEventListener('mousedown', stopBubble);
+        box.addEventListener('pointerdown', activateBox);
+        box.addEventListener('mousedown', activateBox);
     }
 
     if (typeof data.x === 'number') box.style.left = data.x + 'px';
@@ -710,14 +792,20 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
     if (typeof data.h === 'number') box.style.height = data.h + 'px';
 
     const editor = box.querySelector('.text-box-editor');
+    const cInput = box.querySelector('.tbox-color-input');
     if (editor) {
-        if (data.color) editor.style.color = data.color;
+        if (data.color) {
+            editor.style.color = data.color;
+            if (cInput && data.color.startsWith('#')) cInput.value = data.color;
+        }
         editor.style.fontSize = (data.fontSize || 20) + 'px';
         if (data.text !== undefined && document.activeElement !== editor) {
             editor.value = data.text;
         }
         if (autoFocus) {
             setTimeout(() => {
+                deselectAllTextBoxes(data.id);
+                activeTextBoxId = data.id;
                 box.classList.add('editing');
                 editor.focus();
             }, 60);
@@ -742,6 +830,7 @@ window.getWorkspaceCoords = function(clientX, clientY) {
 
 function startPointerAction(clientX, clientY, button) {
     if (window.closeAllPopovers) window.closeAllPopovers();
+    deselectAllTextBoxes(null);
     const pos = window.getWorkspaceCoords(clientX, clientY);
 
     if (button === 0 && currentTool === 'stamp') {
@@ -793,6 +882,8 @@ function startPointerAction(clientX, clientY, button) {
         color: activeColor,
         width: currentWidth,
         opacity: currentOpacity,
+        owner: window.USERNAME || 'Thành viên',
+        owner_id: window.CLIENT_ID,
         points: [pos]
     };
 
@@ -918,7 +1009,8 @@ function endPointerAction() {
             text: '',
             color: currentColor,
             fontSize: Math.max(18, currentWidth * 4),
-            owner: window.USERNAME
+            owner: window.USERNAME || 'Thành viên',
+            owner_id: window.CLIENT_ID
         };
         window.createOrUpdateTextBox(newBox, true);
         socket.emit('new_text_box', newBox);
@@ -1054,6 +1146,9 @@ socket.on('stroke_deleted', (data) => {
 socket.on('board_sync', (data) => {
     strokeHistory = data.draw_history || [];
     redrawAllHistory();
+    if (Array.isArray(data.texts)) {
+        window.loadTextsHistory(data.texts);
+    }
 });
 
 socket.on('board_cleared', () => {

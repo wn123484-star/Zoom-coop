@@ -36,20 +36,53 @@ let pendingSyncState = null;
 const boardYtPlayers = {};
 
 let localScreenStream = null;
+let hiddenCaptureVideo = null;
+let screenWorker = null;
 let screenPeers = {};
 let viewerPeer = null;
-let screenRelayTimer = null;
-let hasWebRtcVideoStream = false;
+let webRtcRenderingConfirmed = false;
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        }
     ]
 };
 
 window.onYouTubeIframeAPIReady = function() {
     ytApiReady = true;
 };
+
+function createBackgroundTimerWorker(intervalMs, onTick) {
+    try {
+        const blob = new Blob([
+            `let tid = setInterval(() => postMessage('tick'), ${intervalMs}); onmessage = (e) => { if (e.data === 'stop') clearInterval(tid); };`
+        ], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+        worker.onmessage = () => onTick();
+        return {
+            stop: () => {
+                try {
+                    worker.postMessage('stop');
+                    worker.terminate();
+                } catch (e) {}
+            }
+        };
+    } catch (err) {
+        const id = setInterval(onTick, intervalMs);
+        return { stop: () => clearInterval(id) };
+    }
+}
 
 function setupScreenWidgetInteractions() {
     if (!screenContainer || !screenHeader) return;
@@ -110,18 +143,37 @@ function setupScreenWidgetInteractions() {
 }
 setupScreenWidgetInteractions();
 
+function isWebRtcActivelyRendering() {
+    if (!webRtcRenderingConfirmed || !viewerPeer || !screenVideo) return false;
+    const st = viewerPeer.iceConnectionState;
+    if (st !== 'connected' && st !== 'completed') return false;
+    if (screenVideo.paused || screenVideo.readyState < 2 || screenVideo.videoWidth < 10) return false;
+    return true;
+}
+
 function closeViewerPeer() {
-    hasWebRtcVideoStream = false;
+    webRtcRenderingConfirmed = false;
     if (viewerPeer) {
         try { viewerPeer.close(); } catch (e) {}
         viewerPeer = null;
     }
+    if (screenVideo && !localScreenStream) {
+        screenVideo.srcObject = null;
+        screenVideo.style.display = 'none';
+    }
 }
 
 function stopLocalScreenShare(notifyRoom) {
-    if (screenRelayTimer) {
-        clearInterval(screenRelayTimer);
-        screenRelayTimer = null;
+    if (screenWorker) {
+        screenWorker.stop();
+        screenWorker = null;
+    }
+    if (hiddenCaptureVideo) {
+        try {
+            hiddenCaptureVideo.pause();
+            hiddenCaptureVideo.srcObject = null;
+        } catch (e) {}
+        hiddenCaptureVideo = null;
     }
     Object.values(screenPeers).forEach(pc => {
         try { pc.close(); } catch (e) {}
@@ -147,13 +199,13 @@ function stopLocalScreenShare(notifyRoom) {
 async function startScreenShareWithMode(mode, modeLabel) {
     if (window.closeAllPopovers) window.closeAllPopovers();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        if (window.showToast) window.showToast('Trình duyệt hoặc thiết bị hiện tại không hỗ trợ API Chia sẻ màn hình!');
+        if (window.showToast) window.showToast('Thiết bị này không hỗ trợ chia sẻ màn hình (Chỉ hỗ trợ xem)!');
         return;
     }
     try {
         stopLocalScreenShare(false);
         const videoConstraints = {
-            frameRate: { ideal: 25, max: 30 }
+            frameRate: { ideal: 20, max: 30 }
         };
         if (mode === 'browser' || mode === 'window' || mode === 'monitor') {
             videoConstraints.displaySurface = mode;
@@ -182,8 +234,16 @@ async function startScreenShareWithMode(mode, modeLabel) {
         screenFallbackImg.style.display = 'none';
         screenVideo.style.display = 'block';
         screenVideo.muted = true;
+        screenVideo.setAttribute('muted', '');
         screenVideo.srcObject = stream;
         screenVideo.play().catch(() => {});
+
+        hiddenCaptureVideo = document.createElement('video');
+        hiddenCaptureVideo.muted = true;
+        hiddenCaptureVideo.playsInline = true;
+        hiddenCaptureVideo.autoplay = true;
+        hiddenCaptureVideo.srcObject = stream;
+        hiddenCaptureVideo.play().catch(() => {});
 
         socket.emit('screen_share_start', {
             room_id: ROOM_ID,
@@ -198,23 +258,30 @@ async function startScreenShareWithMode(mode, modeLabel) {
 
         const relayCanvas = document.createElement('canvas');
         const relayCtx = relayCanvas.getContext('2d');
-        screenRelayTimer = setInterval(() => {
-            if (!localScreenStream || !screenVideo || screenVideo.readyState < 2) return;
-            const vw = screenVideo.videoWidth || 1280;
-            const vh = screenVideo.videoHeight || 720;
-            const targetW = Math.min(960, vw);
-            const targetH = Math.round((vh / vw) * targetW);
-            relayCanvas.width = targetW;
-            relayCanvas.height = targetH;
-            relayCtx.drawImage(screenVideo, 0, 0, targetW, targetH);
-            const dataUrl = relayCanvas.toDataURL('image/jpeg', 0.55);
+        const sendOneFrame = () => {
+            if (!localScreenStream) return;
+            const srcVid = (hiddenCaptureVideo && hiddenCaptureVideo.videoWidth > 0) ? hiddenCaptureVideo : screenVideo;
+            if (!srcVid || srcVid.videoWidth === 0) return;
+            const vw = srcVid.videoWidth;
+            const vh = srcVid.videoHeight;
+            const targetW = Math.min(920, vw);
+            const targetH = Math.max(100, Math.round((vh / vw) * targetW));
+            if (relayCanvas.width !== targetW || relayCanvas.height !== targetH) {
+                relayCanvas.width = targetW;
+                relayCanvas.height = targetH;
+            }
+            relayCtx.drawImage(srcVid, 0, 0, targetW, targetH);
+            const dataUrl = relayCanvas.toDataURL('image/jpeg', 0.54);
             socket.emit('screen_frame', {
                 room_id: ROOM_ID,
                 frame: dataUrl,
                 username: window.USERNAME || 'Thành viên',
                 mode_label: modeLabel
             });
-        }, 450);
+        };
+
+        setTimeout(sendOneFrame, 200);
+        screenWorker = createBackgroundTimerWorker(160, sendOneFrame);
 
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
@@ -310,6 +377,11 @@ function showRemoteScreenWidget(info) {
     screenContainer.classList.remove('minimized');
     screenStopBtn.style.display = 'none';
     screenTitle.innerText = `🖥️ ${info.username || 'Thành viên'} đang chia sẻ (${info.mode_label || 'Màn hình'})`;
+    if (info.last_frame && !isWebRtcActivelyRendering()) {
+        screenVideo.style.display = 'none';
+        screenFallbackImg.style.display = 'block';
+        screenFallbackImg.src = info.last_frame;
+    }
 }
 
 window.loadScreenShareState = function(info) {
@@ -330,7 +402,10 @@ socket.on('screen_share_stopped', () => {
     if (localScreenStream) return;
     closeViewerPeer();
     if (screenVideo) screenVideo.srcObject = null;
-    if (screenFallbackImg) screenFallbackImg.style.display = 'none';
+    if (screenFallbackImg) {
+        screenFallbackImg.style.display = 'none';
+        screenFallbackImg.src = '';
+    }
     if (screenContainer) screenContainer.style.display = 'none';
     if (window.showToast) window.showToast('⏹️ Chia sẻ màn hình đã kết thúc.');
 });
@@ -344,23 +419,53 @@ socket.on('screen_widget_moved', (data) => {
 });
 
 socket.on('webrtc_offer', async (data) => {
-    if (!data || !data.from_sid || !data.sdp) return;
+    if (!data || !data.from_sid || !data.sdp || localScreenStream) return;
     closeViewerPeer();
     const pc = new RTCPeerConnection(rtcConfig);
     viewerPeer = pc;
-    pc.ontrack = (ev) => {
-        if (ev.streams && ev.streams[0]) {
-            hasWebRtcVideoStream = true;
+
+    const checkAndActivateVideo = () => {
+        if (!viewerPeer || !screenVideo) return;
+        const st = viewerPeer.iceConnectionState;
+        if ((st === 'connected' || st === 'completed') && screenVideo.videoWidth > 10 && !screenVideo.paused) {
+            webRtcRenderingConfirmed = true;
             screenFallbackImg.style.display = 'none';
             screenVideo.style.display = 'block';
-            screenVideo.muted = false;
-            screenVideo.srcObject = ev.streams[0];
-            screenVideo.play().catch(() => {
-                screenVideo.muted = true;
-                screenVideo.play().catch(() => {});
-            });
         }
     };
+
+    pc.oniceconnectionstatechange = () => {
+        if (!viewerPeer) return;
+        const st = viewerPeer.iceConnectionState;
+        if (st === 'disconnected' || st === 'failed' || st === 'closed') {
+            webRtcRenderingConfirmed = false;
+            screenVideo.style.display = 'none';
+            screenFallbackImg.style.display = 'block';
+        } else {
+            checkAndActivateVideo();
+        }
+    };
+
+    pc.ontrack = (ev) => {
+        if (ev.streams && ev.streams[0]) {
+            screenVideo.muted = true;
+            screenVideo.setAttribute('muted', '');
+            screenVideo.setAttribute('playsinline', '');
+            screenVideo.srcObject = ev.streams[0];
+            screenVideo.onloadeddata = () => {
+                screenVideo.play().then(() => {
+                    setTimeout(checkAndActivateVideo, 200);
+                }).catch(() => {});
+            };
+            screenVideo.ontimeupdate = () => {
+                if (!webRtcRenderingConfirmed && screenVideo.videoWidth > 10) {
+                    checkAndActivateVideo();
+                }
+            };
+            screenVideo.play().catch(() => {});
+        }
+    };
+
     pc.onicecandidate = (ev) => {
         if (ev.candidate) {
             socket.emit('webrtc_ice', {
@@ -369,6 +474,7 @@ socket.on('webrtc_offer', async (data) => {
             });
         }
     };
+
     try {
         await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
         const answer = await pc.createAnswer();
@@ -401,14 +507,16 @@ socket.on('webrtc_ice', async (data) => {
 });
 
 socket.on('screen_frame', (data) => {
-    if (!data || !data.frame || localScreenStream || hasWebRtcVideoStream) return;
+    if (!data || !data.frame || localScreenStream) return;
     if (screenContainer.style.display === 'none') {
         screenContainer.style.display = 'flex';
     }
     screenTitle.innerText = `🖥️ ${data.username || 'Thành viên'} đang chia sẻ (${data.mode_label || 'Màn hình'})`;
-    screenVideo.style.display = 'none';
-    screenFallbackImg.style.display = 'block';
     screenFallbackImg.src = data.frame;
+    if (!isWebRtcActivelyRendering()) {
+        screenVideo.style.display = 'none';
+        screenFallbackImg.style.display = 'block';
+    }
 });
 
 function syncMediaWidgetState() {

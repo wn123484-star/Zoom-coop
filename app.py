@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 import time
+import shutil
 import threading
 import uuid
 import random
@@ -10,12 +11,23 @@ from flask import Flask, render_template, request, session, redirect, url_for, j
 from flask_socketio import SocketIO, join_room, emit
 from dotenv import load_dotenv
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret')
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='threading',
+    max_http_buffer_size=10 * 1024 * 1024
+)
 
+SERVER_START_TIME = time.time()
 connected_users = {}
 active_rooms = {}
 room_states = {}
@@ -26,6 +38,12 @@ screen_shares = {}
 xo_timers = {}
 dirty_rooms = set()
 db_lock = threading.Lock()
+
+def get_client_ip():
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.remote_addr or '0.0.0.0'
 
 def get_db():
     os.makedirs('database', exist_ok=True)
@@ -42,6 +60,103 @@ def init_db():
         conn.execute('CREATE TABLE IF NOT EXISTS room_data (room_id TEXT PRIMARY KEY, state_json TEXT, xo_json TEXT, updated_at REAL)')
         conn.commit()
         conn.close()
+
+def get_dir_size_mb(folder_path):
+    total = 0
+    if not os.path.exists(folder_path):
+        return 0.0
+    for root, _, files in os.walk(folder_path):
+        for f in files:
+            fp = os.path.join(root, f)
+            try:
+                total += os.path.getsize(fp)
+            except Exception:
+                pass
+    return round(total / (1024 * 1024), 2)
+
+def collect_system_metrics():
+    cpu_percent = 0.0
+    cpu_cores = os.cpu_count() or 1
+    load_avg = [0.0, 0.0, 0.0]
+    if hasattr(os, 'getloadavg'):
+        try:
+            load_avg = [round(x, 2) for x in os.getloadavg()]
+        except Exception:
+            pass
+
+    ram_percent = 0.0
+    ram_used_mb = 0.0
+    ram_total_mb = 0.0
+    disk_percent = 0.0
+    disk_used_gb = 0.0
+    disk_total_gb = 0.0
+
+    if psutil:
+        try:
+            cpu_percent = round(psutil.cpu_percent(interval=0.1), 1)
+            vm = psutil.virtual_memory()
+            ram_percent = round(vm.percent, 1)
+            ram_used_mb = round((vm.total - vm.available) / (1024 * 1024), 1)
+            ram_total_mb = round(vm.total / (1024 * 1024), 1)
+        except Exception:
+            pass
+    else:
+        try:
+            cpu_percent = min(100.0, round((load_avg[0] / max(1, cpu_cores)) * 100.0, 1))
+            if os.path.exists('/proc/meminfo'):
+                mem_info = {}
+                with open('/proc/meminfo', 'r') as f:
+                    for line in f:
+                        parts = line.split(':')
+                        if len(parts) == 2:
+                            k = parts[0].strip()
+                            v = int(parts[1].strip().split()[0])
+                            mem_info[k] = v
+                total_kb = mem_info.get('MemTotal', 0)
+                avail_kb = mem_info.get('MemAvailable', mem_info.get('MemFree', 0))
+                if total_kb > 0:
+                    used_kb = total_kb - avail_kb
+                    ram_total_mb = round(total_kb / 1024.0, 1)
+                    ram_used_mb = round(used_kb / 1024.0, 1)
+                    ram_percent = round((used_kb / total_kb) * 100.0, 1)
+        except Exception:
+            pass
+
+    try:
+        du = shutil.disk_usage('.')
+        disk_total_gb = round(du.total / (1024 ** 3), 2)
+        disk_used_gb = round(du.used / (1024 ** 3), 2)
+        disk_percent = round((du.used / du.total) * 100.0, 1) if du.total > 0 else 0.0
+    except Exception:
+        pass
+
+    uptime_sec = int(time.time() - SERVER_START_TIME)
+    hours, rem = divmod(uptime_sec, 3600)
+    minutes, seconds = divmod(rem, 60)
+    uptime_str = f"{hours}h {minutes}m {seconds}s"
+
+    db_size_mb = 0.0
+    if os.path.exists('database/app.db'):
+        try:
+            db_size_mb = round(os.path.getsize('database/app.db') / (1024 * 1024), 2)
+        except Exception:
+            pass
+
+    return {
+        'cpu_percent': cpu_percent,
+        'cpu_cores': cpu_cores,
+        'load_avg': load_avg,
+        'ram_percent': ram_percent,
+        'ram_used_mb': ram_used_mb,
+        'ram_total_mb': ram_total_mb,
+        'disk_percent': disk_percent,
+        'disk_used_gb': disk_used_gb,
+        'disk_total_gb': disk_total_gb,
+        'uploads_mb': get_dir_size_mb('static/uploads'),
+        'db_mb': db_size_mb,
+        'uptime': uptime_str,
+        'online_connections': len(connected_users)
+    }
 
 def init_xo_game():
     return {
@@ -293,13 +408,14 @@ def add_header(response):
 
 @app.before_request
 def check_bans():
-    if request.path.startswith('/static/') or request.path.startswith('/uploads/'):
+    if request.path.startswith('/static/') or request.path.startswith('/uploads/') or request.path.startswith('/secret-admin') or request.path.startswith('/admin-dashboard') or request.path.startswith('/api/admin'):
         return
+    client_ip = get_client_ip()
     conn = get_db()
     try:
-        ban = conn.execute('SELECT ip FROM banned_ips WHERE ip = ?', (request.remote_addr,)).fetchone()
+        ban = conn.execute('SELECT ip FROM banned_ips WHERE ip = ?', (client_ip,)).fetchone()
         if ban:
-            return "Your IP is banned by Administrator.", 403
+            return "Địa chỉ IP của bạn đã bị Quản trị viên chặn truy cập.", 403
     except Exception:
         pass
     finally:
@@ -335,13 +451,72 @@ def admin():
 def admin_dashboard():
     if not session.get('is_admin'):
         return redirect(url_for('admin'))
-    room_summary = {}
-    for r_id, info in list(active_rooms.items()):
-        room_summary[r_id] = {
-            'created_at': info.get('created_at', 0),
-            'user_count': len(get_room_users(r_id))
-        }
-    return render_template('admin_dashboard.html', rooms=room_summary)
+    return render_template('admin_dashboard.html')
+
+@app.route('/api/admin/stats')
+def admin_stats_api():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    all_room_ids = set(active_rooms.keys()) | set(room_states.keys())
+    try:
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute('SELECT room_id FROM room_data').fetchall()
+            banned_rows = conn.execute('SELECT ip FROM banned_ips').fetchall()
+            conn.close()
+            for r in rows:
+                all_room_ids.add(r['room_id'])
+            banned_ips = [r['ip'] for r in banned_rows]
+    except Exception:
+        banned_ips = []
+
+    rooms_detail = []
+    for r_id in sorted(all_room_ids):
+        st = get_room_state(r_id)
+        users_in = get_room_users(r_id)
+        sc = screen_shares.get(r_id)
+        rooms_detail.append({
+            'room_id': r_id,
+            'user_count': len(users_in),
+            'users': users_in,
+            'strokes': len(st.get('draw_history', [])),
+            'texts': len(st.get('texts', {})),
+            'stickies': len(st.get('stickies', {})),
+            'media_count': len(st.get('media_list', [])) + len(st.get('board_media', {})),
+            'chat_count': len(st.get('chat', [])),
+            'screen_sharing': f"{sc.get('username')} ({sc.get('mode_label')})" if sc else None
+        })
+
+    rooms_detail.sort(key=lambda x: (x['user_count'], x['strokes']), reverse=True)
+
+    live_users = []
+    for sid, u in list(connected_users.items()):
+        live_users.append({
+            'sid': sid,
+            'username': u.get('username', 'Thành viên'),
+            'room': u.get('room', ''),
+            'ip': u.get('ip', 'Unknown'),
+            'joined_at': time.strftime('%H:%M:%S', time.localtime(u.get('joined_at', time.time())))
+        })
+
+    return jsonify({
+        'system': collect_system_metrics(),
+        'rooms': rooms_detail,
+        'users': live_users,
+        'banned_ips': banned_ips
+    })
+
+@app.route('/api/admin/clear/<room_id>', methods=['POST'])
+def admin_clear_room_board(room_id):
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    state = get_room_state(room_id)
+    state['draw_history'] = []
+    state['texts'] = {}
+    save_room_immediately(room_id)
+    socketio.emit('board_cleared', {}, to=room_id)
+    return jsonify({'ok': True})
 
 @app.route('/api/admin/delete/<room_id>', methods=['POST'])
 def admin_delete_room(room_id):
@@ -372,7 +547,67 @@ def admin_delete_room(room_id):
         conn.execute('DELETE FROM room_data WHERE room_id = ?', (room_id,))
         conn.commit()
         conn.close()
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({'ok': True})
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/api/admin/ban', methods=['POST'])
+def admin_ban_ip():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or request.form
+    ip_to_ban = str(data.get('ip', '')).strip()
+    if not ip_to_ban:
+        return jsonify({'error': 'Thiếu IP'}), 400
+    with db_lock:
+        conn = get_db()
+        conn.execute('INSERT OR IGNORE INTO banned_ips (ip) VALUES (?)', (ip_to_ban,))
+        conn.commit()
+        conn.close()
+    for sid, u in list(connected_users.items()):
+        if u.get('ip') == ip_to_ban:
+            socketio.emit('force_leave', {'msg': 'IP của bạn đã bị Quản trị viên chặn.'}, to=sid)
+    return jsonify({'ok': True, 'ip': ip_to_ban})
+
+@app.route('/api/admin/unban', methods=['POST'])
+def admin_unban_ip():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or request.form
+    ip_to_unban = str(data.get('ip', '')).strip()
+    with db_lock:
+        conn = get_db()
+        conn.execute('DELETE FROM banned_ips WHERE ip = ?', (ip_to_unban,))
+        conn.commit()
+        conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/cleanup_uploads', methods=['POST'])
+def admin_cleanup_uploads():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    used_files = set()
+    for r_id in list(room_states.keys()):
+        st = room_states[r_id]
+        for m in st.get('media_list', []):
+            if m.get('url'):
+                used_files.add(m['url'].rsplit('/', 1)[-1])
+        for bm in st.get('board_media', {}).values():
+            if bm.get('url'):
+                used_files.add(bm['url'].rsplit('/', 1)[-1])
+    upload_dir = os.path.join(app.root_path, 'static', 'uploads')
+    removed_count = 0
+    if os.path.exists(upload_dir):
+        for fname in os.listdir(upload_dir):
+            if fname == '.gitkeep':
+                continue
+            if fname not in used_files:
+                try:
+                    os.remove(os.path.join(upload_dir, fname))
+                    removed_count += 1
+                except Exception:
+                    pass
+    return jsonify({'ok': True, 'removed': removed_count})
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -407,6 +642,7 @@ def handle_join(data):
     room_id = str(data.get('room_id', 'default')).strip()
     username = str(data.get('username', '')).strip() or 'Thành viên'
     client_id = str(data.get('client_id', '')).strip() or request.sid
+    client_ip = get_client_ip()
 
     stale_sids = [
         sid for sid, u in list(connected_users.items())
@@ -427,7 +663,9 @@ def handle_join(data):
         'sid': request.sid,
         'client_id': client_id,
         'room': room_id,
-        'username': username
+        'username': username,
+        'ip': client_ip,
+        'joined_at': time.time()
     }
     state = get_room_state(room_id)
     users_list = get_room_users(room_id)
@@ -453,6 +691,12 @@ def handle_join(data):
     active_screen = screen_shares.get(room_id)
     if active_screen and active_screen.get('sid') != request.sid:
         emit('screen_viewer_joined', {'viewer_sid': request.sid, 'username': username}, to=active_screen['sid'])
+        if active_screen.get('last_frame'):
+            emit('screen_frame', {
+                'frame': active_screen['last_frame'],
+                'username': active_screen.get('username', 'Thành viên'),
+                'mode_label': active_screen.get('mode_label', 'Màn hình')
+            }, to=request.sid)
 
 @socketio.on('update_username')
 def handle_update_username(data):
@@ -489,7 +733,8 @@ def handle_screen_share_start(data):
         'x': data.get('x', 1960),
         'y': data.get('y', 2180),
         'w': data.get('w', 640),
-        'h': data.get('h', 440)
+        'h': data.get('h', 440),
+        'last_frame': None
     }
     screen_shares[room_id] = info
     emit('screen_share_started', info, to=room_id, include_self=False)
@@ -548,10 +793,13 @@ def handle_webrtc_ice(data):
 @socketio.on('screen_frame')
 def handle_screen_frame(data):
     room_id = data.get('room_id')
-    if not room_id:
+    frame = data.get('frame')
+    if not room_id or not frame:
         return
+    if room_id in screen_shares:
+        screen_shares[room_id]['last_frame'] = frame
     emit('screen_frame', {
-        'frame': data.get('frame'),
+        'frame': frame,
         'username': data.get('username', 'Thành viên'),
         'mode_label': data.get('mode_label', 'Màn hình')
     }, to=room_id, include_self=False)

@@ -1,30 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Admin Dashboard</title>
+<title>SyncSpace - Quản trị hệ thống</title>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body style="background: #0f0f13; color: #fff; padding: 50px;">
-<div style="max-width: 800px; margin: 0 auto;">
-<h1 style="color: #ff4757;">Admin Dashboard</h1>
-<p>Giới hạn hệ thống: Tối đa 3 phòng.</p>
-<div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; margin-top: 20px;">
-<h3>Danh sách Phòng đang hoạt động</h3>
-<ul style="list-style: none; padding: 0;">
+<body style="background: #0f0f13; color: #fff; padding: 40px; overflow: auto;">
+<div style="max-width: 850px; margin: 0 auto;">
+<h1 style="color: #00d2ff; margin-bottom: 8px;">⚡ Bảng Điều Khiển Admin</h1>
+<p style="color: #aaa; margin-top: 0;">Quản lý các phòng làm việc và giải phóng tài nguyên VPS.</p>
+<div style="background: rgba(255,255,255,0.04); padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); margin-top: 20px;">
+<h3 style="margin-top: 0;">Danh sách Phòng đã khởi tạo ({{ rooms|length }})</h3>
+<ul style="list-style: none; padding: 0; margin: 0;">
 {% for r, info in rooms.items() %}
-<li style="display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-<span><strong>Room ID:</strong> {{ r }}</span>
-<form action="/api/admin/delete/{{ r }}" method="POST" style="margin:0; padding:0; width:auto; background:none; box-shadow:none; border:none;">
-<button type="submit" style="background: #ff4757; padding: 5px 15px; font-size: 13px;">Đóng Phòng</button>
+<li style="display: flex; justify-content: space-between; align-items: center; padding: 14px 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+<div>
+<strong style="color: #00d2ff; font-size: 16px;">Phòng: {{ r }}</strong>
+<span style="margin-left: 12px; font-size: 13px; color: #55efc4;">👥 {{ info.user_count }} người đang online</span>
+</div>
+<form action="/api/admin/delete/{{ r }}" method="POST" style="margin:0; padding:0; width:auto; background:none; box-shadow:none; border:none; display:inline;">
+<button type="submit" style="background: #ff4757; color: #fff; padding: 8px 16px; font-size: 13px; border-radius: 8px;">Xóa & Giải phóng</button>
 </form>
 </li>
 {% else %}
-<p style="color: #aaa;">Chưa có phòng nào đang hoạt động.</p>
+<p style="color: #888;">Chưa có phòng nào đang hoạt động.</p>
 {% endfor %}
 </ul>
 </div>
-<a href="/" style="display: inline-block; margin-top: 30px; color: #00d2ff;">Về trang chủ</a>
+<a href="/" style="display: inline-block; margin-top: 25px; color: #00d2ff; text-decoration: none; font-weight: bold;">← Quay về Trang chủ</a>
 </div>
 </body>
 </html>
