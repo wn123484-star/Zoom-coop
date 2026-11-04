@@ -1,4 +1,4 @@
-const socket = io({ reconnection: true, reconnectionAttempts: 20, reconnectionDelay: 800 });
+const socket = io({ reconnection: true, reconnectionAttempts: 25, reconnectionDelay: 800 });
 let cachedRoomState = null;
 
 window.bindSafeButton = function(el, handler) {
@@ -14,7 +14,7 @@ window.bindSafeButton = function(el, handler) {
         e.preventDefault();
         e.stopPropagation();
         const now = Date.now();
-        if (now - lastTrigger < 220) return;
+        if (now - lastTrigger < 200) return;
         lastTrigger = now;
         handler(e);
     };
@@ -31,7 +31,7 @@ window.showToast = function(text) {
     container.appendChild(el);
     setTimeout(() => {
         el.remove();
-    }, 2500);
+    }, 2600);
 };
 
 function applyFullRoomState(state) {
@@ -39,8 +39,9 @@ function applyFullRoomState(state) {
     if (window.loadRoomSettings && state.settings) window.loadRoomSettings(state.settings);
     if (window.loadDrawHistory) window.loadDrawHistory(state.draw_history || []);
     if (window.loadStickiesHistory) window.loadStickiesHistory(state.stickies || []);
+    if (window.loadBoardMediaHistory) window.loadBoardMediaHistory(state.board_media || []);
     if (window.loadWidgetsState && state.widgets) window.loadWidgetsState(state.widgets);
-    if (window.loadMediaState) window.loadMediaState(state.media);
+    if (window.loadMediaState) window.loadMediaState(state.media, state.media_list || []);
     if (window.loadXoState && state.xo_game) window.loadXoState(state.xo_game);
     if (window.loadChatHistory && state.chat) window.loadChatHistory(state.chat);
     if (state.users) {

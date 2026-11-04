@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncSpace</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="lobby-container">
+<h1 class="logo-glow">SyncSpace</h1>
+<form id="join-form">
+<input type="text" id="username" placeholder="Your Display Name" required autocomplete="off">
+<input type="text" id="room_id" placeholder="Room ID" required autocomplete="off">
+<button type="submit">Join Workspace</button>
+</form>
+</div>
+<script>
+document.getElementById('join-form').addEventListener('submit', function(e) {
+e.preventDefault();
+const name = document.getElementById('username').value.trim();
+const room = document.getElementById('room_id').value.trim();
+if(name && room) {
+window.location.href = `/room/${room}?name=${encodeURIComponent(name)}`;
+}
+});
+</script>
+</body>
+</html>

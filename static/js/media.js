@@ -6,6 +6,8 @@ const mediaMinBtn = document.getElementById('media-min-btn');
 const mediaCloseBtn = document.getElementById('media-close-btn');
 const btnClearMedia = document.getElementById('btn-clear-media');
 const btnPinCurrentMedia = document.getElementById('btn-pin-current-media');
+const btnSyncNow = document.getElementById('btn-sync-now');
+const btnUnlockAudio = document.getElementById('btn-unlock-audio');
 const mediaHeader = document.getElementById('media-header');
 const mediaContent = document.getElementById('media-content');
 const mediaControlsBox = document.getElementById('media-controls-box');
@@ -13,6 +15,14 @@ const mediaHistoryBar = document.getElementById('media-history-bar');
 const btnToggleControls = document.getElementById('btn-toggle-media-controls');
 
 let activeHubMedia = null;
+let ytPlayer = null;
+let ytApiReady = false;
+let isApplyingRemoteSync = false;
+let pendingSyncState = null;
+
+window.onYouTubeIframeAPIReady = function() {
+    ytApiReady = true;
+};
 
 function syncMediaWidgetState() {
     socket.emit('widget_state', {
@@ -27,7 +37,9 @@ function syncMediaWidgetState() {
 
 function openMediaHubAtCenter(showControls) {
     const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
-    mediaContainer.style.left = Math.round(center.x - 260) + 'px';
+    const w = Math.min(530, window.innerWidth - 24);
+    mediaContainer.style.width = w + 'px';
+    mediaContainer.style.left = Math.round(center.x - w / 2) + 'px';
     mediaContainer.style.top = Math.round(center.y - 210) + 'px';
     mediaContainer.style.display = 'flex';
     mediaContainer.classList.remove('minimized');
@@ -40,6 +52,28 @@ function openMediaHubAtCenter(showControls) {
 
 window.bindSafeButton(btnToggleControls, () => {
     mediaControlsBox.classList.toggle('collapsed');
+});
+
+window.bindSafeButton(btnSyncNow, () => {
+    socket.emit('request_media_sync', { room_id: ROOM_ID });
+    if (window.showToast) window.showToast('Đang đồng bộ thời gian phát với phòng...');
+});
+
+window.bindSafeButton(btnUnlockAudio, () => {
+    btnUnlockAudio.style.display = 'none';
+    if (ytPlayer && typeof ytPlayer.unMute === 'function') {
+        try {
+            ytPlayer.unMute();
+            ytPlayer.setVolume(100);
+            ytPlayer.playVideo();
+        } catch (e) {}
+    }
+    const htmlMedia = mediaContent.querySelector('video, audio');
+    if (htmlMedia) {
+        htmlMedia.muted = false;
+        htmlMedia.play().catch(() => {});
+    }
+    socket.emit('request_media_sync', { room_id: ROOM_ID });
 });
 
 window.bindSafeButton(mediaBtn, () => {
@@ -155,16 +189,16 @@ function buildMediaElementHTML(kind, url, name) {
     if (kind === 'youtube') {
         const videoId = extractYoutubeId(url);
         if (!videoId) return '<p class="empty-media-text">Link YouTube không hợp lệ</p>';
-        return `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        return `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
     }
     if (kind === 'image') {
         return `<img src="${url}" alt="${safeName}">`;
     }
     if (kind === 'video') {
-        return `<video src="${url}" controls autoplay playsinline></video>`;
+        return `<video id="hub-html5-media" src="${url}" controls autoplay playsinline></video>`;
     }
     if (kind === 'audio') {
-        return `<div class="audio-player-box"><div class="audio-player-title">🎵 ${safeName}</div><audio src="${url}" controls autoplay></audio></div>`;
+        return `<div class="audio-player-box"><div class="audio-player-title">🎵 ${safeName}</div><audio id="hub-html5-media" src="${url}" controls autoplay></audio></div>`;
     }
     if (kind === 'pdf') {
         return `<embed src="${url}" type="application/pdf" width="100%" height="100%"><div style="padding:6px; background:#111; width:100%; text-align:center;"><a href="${url}" target="_blank" style="color:#00d2ff; font-size:12px; font-weight:bold;">📄 Mở PDF toàn màn hình (${safeName})</a></div>`;
@@ -172,10 +206,170 @@ function buildMediaElementHTML(kind, url, name) {
     return `<div class="audio-player-box"><div class="audio-player-title">📁 ${safeName}</div><a href="${url}" target="_blank" style="color:#00d2ff; font-weight:bold;">Tải xuống / Mở tệp</a></div>`;
 }
 
+function destroyYtPlayer() {
+    if (ytPlayer) {
+        try { ytPlayer.destroy(); } catch (e) {}
+        ytPlayer = null;
+    }
+}
+
 function clearMediaView() {
+    destroyYtPlayer();
     activeHubMedia = null;
-    mediaContent.innerHTML = '<div class="empty-media-box"><p class="empty-media-text">🎬 Chọn <b>Ảnh, Video, Nhạc MP3, Tài liệu PDF</b> hoặc dán link <b>YouTube</b> ở trên để mọi người trong phòng cùng xem và nghe trực tiếp!</p></div>';
+    btnUnlockAudio.style.display = 'none';
+    mediaContent.innerHTML = '<div class="empty-media-box"><p class="empty-media-text">🎬 Chọn <b>Ảnh, Video, Nhạc MP3, Tài liệu PDF</b> hoặc dán link <b>YouTube</b> ở trên để mọi người cùng xem và nghe đồng bộ!</p></div>';
     mediaControlsBox.classList.remove('collapsed');
+}
+
+function applyPlaybackSyncState(syncData) {
+    if (!syncData) return;
+    const targetTime = parseFloat(syncData.currentTime || 0);
+    const shouldPlay = !!syncData.playing;
+
+    if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+        isApplyingRemoteSync = true;
+        try {
+            const cur = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+            if (Math.abs(cur - targetTime) > 1.8 || syncData.force) {
+                ytPlayer.seekTo(targetTime, true);
+            }
+            if (shouldPlay) {
+                ytPlayer.playVideo();
+            } else {
+                ytPlayer.pauseVideo();
+            }
+        } catch (e) {}
+        setTimeout(() => { isApplyingRemoteSync = false; }, 450);
+        return;
+    }
+
+    const htmlMedia = document.getElementById('hub-html5-media');
+    if (htmlMedia) {
+        isApplyingRemoteSync = true;
+        if (Math.abs((htmlMedia.currentTime || 0) - targetTime) > 1.5 || syncData.force) {
+            try { htmlMedia.currentTime = targetTime; } catch (e) {}
+        }
+        if (shouldPlay) {
+            htmlMedia.play().catch(() => {
+                htmlMedia.muted = true;
+                htmlMedia.play().catch(() => {});
+                btnUnlockAudio.style.display = 'block';
+            });
+        } else {
+            htmlMedia.pause();
+        }
+        setTimeout(() => { isApplyingRemoteSync = false; }, 400);
+    }
+}
+
+function bindHtml5SyncEvents(mediaEl, startPos, shouldPlay) {
+    if (!mediaEl) return;
+    mediaEl.addEventListener('loadedmetadata', () => {
+        if (startPos > 0.5) {
+            try { mediaEl.currentTime = startPos; } catch (e) {}
+        }
+        if (shouldPlay) {
+            mediaEl.play().catch(() => {
+                mediaEl.muted = true;
+                mediaEl.play().catch(() => {});
+                btnUnlockAudio.style.display = 'block';
+            });
+        }
+    }, { once: true });
+
+    mediaEl.addEventListener('play', () => {
+        if (isApplyingRemoteSync) return;
+        socket.emit('media_playback_sync', {
+            room_id: ROOM_ID,
+            action: 'play',
+            currentTime: mediaEl.currentTime || 0,
+            sender: window.USERNAME
+        });
+    });
+
+    mediaEl.addEventListener('pause', () => {
+        if (isApplyingRemoteSync || mediaEl.ended) return;
+        socket.emit('media_playback_sync', {
+            room_id: ROOM_ID,
+            action: 'pause',
+            currentTime: mediaEl.currentTime || 0,
+            sender: window.USERNAME
+        });
+    });
+
+    mediaEl.addEventListener('seeked', () => {
+        if (isApplyingRemoteSync) return;
+        socket.emit('media_playback_sync', {
+            room_id: ROOM_ID,
+            action: mediaEl.paused ? 'pause' : 'play',
+            currentTime: mediaEl.currentTime || 0,
+            sender: window.USERNAME
+        });
+    });
+}
+
+function createSyncedYoutubePlayer(videoId, startPos, shouldPlay) {
+    destroyYtPlayer();
+    mediaContent.innerHTML = '<div id="yt-sync-mount" style="width:100%; height:310px;"></div>';
+    if (!window.YT || !window.YT.Player) {
+        mediaContent.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&start=${Math.floor(startPos)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+        return;
+    }
+    ytPlayer = new YT.Player('yt-sync-mount', {
+        width: '100%',
+        height: '310',
+        videoId: videoId,
+        playerVars: {
+            autoplay: 1,
+            playsinline: 1,
+            rel: 0,
+            modestbranding: 1,
+            start: Math.floor(startPos || 0),
+            origin: window.location.origin
+        },
+        events: {
+            onReady: function(ev) {
+                if (startPos > 0.5) {
+                    ev.target.seekTo(startPos, true);
+                }
+                if (shouldPlay) {
+                    ev.target.playVideo();
+                    setTimeout(() => {
+                        try {
+                            const st = ev.target.getPlayerState();
+                            if (st !== YT.PlayerState.PLAYING && st !== YT.PlayerState.BUFFERING) {
+                                ev.target.mute();
+                                ev.target.playVideo();
+                                btnUnlockAudio.style.display = 'block';
+                            }
+                        } catch (err) {}
+                    }, 900);
+                }
+                if (pendingSyncState) {
+                    applyPlaybackSyncState(pendingSyncState);
+                    pendingSyncState = null;
+                }
+            },
+            onStateChange: function(ev) {
+                if (isApplyingRemoteSync) return;
+                if (ev.data === YT.PlayerState.PLAYING) {
+                    socket.emit('media_playback_sync', {
+                        room_id: ROOM_ID,
+                        action: 'play',
+                        currentTime: ev.target.getCurrentTime() || 0,
+                        sender: window.USERNAME
+                    });
+                } else if (ev.data === YT.PlayerState.PAUSED) {
+                    socket.emit('media_playback_sync', {
+                        room_id: ROOM_ID,
+                        action: 'pause',
+                        currentTime: ev.target.getCurrentTime() || 0,
+                        sender: window.USERNAME
+                    });
+                }
+            }
+        }
+    });
 }
 
 function renderMediaInHub(item) {
@@ -183,13 +377,32 @@ function renderMediaInHub(item) {
         clearMediaView();
         return;
     }
+    btnUnlockAudio.style.display = 'none';
     const kind = resolveKind(item.kind || item.type, item.url);
+    const startPos = parseFloat(item.current_pos || item.position || 0);
+    const shouldPlay = item.playing !== undefined ? !!item.playing : true;
     activeHubMedia = { kind: kind, type: item.type, url: item.url, name: item.name || 'Media' };
-    mediaContent.innerHTML = buildMediaElementHTML(kind, item.url, item.name);
+
     if (mediaContainer.style.display === 'none' || !mediaContainer.style.display) {
-        mediaContainer.style.display = 'flex';
-        mediaBtn.classList.add('active');
+        openMediaHubAtCenter(false);
     }
+
+    if (kind === 'youtube') {
+        const videoId = extractYoutubeId(item.url);
+        if (!videoId) {
+            mediaContent.innerHTML = '<p class="empty-media-text">Link YouTube không hợp lệ</p>';
+            return;
+        }
+        createSyncedYoutubePlayer(videoId, startPos, shouldPlay);
+    } else {
+        destroyYtPlayer();
+        mediaContent.innerHTML = buildMediaElementHTML(kind, item.url, item.name);
+        if (kind === 'video' || kind === 'audio') {
+            const mediaEl = document.getElementById('hub-html5-media');
+            bindHtml5SyncEvents(mediaEl, startPos, shouldPlay);
+        }
+    }
+    mediaControlsBox.classList.add('collapsed');
 }
 
 function renderMediaHistoryList(list) {
@@ -204,14 +417,13 @@ function renderMediaHistoryList(list) {
         const icon = k === 'youtube' ? '▶️' : k === 'image' ? '🖼️' : k === 'video' ? '🎬' : k === 'audio' ? '🎵' : '📄';
         chip.innerText = `${icon} ${item.name || 'Media'}`;
         window.bindSafeButton(chip, () => {
-            renderMediaInHub(item);
             socket.emit('media_share', {
                 room_id: ROOM_ID,
                 type: item.type,
                 kind: k,
                 url: item.url,
                 name: item.name,
-                sender: USERNAME
+                sender: window.USERNAME
             });
         });
         mediaHistoryBar.appendChild(chip);
@@ -238,7 +450,7 @@ function createBoardMediaDOM(data) {
     const title = document.createElement('span');
     title.className = 'widget-title';
     const icon = kind === 'youtube' ? '▶️' : kind === 'image' ? '🖼️' : kind === 'video' ? '🎬' : kind === 'audio' ? '🎵' : '📄';
-    title.innerText = `${icon} ${data.name || 'Media'} (${data.owner || 'Khách'})`;
+    title.innerText = `${icon} ${data.name || 'Media'} (${data.owner || 'Thành viên'})`;
 
     const controls = document.createElement('div');
     controls.className = 'widget-controls';
@@ -331,7 +543,7 @@ function spawnBoardMediaCard(kind, url, name) {
         kind: kind,
         url: url,
         name: name || 'Media',
-        owner: USERNAME,
+        owner: window.USERNAME,
         x: x,
         y: y
     };
@@ -364,9 +576,14 @@ window.bindSafeButton(document.getElementById('btn-play-yt'), () => {
         if (window.showToast) window.showToast('Vui lòng nhập đúng định dạng link YouTube!');
         return;
     }
-    const item = { type: 'youtube', kind: 'youtube', url: url, name: 'YouTube (' + vid + ')', sender: USERNAME };
-    renderMediaInHub(item);
-    socket.emit('media_share', { room_id: ROOM_ID, type: 'youtube', kind: 'youtube', url: url, name: item.name, sender: USERNAME });
+    socket.emit('media_share', {
+        room_id: ROOM_ID,
+        type: 'youtube',
+        kind: 'youtube',
+        url: url,
+        name: 'YouTube (' + vid + ')',
+        sender: window.USERNAME
+    });
 });
 
 function performFileUpload(pinDirectlyToBoard) {
@@ -401,16 +618,15 @@ function performFileUpload(pinDirectlyToBoard) {
                 if (pinDirectlyToBoard) {
                     spawnBoardMediaCard(kind, data.url, name);
                 } else {
-                    renderMediaInHub({ type: data.type, kind: kind, url: data.url, name: name });
+                    socket.emit('media_share', {
+                        room_id: ROOM_ID,
+                        type: data.type,
+                        kind: kind,
+                        url: data.url,
+                        name: name,
+                        sender: window.USERNAME
+                    });
                 }
-                socket.emit('media_share', {
-                    room_id: ROOM_ID,
-                    type: data.type,
-                    kind: kind,
-                    url: data.url,
-                    name: name,
-                    sender: USERNAME
-                });
                 fileInput.value = '';
                 if (window.showToast) window.showToast('Đã tải lên: ' + name);
             } else {
@@ -440,6 +656,11 @@ socket.on('media_shared', (data) => {
     } else if (data.url) {
         renderMediaInHub(data);
     }
+});
+
+socket.on('media_playback_sync', (data) => {
+    pendingSyncState = data;
+    applyPlaybackSyncState(data);
 });
 
 socket.on('board_media_added', (d) => createBoardMediaDOM(d));

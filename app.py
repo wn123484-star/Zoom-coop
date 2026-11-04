@@ -79,6 +79,17 @@ def detect_media_kind(filename, content_type):
         return 'pdf'
     return 'file'
 
+def compute_live_media(media_obj):
+    if not media_obj or not isinstance(media_obj, dict):
+        return None
+    copy_obj = dict(media_obj)
+    if copy_obj.get('playing'):
+        elapsed = max(0.0, time.time() - float(copy_obj.get('updated_at', time.time())))
+        copy_obj['current_pos'] = float(copy_obj.get('position', 0.0)) + elapsed
+    else:
+        copy_obj['current_pos'] = float(copy_obj.get('position', 0.0))
+    return copy_obj
+
 def mark_room_dirty(room_id):
     if room_id:
         dirty_rooms.add(room_id)
@@ -229,8 +240,8 @@ def index():
 
 @app.route('/room/<room_id>')
 def room(room_id):
-    username = request.args.get('name', 'Khách').strip() or 'Khách'
-    return render_template('room.html', room_id=room_id, username=username)
+    raw_name = request.args.get('name', '').strip()
+    return render_template('room.html', room_id=room_id, username=raw_name)
 
 @app.route('/secret-admin', methods=['GET', 'POST'])
 def admin():
@@ -306,7 +317,7 @@ def upload_file():
 @socketio.on('join_room')
 def handle_join(data):
     room_id = str(data.get('room_id', 'default')).strip()
-    username = str(data.get('username', 'Khách')).strip() or 'Khách'
+    username = str(data.get('username', '')).strip() or 'Thành viên'
     active_with_users = [r for r in active_rooms if len(get_room_users(r)) > 0]
     if room_id not in active_rooms and len(active_with_users) >= 15:
         emit('room_error', {'msg': 'Máy chủ đã đạt giới hạn phòng hoạt động cùng lúc. Vui lòng thử lại sau.'})
@@ -321,7 +332,7 @@ def handle_join(data):
         'draw_history': state['draw_history'],
         'stickies': list(state['stickies'].values()),
         'board_media': list(state.get('board_media', {}).values()),
-        'media': state['media'],
+        'media': compute_live_media(state['media']),
         'media_list': state.get('media_list', [])[-30:],
         'xo_game': xo_games[room_id],
         'chat': state['chat'][-50:],
@@ -330,6 +341,16 @@ def handle_join(data):
         'users': users_list
     }, to=request.sid)
     emit('room_users', {'users': users_list, 'joined': username, 'sid': request.sid}, to=room_id)
+
+@socketio.on('update_username')
+def handle_update_username(data):
+    new_name = str(data.get('username', '')).strip()
+    if not new_name or request.sid not in connected_users:
+        return
+    connected_users[request.sid]['username'] = new_name[:35]
+    room_id = connected_users[request.sid]['room']
+    users_list = get_room_users(room_id)
+    emit('room_users', {'users': users_list, 'renamed': new_name[:35], 'sid': request.sid}, to=room_id)
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -346,6 +367,8 @@ def handle_mouse_move(data):
     if not room_id:
         return
     data['sid'] = request.sid
+    if request.sid in connected_users:
+        data['username'] = connected_users[request.sid]['username']
     emit('mouse_update', data, to=room_id, include_self=False)
 
 @socketio.on('laser_point')
@@ -515,7 +538,7 @@ def handle_xo_click(data):
     room_id = data.get('room_id')
     r = int(data.get('row', 0))
     c = int(data.get('col', 0))
-    username = data.get('username', 'Khách')
+    username = data.get('username', 'Thành viên')
     get_room_state(room_id)
     game = xo_games[room_id]
     if game['status'] != 'playing' or game['board'][r][c] != '':
@@ -576,14 +599,19 @@ def handle_media_share(data):
         mark_room_dirty(room_id)
         emit('media_shared', {'type': 'clear', 'media_list': state['media_list'][-30:]}, to=room_id)
         return
+    now = time.time()
     item = {
         'id': uuid.uuid4().hex[:8],
         'type': data.get('type'),
         'kind': data.get('kind') or detect_media_kind(data.get('name', ''), data.get('type', '')),
         'url': data.get('url'),
         'name': data.get('name') or ('YouTube Video' if data.get('type') == 'youtube' else 'Media File'),
-        'sender': data.get('sender', 'Khách'),
-        'time': time.strftime('%H:%M')
+        'sender': data.get('sender', 'Thành viên'),
+        'time': time.strftime('%H:%M'),
+        'playing': True,
+        'position': 0.0,
+        'updated_at': now,
+        'current_pos': 0.0
     }
     state['media'] = item
     if not any(m.get('url') == item['url'] for m in state['media_list']):
@@ -591,8 +619,47 @@ def handle_media_share(data):
         if len(state['media_list']) > 30:
             state['media_list'] = state['media_list'][-30:]
     state['widgets']['media']['open'] = True
+    state['widgets']['media']['minimized'] = False
     mark_room_dirty(room_id)
+    emit('widget_updated', {'widget': 'media', 'state': state['widgets']['media']}, to=room_id)
     emit('media_shared', {'media': item, 'media_list': state['media_list'][-30:]}, to=room_id)
+
+@socketio.on('media_playback_sync')
+def handle_media_playback_sync(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    state = get_room_state(room_id)
+    media = state.get('media')
+    if not media:
+        return
+    action = data.get('action', 'play')
+    pos = max(0.0, float(data.get('currentTime', 0.0)))
+    media['playing'] = (action == 'play')
+    media['position'] = pos
+    media['updated_at'] = time.time()
+    mark_room_dirty(room_id)
+    emit('media_playback_sync', {
+        'action': action,
+        'currentTime': pos,
+        'playing': media['playing'],
+        'sender': data.get('sender', '')
+    }, to=room_id, include_self=False)
+
+@socketio.on('request_media_sync')
+def handle_request_media_sync(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    state = get_room_state(room_id)
+    live_media = compute_live_media(state.get('media'))
+    if live_media:
+        emit('media_playback_sync', {
+            'action': 'play' if live_media.get('playing') else 'pause',
+            'currentTime': live_media.get('current_pos', 0.0),
+            'playing': live_media.get('playing', False),
+            'force': True
+        }, to=request.sid)
 
 @socketio.on('chat_message')
 def handle_chat_message(data):
@@ -603,7 +670,7 @@ def handle_chat_message(data):
     state = get_room_state(room_id)
     msg = {
         'id': uuid.uuid4().hex[:8],
-        'username': data.get('username', 'Khách'),
+        'username': data.get('username', 'Thành viên'),
         'text': text[:500],
         'time': time.strftime('%H:%M')
     }
