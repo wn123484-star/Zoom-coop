@@ -1,4 +1,4 @@
-const socket = io({ reconnection: true, reconnectionAttempts: 25, reconnectionDelay: 800 });
+const socket = io({ reconnection: true, reconnectionAttempts: 25, reconnectionDelay: 800, autoConnect: false });
 let cachedRoomState = null;
 
 window.bindSafeButton = function(el, handler) {
@@ -50,8 +50,23 @@ function applyFullRoomState(state) {
     }
 }
 
+window.connectWithUsername = function(nameStr) {
+    const cleanName = (nameStr || '').trim() || 'Thành viên';
+    window.USERNAME = cleanName;
+    localStorage.setItem('syncspace_username', cleanName);
+    const displayEl = document.getElementById('current-user-display');
+    if (displayEl) displayEl.innerText = cleanName;
+    const newUrl = `${window.location.pathname}?name=${encodeURIComponent(cleanName)}`;
+    window.history.replaceState({}, '', newUrl);
+    if (!socket.connected) {
+        socket.connect();
+    } else {
+        socket.emit('update_username', { room_id: ROOM_ID, username: cleanName });
+    }
+};
+
 socket.on('connect', () => {
-    socket.emit('join_room', { room_id: ROOM_ID, username: USERNAME });
+    socket.emit('join_room', { room_id: ROOM_ID, username: window.USERNAME || 'Thành viên' });
 });
 
 socket.on('room_state', (state) => {
@@ -69,6 +84,40 @@ socket.on('room_users', (data) => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
+    const nameModal = document.getElementById('name-modal');
+    const nameInput = document.getElementById('name-modal-input');
+    const nameForm = document.getElementById('name-modal-form');
+    const btnEditName = document.getElementById('btn-edit-name');
+
+    function openNameModal(prefill) {
+        if (!nameModal) return;
+        nameModal.style.display = 'flex';
+        nameInput.value = prefill || localStorage.getItem('syncspace_username') || '';
+        setTimeout(() => nameInput.focus(), 60);
+    }
+
+    if (nameForm) {
+        nameForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const val = nameInput.value.trim();
+            if (!val) return;
+            nameModal.style.display = 'none';
+            window.connectWithUsername(val);
+        });
+    }
+
+    if (btnEditName) {
+        window.bindSafeButton(btnEditName, () => {
+            openNameModal(window.USERNAME);
+        });
+    }
+
+    if (window.USERNAME && window.USERNAME.trim() !== '') {
+        window.connectWithUsername(window.USERNAME.trim());
+    } else {
+        openNameModal('');
+    }
+
     if (cachedRoomState) {
         applyFullRoomState(cachedRoomState);
     }
