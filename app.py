@@ -14,6 +14,9 @@ import ssl
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory, Response
 from flask_socketio import SocketIO, join_room, emit
 from dotenv import load_dotenv
+import io
+import zipfile
+from flask import send_file
 
 try:
     import psutil
@@ -724,6 +727,236 @@ def admin_cleanup_uploads():
                 except Exception:
                     pass
     return jsonify({'ok': True, 'removed': removed_count})
+
+@app.route('/api/admin/backup/<room_id>')
+def admin_backup_room(room_id):
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    state = get_room_state(room_id)
+    payload = {
+        'backup_version': 21,
+        'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'room_id': room_id,
+        'state': state,
+        'xo_game': xo_games.get(room_id, init_xo_game()),
+        'chess_game': chess_games.get(room_id, init_chess_game()),
+        'memory_game': memory_games.get(room_id, init_memory_game())
+    }
+    buf = io.BytesIO(json.dumps(payload, ensure_ascii=False, indent=2).encode('utf-8'))
+    buf.seek(0)
+    filename = f"SyncSpace_Room_{room_id}_{int(time.time())}.json"
+    return send_file(buf, mimetype='application/json', as_attachment=True, download_name=filename)
+
+@app.route('/api/admin/backup_all_zip')
+def admin_backup_all_zip():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    for r_id in list(room_states.keys()):
+        save_room_immediately(r_id)
+    mem_zip = io.BytesIO()
+    with zipfile.ZipFile(mem_zip, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+        all_rooms_export = {}
+        try:
+            with db_lock:
+                conn = get_db()
+                rows = conn.execute('SELECT room_id, state_json, xo_json, updated_at FROM room_data').fetchall()
+                conn.close()
+                for row in rows:
+                    rid = row['room_id']
+                    try:
+                        st_obj = json.loads(row['state_json'])
+                    except Exception:
+                        st_obj = default_room_state()
+                    try:
+                        xo_obj = json.loads(row['xo_json'])
+                    except Exception:
+                        xo_obj = init_xo_game()
+                    room_dump = {
+                        'backup_version': 21,
+                        'room_id': rid,
+                        'updated_at': row['updated_at'],
+                        'state': st_obj,
+                        'xo_game': xo_obj
+                    }
+                    all_rooms_export[rid] = room_dump
+                    zf.writestr(f"rooms/{rid}.json", json.dumps(room_dump, ensure_ascii=False, indent=2))
+        except Exception:
+            pass
+        zf.writestr("all_rooms_backup.json", json.dumps(all_rooms_export, ensure_ascii=False, indent=2))
+        if os.path.exists('database/app.db'):
+            try:
+                zf.write('database/app.db', arcname='database/app.db')
+            except Exception:
+                pass
+        upload_dir = os.path.join(app.root_path, 'static', 'uploads')
+        if os.path.exists(upload_dir):
+            for fname in os.listdir(upload_dir):
+                if fname == '.gitkeep':
+                    continue
+                fpath = os.path.join(upload_dir, fname)
+                if os.path.isfile(fpath):
+                    try:
+                        zf.write(fpath, arcname=f"uploads/{fname}")
+                    except Exception:
+                        pass
+    mem_zip.seek(0)
+    zip_name = f"SyncSpace_FullBackup_{time.strftime('%Y%m%d_%H%M%S')}.zip"
+    return send_file(mem_zip, mimetype='application/zip', as_attachment=True, download_name=zip_name)
+
+def restore_single_room_dict(room_id, data_obj):
+    if not room_id or not isinstance(data_obj, dict):
+        return False
+    base = default_room_state()
+    st = data_obj.get('state') if isinstance(data_obj.get('state'), dict) else data_obj
+    for k, v in base.items():
+        if k not in st:
+            st[k] = v
+    room_states[room_id] = st
+    xo_games[room_id] = data_obj.get('xo_game') or st.get('xo_game') or init_xo_game()
+    chess_games[room_id] = data_obj.get('chess_game') or st.get('chess_game') or init_chess_game()
+    memory_games[room_id] = data_obj.get('memory_game') or st.get('memory_game') or init_memory_game()
+    if room_id not in active_rooms:
+        active_rooms[room_id] = {'created_at': time.time(), 'last_active': time.time()}
+    save_room_immediately(room_id)
+    users_list = get_room_users(room_id)
+    live_bmedia = [compute_live_media(bm) for bm in st.get('board_media', {}).values()]
+    socketio.emit('room_state', {
+        'draw_history': st['draw_history'],
+        'texts': list(st.get('texts', {}).values()),
+        'stickies': list(st['stickies'].values()),
+        'board_media': live_bmedia,
+        'media': compute_live_media(st['media']),
+        'media_list': st.get('media_list', [])[-30:],
+        'xo_game': xo_games[room_id],
+        'chess_game': chess_games[room_id],
+        'memory_game': memory_games[room_id],
+        'screen_share': screen_shares.get(room_id),
+        'chat': st['chat'][-50:],
+        'settings': st['settings'],
+        'widgets': st['widgets'],
+        'users': users_list
+    }, to=room_id)
+    return True
+
+@app.route('/api/admin/restore', methods=['POST'])
+def admin_restore_backup():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    target_room_override = request.form.get('room_id', '').strip()
+    if 'file' not in request.files:
+        return jsonify({'error': 'Chưa chọn tệp sao lưu (.json hoặc .zip)'}), 400
+    f = request.files['file']
+    if not f or not f.filename:
+        return jsonify({'error': 'Tệp không hợp lệ'}), 400
+    fname = f.filename.lower()
+    restored_rooms = []
+    try:
+        if fname.endswith('.zip'):
+            zbytes = io.BytesIO(f.read())
+            upload_dir = os.path.join(app.root_path, 'static', 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
+            with zipfile.ZipFile(zbytes, 'r') as zf:
+                for member in zf.namelist():
+                    if member.startswith('uploads/') and not member.endswith('/'):
+                        base_name = os.path.basename(member)
+                        if base_name:
+                            with open(os.path.join(upload_dir, base_name), 'wb') as out_f:
+                                out_f.write(zf.read(member))
+                    elif member.startswith('rooms/') and member.endswith('.json'):
+                        raw_json = json.loads(zf.read(member).decode('utf-8'))
+                        rid = target_room_override or raw_json.get('room_id') or os.path.splitext(os.path.basename(member))[0]
+                        if restore_single_room_dict(rid, raw_json):
+                            restored_rooms.append(rid)
+                if not restored_rooms and 'all_rooms_backup.json' in zf.namelist():
+                    all_map = json.loads(zf.read('all_rooms_backup.json').decode('utf-8'))
+                    if isinstance(all_map, dict):
+                        for rid, rdata in all_map.items():
+                            if restore_single_room_dict(rid, rdata):
+                                restored_rooms.append(rid)
+        else:
+            raw_json = json.loads(f.read().decode('utf-8'))
+            if isinstance(raw_json, dict) and 'state' in raw_json:
+                rid = target_room_override or raw_json.get('room_id') or 'restored_room'
+                if restore_single_room_dict(rid, raw_json):
+                    restored_rooms.append(rid)
+            elif isinstance(raw_json, dict) and 'draw_history' in raw_json:
+                rid = target_room_override or 'restored_room'
+                if restore_single_room_dict(rid, {'room_id': rid, 'state': raw_json}):
+                    restored_rooms.append(rid)
+            elif isinstance(raw_json, dict):
+                for rid, rdata in raw_json.items():
+                    if isinstance(rdata, dict) and restore_single_room_dict(rid, rdata):
+                        restored_rooms.append(rid)
+        return jsonify({'ok': True, 'restored_rooms': restored_rooms})
+    except Exception as e:
+        return jsonify({'error': f'Lỗi khôi phục tệp: {str(e)}'}), 400
+
+@app.route('/api/admin/broadcast', methods=['POST'])
+def admin_broadcast():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or request.form
+    msg = str(data.get('msg', '')).strip()
+    if not msg:
+        return jsonify({'error': 'Thiếu nội dung thông báo'}), 400
+    socketio.emit('system_broadcast', {'msg': msg, 'time': time.strftime('%H:%M')})
+    return jsonify({'ok': True})
+
+@app.route('/api/room/<room_id>/export')
+def room_export_json(room_id):
+    state = get_room_state(room_id)
+    payload = {
+        'backup_version': 21,
+        'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'room_id': room_id,
+        'state': state,
+        'xo_game': xo_games.get(room_id, init_xo_game()),
+        'chess_game': chess_games.get(room_id, init_chess_game()),
+        'memory_game': memory_games.get(room_id, init_memory_game())
+    }
+    buf = io.BytesIO(json.dumps(payload, ensure_ascii=False, indent=2).encode('utf-8'))
+    buf.seek(0)
+    filename = f"SyncSpace_{room_id}_{time.strftime('%Y%m%d_%H%M')}.json"
+    return send_file(buf, mimetype='application/json', as_attachment=True, download_name=filename)
+
+@app.route('/api/room/<room_id>/import', methods=['POST'])
+def room_import_json(room_id):
+    if 'file' not in request.files:
+        return jsonify({'error': 'Chưa chọn tệp JSON'}), 400
+    f = request.files['file']
+    try:
+        raw_json = json.loads(f.read().decode('utf-8'))
+        if restore_single_room_dict(room_id, raw_json):
+            return jsonify({'ok': True, 'room_id': room_id})
+        return jsonify({'error': 'Định dạng JSON không hợp lệ'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@socketio.on('room_timer_action')
+def handle_room_timer_action(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('room_timer_sync', {
+        'action': data.get('action', 'start'),
+        'seconds': int(data.get('seconds', 300)),
+        'sender': data.get('sender', 'Thành viên')
+    }, to=room_id)
+
+@socketio.on('roll_dice')
+def handle_roll_dice(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    sender = data.get('sender', 'Thành viên')
+    d1 = random.randint(1, 6)
+    d2 = random.randint(1, 6)
+    emit('dice_rolled', {
+        'sender': sender,
+        'd1': d1,
+        'd2': d2,
+        'total': d1 + d2
+    }, to=room_id)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():

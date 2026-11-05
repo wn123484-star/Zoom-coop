@@ -96,13 +96,13 @@
 <div class="widget-resizer" title="Kéo để chỉnh kích thước màn hình"></div>
 </div>
 
-<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1920px; top: 2220px; width: 580px; height: 440px;">
+<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1920px; top: 2220px; width: 600px; height: 460px;">
 <div id="media-header" class="widget-header">
-<span class="widget-title">🎬 Trạm Media & Tài Liệu (YT / Ảnh / Video / Excel / Word / HTML / PDF)</span>
+<span class="widget-title">🎬 Trạm Media, Trang Web URL & Tài Liệu Chung</span>
 <div class="widget-controls">
 <button type="button" id="btn-sync-now" class="widget-btn" title="Đồng bộ thời gian phát với phòng">🔄 Đồng bộ</button>
-<button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện khung tải lên">🔽 Nhập</button>
-<button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Media/Tài liệu đang mở thành thẻ trên bảng">📌 Ghim lên bảng</button>
+<button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện khung nhập link/tải tệp">🔽 Nhập</button>
+<button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Trang Web/Media đang mở thành thẻ trên bảng">📌 Ghim lên bảng</button>
 <button type="button" id="btn-clear-media" class="widget-btn" title="Đóng nội dung đang mở">🗑️ Đóng</button>
 <button type="button" id="media-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
 <button type="button" id="media-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
@@ -111,8 +111,9 @@
 <div id="media-body" class="widget-body">
 <div id="media-controls-box" class="media-controls">
 <div class="media-input-row">
-<input type="text" id="youtube-link" placeholder="Dán link YouTube (watch, shorts, youtu.be) để phát đồng bộ...">
-<button type="button" id="btn-play-yt">▶️ Phát YT</button>
+<input type="text" id="youtube-link" placeholder="Dán link YouTube hoặc URL Trang Web bất kỳ (VD: https://wikipedia.org)...">
+<button type="button" id="btn-play-yt" title="Mở xem chung video YouTube hoặc trang Web">🌐 Mở Web / YT</button>
+<button type="button" id="btn-stream-web-tab" class="pin-btn" title="Mở trang web ở tab mới và chiếu trực tiếp phiên đã đăng nhập của bạn cho cả phòng cùng xem">📡 Chiếu Tab Đăng Nhập</button>
 </div>
 <div class="media-input-row upload-row">
 <input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.html,.htm,.txt,.md,.json,.py,.js,.css">
@@ -123,7 +124,7 @@
 </div>
 <div id="media-content" class="media-content">
 <div class="empty-media-box">
-<p class="empty-media-text">📂 Hỗ trợ hiển thị trực tiếp: <b>Ảnh, Video, Nhạc MP3, PDF, Bảng tính Excel (.xlsx/.csv), Word (.docx), Web HTML (.html), Văn bản/Code</b> và <b>YouTube</b>!</p>
+<p class="empty-media-text">🌐 Dán <b>URL Trang Web bất kỳ</b>, link <b>YouTube</b> hoặc tải lên <b>Ảnh, Video, MP3, PDF, Excel, Word, HTML</b> để cả phòng cùng xem!<br><small style="color:#00d2ff;">(Nếu trang web cần đăng nhập tài khoản, hãy bấm <b>📡 Chiếu Tab Đăng Nhập</b> để mọi người nhìn thấy giống hệt màn hình của bạn)</small></p>
 </div>
 </div>
 <button type="button" id="btn-unlock-audio" class="unlock-audio-banner" style="display: none;">🔊 Chạm vào đây để Bật tiếng & Đồng bộ Video với phòng</button>
@@ -263,7 +264,7 @@
 <div id="popover-screen" class="tool-popover glass-effect">
 <div class="popover-title">🖥️ Chế Độ Chia Sẻ Màn Hình (Google Meet)</div>
 <div class="popover-grid single-col">
-<button type="button" class="screen-mode-btn" data-mode="browser" data-label="Thẻ trình duyệt">🌐 Thẻ trình duyệt (Tab + Kèm âm thanh)</button>
+<button type="button" class="screen-mode-btn" data-mode="browser" data-label="Thẻ trình duyệt">🌐 Thẻ trình duyệt (Tab Web đang đăng nhập + Âm thanh)</button>
 <button type="button" class="screen-mode-btn" data-mode="window" data-label="Cửa sổ ứng dụng">🪟 Cửa sổ ứng dụng (Chỉ 1 phần mềm)</button>
 <button type="button" class="screen-mode-btn" data-mode="monitor" data-label="Toàn màn hình">🖥️ Toàn bộ màn hình (Entire Screen)</button>
 <button type="button" id="btn-stop-screen-menu" class="screen-mode-btn stop-mode" style="display:none;">⏹️ Dừng chia sẻ màn hình hiện tại</button>
@@ -286,7 +287,7 @@
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
 <button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn Ảnh, Video, PDF, Excel, Word, HTML từ máy để hiển thị ngay">📤<span>Đăng Ảnh / Tài Liệu</span></button>
 <button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
-<button type="button" id="tool-media" class="dock-btn" title="Bật/Tắt Trạm Media & Tài liệu chung">🎬<span>Trạm Media / YT</span></button>
+<button type="button" id="tool-media" class="dock-btn" title="Mở Trạm Media, Xem Web URL & YouTube chung">🌐<span>Web URL / Media</span></button>
 <button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Mở kho trò chơi tương tác">🎮<span>Trò Chơi ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>

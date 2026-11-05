@@ -58,6 +58,59 @@ let activeTextBoxId = null;
 let lastEmitTime = 0;
 let laserTrails = [];
 
+let needsRedrawAll = false;
+let needsRedrawDraft = false;
+let pendingDeletedStrokeIds = new Set();
+let flushDeleteTimer = null;
+let pendingEraserPoints = [];
+let flushEraserSegmentTimer = null;
+
+function scheduleRedrawAll() {
+    needsRedrawAll = true;
+}
+
+function scheduleRedrawDraft() {
+    needsRedrawDraft = true;
+}
+
+function queueStrokeDeletion(strokeId) {
+    if (!strokeId) return;
+    pendingDeletedStrokeIds.add(strokeId);
+    if (!flushDeleteTimer) {
+        flushDeleteTimer = setTimeout(() => {
+            flushDeleteTimer = null;
+            if (pendingDeletedStrokeIds.size > 0) {
+                const batch = Array.from(pendingDeletedStrokeIds);
+                pendingDeletedStrokeIds.clear();
+                socket.emit('delete_strokes_batch', {
+                    room_id: ROOM_ID,
+                    stroke_ids: batch
+                });
+            }
+        }, 40);
+    }
+}
+
+function queueEraserPointSegment(pt, widthVal) {
+    pendingEraserPoints.push(pt);
+    if (!flushEraserSegmentTimer) {
+        flushEraserSegmentTimer = setTimeout(() => {
+            flushEraserSegmentTimer = null;
+            if (pendingEraserPoints.length > 0) {
+                const ptsToSend = pendingEraserPoints.slice();
+                const lastPt = pendingEraserPoints[pendingEraserPoints.length - 1];
+                pendingEraserPoints = [lastPt];
+                socket.emit('draw_segment', {
+                    room_id: ROOM_ID,
+                    tool: 'eraser',
+                    width: widthVal,
+                    points: ptsToSend
+                });
+            }
+        }, 35);
+    }
+}
+
 const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowdown: false, arrowright: false };
 
 function deselectAllTextBoxes(exceptId) {
@@ -147,6 +200,14 @@ function mainAnimationLoop() {
         panX += dx * 0.26;
         panY += dy * 0.26;
         applyTransformImmediate();
+    }
+    if (needsRedrawAll) {
+        needsRedrawAll = false;
+        performRedrawAllHistory();
+    }
+    if (needsRedrawDraft) {
+        needsRedrawDraft = false;
+        performRedrawDraftCanvas();
     }
     renderLaserLoop();
     requestAnimationFrame(mainAnimationLoop);
@@ -350,7 +411,7 @@ function setupStrokeContext(targetCtx, tool, color, width, opacity) {
         targetCtx.globalCompositeOperation = 'source-over';
         targetCtx.strokeStyle = hexToRgba(color, op);
         targetCtx.shadowColor = color;
-        targetCtx.shadowBlur = width * 3 + 10;
+        targetCtx.shadowBlur = width * 2.5 + 8;
     } else if (tool === 'dashed') {
         targetCtx.globalCompositeOperation = 'source-over';
         targetCtx.strokeStyle = hexToRgba(color, op);
@@ -419,94 +480,96 @@ function drawShapePath(targetCtx, tool, color, width, opacity, p0, p1) {
 
 function renderStrokeOnContext(targetCtx, stroke) {
     if (!stroke) return;
-    if (stroke.tool === 'text' && stroke.text && stroke.points && stroke.points[0]) {
-        targetCtx.save();
-        targetCtx.globalCompositeOperation = 'source-over';
-        targetCtx.fillStyle = stroke.color || '#00d2ff';
-        const fontSize = Math.max(16, (stroke.width || 4) * 5);
-        targetCtx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`;
-        targetCtx.fillText(stroke.text, stroke.points[0].x, stroke.points[0].y);
-        targetCtx.restore();
-        return;
-    }
-    const pts = stroke.points || [];
-    if (pts.length === 0) return;
-    const op = typeof stroke.opacity === 'number' ? stroke.opacity : 1.0;
-
-    if (isShapeTool(stroke.tool)) {
-        if (pts.length >= 2) {
-            drawShapePath(targetCtx, stroke.tool, stroke.color, stroke.width, op, pts[0], pts[pts.length - 1]);
+    try {
+        if (stroke.tool === 'text' && stroke.text && stroke.points && stroke.points[0]) {
+            targetCtx.save();
+            targetCtx.globalCompositeOperation = 'source-over';
+            targetCtx.fillStyle = stroke.color || '#00d2ff';
+            const fontSize = Math.max(16, (stroke.width || 4) * 5);
+            targetCtx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`;
+            targetCtx.fillText(stroke.text, stroke.points[0].x, stroke.points[0].y);
+            targetCtx.restore();
+            return;
         }
-        return;
-    }
+        const pts = stroke.points || [];
+        if (pts.length === 0) return;
+        const op = typeof stroke.opacity === 'number' ? stroke.opacity : 1.0;
 
-    if (stroke.tool === 'calligraphy') {
-        targetCtx.save();
-        targetCtx.globalCompositeOperation = 'source-over';
-        targetCtx.fillStyle = hexToRgba(stroke.color, op);
-        targetCtx.strokeStyle = hexToRgba(stroke.color, op);
-        const angle = -Math.PI / 5;
-        const dx = Math.cos(angle) * (stroke.width * 1.6);
-        const dy = Math.sin(angle) * (stroke.width * 1.6);
-        if (pts.length === 1) {
-            targetCtx.beginPath();
-            targetCtx.moveTo(pts[0].x - dx, pts[0].y - dy);
-            targetCtx.lineTo(pts[0].x + dx, pts[0].y + dy);
-            targetCtx.lineWidth = Math.max(2, stroke.width * 0.6);
-            targetCtx.stroke();
-        } else {
-            for (let i = 0; i < pts.length - 1; i++) {
+        if (isShapeTool(stroke.tool)) {
+            if (pts.length >= 2) {
+                drawShapePath(targetCtx, stroke.tool, stroke.color, stroke.width, op, pts[0], pts[pts.length - 1]);
+            }
+            return;
+        }
+
+        if (stroke.tool === 'calligraphy') {
+            targetCtx.save();
+            targetCtx.globalCompositeOperation = 'source-over';
+            targetCtx.fillStyle = hexToRgba(stroke.color, op);
+            targetCtx.strokeStyle = hexToRgba(stroke.color, op);
+            const angle = -Math.PI / 5;
+            const dx = Math.cos(angle) * (stroke.width * 1.6);
+            const dy = Math.sin(angle) * (stroke.width * 1.6);
+            if (pts.length === 1) {
                 targetCtx.beginPath();
-                targetCtx.moveTo(pts[i].x - dx, pts[i].y - dy);
-                targetCtx.lineTo(pts[i].x + dx, pts[i].y + dy);
-                targetCtx.lineTo(pts[i + 1].x + dx, pts[i + 1].y + dy);
-                targetCtx.lineTo(pts[i + 1].x - dx, pts[i + 1].y - dy);
-                targetCtx.closePath();
-                targetCtx.fill();
+                targetCtx.moveTo(pts[0].x - dx, pts[0].y - dy);
+                targetCtx.lineTo(pts[0].x + dx, pts[0].y + dy);
+                targetCtx.lineWidth = Math.max(2, stroke.width * 0.6);
+                targetCtx.stroke();
+            } else {
+                for (let i = 0; i < pts.length - 1; i++) {
+                    targetCtx.beginPath();
+                    targetCtx.moveTo(pts[i].x - dx, pts[i].y - dy);
+                    targetCtx.lineTo(pts[i].x + dx, pts[i].y + dy);
+                    targetCtx.lineTo(pts[i + 1].x + dx, pts[i + 1].y + dy);
+                    targetCtx.lineTo(pts[i + 1].x - dx, pts[i + 1].y - dy);
+                    targetCtx.closePath();
+                    targetCtx.fill();
+                }
             }
+            targetCtx.restore();
+            return;
         }
-        targetCtx.restore();
-        return;
-    }
 
-    if (stroke.tool === 'spray') {
+        if (stroke.tool === 'spray') {
+            targetCtx.save();
+            targetCtx.globalCompositeOperation = 'source-over';
+            targetCtx.fillStyle = hexToRgba(stroke.color, 0.35 * op);
+            const radius = Math.max(8, stroke.width * 2.2);
+            for (let i = 0; i < pts.length; i++) {
+                const p = pts[i];
+                for (let j = 0; j < 10; j++) {
+                    const ang = ((i * 13 + j * 37) % 360) * (Math.PI / 180);
+                    const r = (((i * 7 + j * 19) % 100) / 100) * radius;
+                    targetCtx.fillRect(p.x + Math.cos(ang) * r, p.y + Math.sin(ang) * r, 2, 2);
+                }
+            }
+            targetCtx.restore();
+            return;
+        }
+
         targetCtx.save();
-        targetCtx.globalCompositeOperation = 'source-over';
-        targetCtx.fillStyle = hexToRgba(stroke.color, 0.35 * op);
-        const radius = Math.max(8, stroke.width * 2.2);
-        for (let i = 0; i < pts.length; i++) {
-            const p = pts[i];
-            for (let j = 0; j < 10; j++) {
-                const ang = ((i * 13 + j * 37) % 360) * (Math.PI / 180);
-                const r = (((i * 7 + j * 19) % 100) / 100) * radius;
-                targetCtx.fillRect(p.x + Math.cos(ang) * r, p.y + Math.sin(ang) * r, 2, 2);
+        setupStrokeContext(targetCtx, stroke.tool, stroke.color, stroke.width, op);
+        targetCtx.beginPath();
+        targetCtx.moveTo(pts[0].x, pts[0].y);
+        if (pts.length === 1) {
+            targetCtx.lineTo(pts[0].x + 0.1, pts[0].y + 0.1);
+        } else if (pts.length === 2) {
+            targetCtx.lineTo(pts[1].x, pts[1].y);
+        } else {
+            for (let i = 1; i < pts.length - 1; i++) {
+                const midX = (pts[i].x + pts[i + 1].x) / 2;
+                const midY = (pts[i].y + pts[i + 1].y) / 2;
+                targetCtx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
             }
+            targetCtx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
         }
+        targetCtx.stroke();
         targetCtx.restore();
-        return;
-    }
-
-    targetCtx.save();
-    setupStrokeContext(targetCtx, stroke.tool, stroke.color, stroke.width, op);
-    targetCtx.beginPath();
-    targetCtx.moveTo(pts[0].x, pts[0].y);
-    if (pts.length === 1) {
-        targetCtx.lineTo(pts[0].x + 0.1, pts[0].y + 0.1);
-    } else if (pts.length === 2) {
-        targetCtx.lineTo(pts[1].x, pts[1].y);
-    } else {
-        for (let i = 1; i < pts.length - 1; i++) {
-            const midX = (pts[i].x + pts[i + 1].x) / 2;
-            const midY = (pts[i].y + pts[i + 1].y) / 2;
-            targetCtx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
-        }
-        targetCtx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
-    }
-    targetCtx.stroke();
-    targetCtx.restore();
+    } catch (err) {}
 }
 
-function redrawDraftCanvas() {
+function performRedrawDraftCanvas() {
     draftCtx.clearRect(0, 0, draftCanvas.width, draftCanvas.height);
     if (currentStroke && currentStroke.tool !== 'eraser' && currentStroke.tool !== 'laser') {
         renderStrokeOnContext(draftCtx, currentStroke);
@@ -532,11 +595,40 @@ function redrawDraftCanvas() {
     }
 }
 
-function redrawAllHistory() {
+function performRedrawAllHistory() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < strokeHistory.length; i++) {
         renderStrokeOnContext(ctx, strokeHistory[i]);
     }
+}
+
+function ensureStrokeBBox(stroke) {
+    if (stroke._bbox) return stroke._bbox;
+    const pts = stroke.points || [];
+    if (pts.length === 0) {
+        stroke._bbox = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+        return stroke._bbox;
+    }
+    let minX = pts[0].x;
+    let maxX = pts[0].x;
+    let minY = pts[0].y;
+    let maxY = pts[0].y;
+    for (let i = 1; i < pts.length; i++) {
+        const x = pts[i].x;
+        const y = pts[i].y;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+    const pad = Math.max(18, (parseFloat(stroke.width) || 4) * 3.5);
+    stroke._bbox = {
+        minX: minX - pad,
+        minY: minY - pad,
+        maxX: maxX + pad,
+        maxY: maxY + pad
+    };
+    return stroke._bbox;
 }
 
 function distToSegmentSquared(px, py, x1, y1, x2, y2) {
@@ -551,6 +643,10 @@ function distToSegmentSquared(px, py, x1, y1, x2, y2) {
 
 function isPointHittingStroke(px, py, stroke, tolerance) {
     if (!stroke || stroke.tool === 'eraser') return false;
+    const bbox = ensureStrokeBBox(stroke);
+    if (px < bbox.minX - tolerance || px > bbox.maxX + tolerance || py < bbox.minY - tolerance || py > bbox.maxY + tolerance) {
+        return false;
+    }
     const pts = stroke.points || [];
     if (pts.length === 0) return false;
     const strokeW = parseFloat(stroke.width || 4);
@@ -584,19 +680,23 @@ function isPointHittingStroke(px, py, stroke, tolerance) {
     return false;
 }
 
-function eraseStrokeAtPoint(px, py) {
+function eraseStrokesNearPoint(px, py) {
+    let anyRemoved = false;
+    const tol = Math.max(10, currentWidth * 1.6);
     for (let i = strokeHistory.length - 1; i >= 0; i--) {
         const st = strokeHistory[i];
-        if (isPointHittingStroke(px, py, st, currentWidth * 1.5)) {
+        if (isPointHittingStroke(px, py, st, tol)) {
             const removed = strokeHistory.splice(i, 1)[0];
-            redrawAllHistory();
+            anyRemoved = true;
             if (removed && removed.id) {
-                socket.emit('delete_stroke', { room_id: ROOM_ID, stroke_id: removed.id });
+                queueStrokeDeletion(removed.id);
             }
-            return true;
         }
     }
-    return false;
+    if (anyRemoved) {
+        scheduleRedrawAll();
+    }
+    return anyRemoved;
 }
 
 window.createOrUpdateTextBox = function(data, autoFocus) {
@@ -859,14 +959,14 @@ function startPointerAction(clientX, clientY, button) {
     if (currentTool === 'text') {
         drawing = true;
         textDragBox = { x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y };
-        redrawDraftCanvas();
+        scheduleRedrawDraft();
         return;
     }
 
     if (currentTool === 'eraser' && window.eraserMode === 'stroke') {
         drawing = true;
         currentStroke = null;
-        eraseStrokeAtPoint(pos.x, pos.y);
+        eraseStrokesNearPoint(pos.x, pos.y);
         return;
     }
 
@@ -892,18 +992,10 @@ function startPointerAction(clientX, clientY, button) {
         socket.emit('laser_point', { room_id: ROOM_ID, x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y });
     } else if (currentTool === 'eraser') {
         renderStrokeOnContext(ctx, currentStroke);
-        socket.emit('draw_segment', {
-            room_id: ROOM_ID,
-            tool: 'eraser',
-            color: activeColor,
-            width: currentWidth,
-            x0: pos.x,
-            y0: pos.y,
-            x1: pos.x,
-            y1: pos.y
-        });
+        pendingEraserPoints = [pos];
+        queueEraserPointSegment(pos, currentWidth);
     } else {
-        redrawDraftCanvas();
+        scheduleRedrawDraft();
     }
 }
 
@@ -922,12 +1014,12 @@ function movePointerAction(clientX, clientY) {
     if (currentTool === 'text' && textDragBox) {
         textDragBox.x1 = pos.x;
         textDragBox.y1 = pos.y;
-        redrawDraftCanvas();
+        scheduleRedrawDraft();
         return;
     }
 
     if (currentTool === 'eraser' && window.eraserMode === 'stroke') {
-        eraseStrokeAtPoint(pos.x, pos.y);
+        eraseStrokesNearPoint(pos.x, pos.y);
         return;
     }
     if (!currentStroke) return;
@@ -937,9 +1029,9 @@ function movePointerAction(clientX, clientY) {
     if (isShapeTool(currentTool)) {
         if (pts.length === 1) pts.push(pos);
         else pts[1] = pos;
-        redrawDraftCanvas();
+        scheduleRedrawDraft();
         const now = Date.now();
-        if (now - lastEmitTime > 30) {
+        if (now - lastEmitTime > 35) {
             socket.emit('draw_live', { room_id: ROOM_ID, stroke: currentStroke });
             lastEmitTime = now;
         }
@@ -947,38 +1039,35 @@ function movePointerAction(clientX, clientY) {
     }
 
     const distSq = (pos.x - prev.x) * (pos.x - prev.x) + (pos.y - prev.y) * (pos.y - prev.y);
-    if (distSq < 2.2) return;
+    if (distSq < 2.5) return;
 
     pts.push(pos);
 
     if (currentTool === 'laser') {
         laserTrails.push({ x0: prev.x, y0: prev.y, x1: pos.x, y1: pos.y, t: Date.now() });
-        socket.emit('laser_point', { room_id: ROOM_ID, x0: prev.x, y0: prev.y, x1: pos.x, y1: pos.y });
+        const now = Date.now();
+        if (now - lastEmitTime > 20) {
+            socket.emit('laser_point', { room_id: ROOM_ID, x0: prev.x, y0: prev.y, x1: pos.x, y1: pos.y });
+            lastEmitTime = now;
+        }
         return;
     }
 
     if (currentTool === 'eraser') {
+        ctx.save();
         setupStrokeContext(ctx, 'eraser', '#000', currentWidth, 1);
         ctx.beginPath();
         ctx.moveTo(prev.x, prev.y);
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
-        socket.emit('draw_segment', {
-            room_id: ROOM_ID,
-            tool: 'eraser',
-            color: '#000',
-            width: currentWidth,
-            x0: prev.x,
-            y0: prev.y,
-            x1: pos.x,
-            y1: pos.y
-        });
+        ctx.restore();
+        queueEraserPointSegment(pos, currentWidth);
         return;
     }
 
-    redrawDraftCanvas();
+    scheduleRedrawDraft();
     const now = Date.now();
-    if (now - lastEmitTime > 28) {
+    if (now - lastEmitTime > 35) {
         socket.emit('draw_live', { room_id: ROOM_ID, stroke: currentStroke });
         lastEmitTime = now;
     }
@@ -998,7 +1087,7 @@ function endPointerAction() {
         const w = Math.max(220, Math.round(Math.abs(textDragBox.x1 - textDragBox.x0)));
         const h = Math.max(68, Math.round(Math.abs(textDragBox.y1 - textDragBox.y0)));
         textDragBox = null;
-        redrawDraftCanvas();
+        scheduleRedrawDraft();
         const newBox = {
             room_id: ROOM_ID,
             id: 'tbox_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
@@ -1019,14 +1108,16 @@ function endPointerAction() {
     }
 
     if (currentStroke && currentStroke.tool !== 'laser') {
+        ensureStrokeBBox(currentStroke);
         if (currentStroke.tool !== 'eraser') {
             renderStrokeOnContext(ctx, currentStroke);
         }
         strokeHistory.push(currentStroke);
         socket.emit('draw_stroke', { room_id: ROOM_ID, stroke: currentStroke });
     }
+    pendingEraserPoints = [];
     currentStroke = null;
-    redrawDraftCanvas();
+    scheduleRedrawDraft();
 }
 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -1057,7 +1148,7 @@ canvas.addEventListener('touchstart', (e) => {
         drawing = false;
         currentStroke = null;
         textDragBox = null;
-        redrawDraftCanvas();
+        scheduleRedrawDraft();
         const t1 = e.touches[0];
         const t2 = e.touches[1];
         pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -1103,50 +1194,64 @@ canvas.addEventListener('touchend', () => {
 
 window.loadDrawHistory = function(history) {
     strokeHistory = Array.isArray(history) ? history : [];
-    redrawAllHistory();
+    strokeHistory.forEach(s => ensureStrokeBBox(s));
+    scheduleRedrawAll();
 };
 
 socket.on('laser_point', (d) => {
-    laserTrails.push({ x0: d.x0, y0: d.y0, x1: d.x1, y1: d.y1, t: Date.now() });
+    if (d) laserTrails.push({ x0: d.x0, y0: d.y0, x1: d.x1, y1: d.y1, t: Date.now() });
 });
 
 socket.on('draw_live', (data) => {
     if (!data || !data.stroke) return;
     remoteLiveStrokes[data.sid || 'peer'] = data.stroke;
-    redrawDraftCanvas();
+    scheduleRedrawDraft();
 });
 
 socket.on('draw_segment', (d) => {
-    if (d.tool === 'eraser') {
-        setupStrokeContext(ctx, 'eraser', '#000', d.width, 1);
-        ctx.beginPath();
+    if (!d || d.tool !== 'eraser') return;
+    ctx.save();
+    setupStrokeContext(ctx, 'eraser', '#000', d.width || 4, 1);
+    ctx.beginPath();
+    if (Array.isArray(d.points) && d.points.length > 0) {
+        ctx.moveTo(d.points[0].x, d.points[0].y);
+        for (let i = 1; i < d.points.length; i++) {
+            ctx.lineTo(d.points[i].x, d.points[i].y);
+        }
+    } else if (typeof d.x0 === 'number') {
         ctx.moveTo(d.x0, d.y0);
         ctx.lineTo(d.x1, d.y1);
-        ctx.stroke();
     }
+    ctx.stroke();
+    ctx.restore();
 });
 
 socket.on('draw_stroke', (stroke) => {
-    if (stroke && stroke.sid) {
+    if (!stroke) return;
+    if (stroke.sid) {
         delete remoteLiveStrokes[stroke.sid];
     } else {
         remoteLiveStrokes = {};
     }
-    redrawDraftCanvas();
+    scheduleRedrawDraft();
+    ensureStrokeBBox(stroke);
     strokeHistory.push(stroke);
     renderStrokeOnContext(ctx, stroke);
 });
 
 socket.on('stroke_deleted', (data) => {
-    if (!data || !data.stroke_id) return;
-    strokeHistory = strokeHistory.filter(s => s.id !== data.stroke_id);
-    redrawAllHistory();
+    if (!data) return;
+    const ids = Array.isArray(data.stroke_ids) ? new Set(data.stroke_ids) : (data.stroke_id ? new Set([data.stroke_id]) : null);
+    if (!ids || ids.size === 0) return;
+    strokeHistory = strokeHistory.filter(s => !ids.has(s.id));
+    scheduleRedrawAll();
 });
 
 socket.on('board_sync', (data) => {
-    strokeHistory = data.draw_history || [];
-    redrawAllHistory();
-    if (Array.isArray(data.texts)) {
+    strokeHistory = (data && data.draw_history) ? data.draw_history : [];
+    strokeHistory.forEach(s => ensureStrokeBBox(s));
+    scheduleRedrawAll();
+    if (data && Array.isArray(data.texts)) {
         window.loadTextsHistory(data.texts);
     }
 });

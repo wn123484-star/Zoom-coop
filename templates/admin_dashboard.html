@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SyncSpace - Trung Tâm Giám Sát Hệ Thống (Admin)</title>
+<title>SyncSpace - Trung Tâm Giám Sát & Sao Lưu (Admin)</title>
 <style>
 * { box-sizing: border-box; }
 body { margin: 0; padding: 24px; font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b0c10; color: #e2e8f0; }
-.admin-wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.admin-wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 .admin-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(255,255,255,0.04); padding: 18px 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); }
 .admin-top h1 { margin: 0; font-size: 22px; color: #00d2ff; display: flex; align-items: center; gap: 10px; }
 .live-pill { background: rgba(46, 213, 115, 0.16); color: #2ed573; border: 1px solid rgba(46, 213, 115, 0.4); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
@@ -24,17 +24,19 @@ body { margin: 0; padding: 24px; font-family: 'Inter', system-ui, -apple-system,
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 11px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); }
 th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercase; }
-.btn { border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+.btn { border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; }
 .btn-cyan { background: rgba(0, 210, 255, 0.18); color: #00d2ff; border: 1px solid rgba(0, 210, 255, 0.35); }
 .btn-cyan:hover { background: #00d2ff; color: #000; }
+.btn-green { background: rgba(46, 213, 115, 0.18); color: #2ed573; border: 1px solid rgba(46, 213, 115, 0.4); }
+.btn-green:hover { background: #2ed573; color: #000; }
 .btn-warn { background: rgba(255, 165, 2, 0.18); color: #ffa502; border: 1px solid rgba(255, 165, 2, 0.35); }
 .btn-warn:hover { background: #ffa502; color: #000; }
 .btn-danger { background: rgba(255, 71, 87, 0.2); color: #ff6b81; border: 1px solid rgba(255, 71, 87, 0.4); }
 .btn-danger:hover { background: #ff4757; color: #fff; }
 .user-tag { display: inline-block; background: rgba(0, 210, 255, 0.14); color: #00d2ff; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 2px; font-weight: 600; }
-.ban-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.ban-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .ban-row input { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #14161f; color: #fff; font-size: 13px; }
-.grid-2col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+.grid-2col { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; }
 @media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -42,11 +44,12 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 <div class="admin-wrap">
 <div class="admin-top">
 <div>
-<h1>⚡ SyncSpace Server Monitor & Admin</h1>
-<div style="font-size:12px; color:#94a3b8; margin-top:4px;">Giám sát tài nguyên VPS (CPU / RAM / Disk) & Quản lý phòng thời gian thực</div>
+<h1>⚡ SyncSpace Server Monitor & Backup Center</h1>
+<div style="font-size:12px; color:#94a3b8; margin-top:4px;">Giám sát CPU / RAM / Disk, Sao lưu & Khôi phục Phòng (JSON / ZIP)</div>
 </div>
-<div style="display:flex; gap:10px; align-items:center;">
+<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <span id="sync-status" class="live-pill">● Đang cập nhật 2s/lần</span>
+<a href="/api/admin/backup_all_zip" class="btn btn-green">📦 Tải Full Backup (.ZIP)</a>
 <button type="button" id="btn-cleanup" class="btn btn-warn">🧹 Dọn rác Uploads</button>
 <a href="/" class="btn btn-cyan">← Trang chủ</a>
 </div>
@@ -82,9 +85,34 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 </div>
 </div>
 
+<div class="grid-2col">
 <div class="panel-box">
 <div class="panel-header">
-<h3>🏠 Danh Sách Phòng Hoạt Động & Lưu Trữ</h3>
+<h3>📤 Khôi Phục / Nhập Dữ Liệu Phòng (Từ tệp .JSON hoặc .ZIP)</h3>
+</div>
+<form id="restore-form" class="ban-row">
+<input type="file" id="restore-file" accept=".json,.zip" required style="flex:1;">
+<input type="text" id="restore-room-id" placeholder="Mã phòng ghi đè (Tùy chọn)..." style="width:210px;">
+<button type="submit" class="btn btn-green">📤 Khôi phục ngay</button>
+</form>
+<div style="font-size:12px; color:#94a3b8;">Hỗ trợ khôi phục từng phòng từ tệp <code>.json</code> hoặc khôi phục toàn bộ máy chủ (kèm ảnh/video/tài liệu) từ gói <code>FullBackup.zip</code>.</div>
+</div>
+
+<div class="panel-box">
+<div class="panel-header">
+<h3>📢 Phát Thông Báo Toàn Hệ Thống (Broadcast)</h3>
+</div>
+<form id="broadcast-form" class="ban-row">
+<input type="text" id="broadcast-input" placeholder="Nhập thông báo gửi tới tất cả các phòng..." required style="flex:1;">
+<button type="submit" class="btn btn-cyan">📢 Gửi Thông Báo</button>
+</form>
+<div style="font-size:12px; color:#94a3b8;">Thông báo sẽ hiển thị nổi kèm âm báo nhẹ trên màn hình của mọi thành viên đang trực tuyến.</div>
+</div>
+</div>
+
+<div class="panel-box">
+<div class="panel-header">
+<h3>🏠 Danh Sách Phòng Hoạt Động & Sao Lưu Từng Phòng</h3>
 </div>
 <div style="overflow-x:auto;">
 <table>
@@ -94,7 +122,7 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 <th>Đang Online</th>
 <th>Dữ Liệu Bảng</th>
 <th>Chia Sẻ Màn Hình</th>
-<th>Thao Tác</th>
+<th>Sao Lưu & Quản Lý</th>
 </tr>
 </thead>
 <tbody id="rooms-tbody">
@@ -187,6 +215,46 @@ document.getElementById('ban-form').addEventListener('submit', (e) => {
     inp.value = '';
 });
 
+document.getElementById('restore-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fileInput = document.getElementById('restore-file');
+    const roomInput = document.getElementById('restore-room-id');
+    if (!fileInput.files || fileInput.files.length === 0) return;
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    if (roomInput.value.trim()) {
+        fd.append('room_id', roomInput.value.trim());
+    }
+    fetch('/api/admin/restore', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (d && d.ok) {
+                alert('✅ Đã khôi phục thành công phòng: ' + (d.restored_rooms || []).join(', '));
+                fileInput.value = '';
+                roomInput.value = '';
+                fetchStats();
+            } else {
+                alert('❌ Lỗi: ' + ((d && d.error) || 'Không thể khôi phục'));
+            }
+        })
+        .catch(() => alert('Lỗi kết nối khi tải tệp khôi phục!'));
+});
+
+document.getElementById('broadcast-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const inp = document.getElementById('broadcast-input');
+    const msg = inp.value.trim();
+    if (!msg) return;
+    fetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msg: msg })
+    }).then(() => {
+        inp.value = '';
+        alert('📢 Đã phát thông báo tới toàn bộ các phòng!');
+    });
+});
+
 document.getElementById('btn-cleanup').addEventListener('click', () => {
     fetch('/api/admin/cleanup_uploads', { method: 'POST' })
         .then(r => r.json())
@@ -236,15 +304,17 @@ function fetchStats() {
                     const tr = document.createElement('tr');
                     const usersHtml = (r.users || []).map(u => `<span class="user-tag">👤 ${u}</span>`).join('') || '<span style="color:#666;">Trống</span>';
                     const screenHtml = r.screen_sharing ? `<span style="color:#2ed573; font-weight:700;">🖥️ ${r.screen_sharing}</span>` : '<span style="color:#666;">Không</span>';
+                    const encRoom = encodeURIComponent(r.room_id);
                     tr.innerHTML = `
                         <td><strong style="color:#00d2ff; font-size:14px;">${r.room_id}</strong></td>
                         <td><b>${r.user_count}</b> người<br>${usersHtml}</td>
                         <td>✏️ ${r.strokes} nét | 🔤 ${r.texts} chữ | 📝 ${r.stickies} note | 🎬 ${r.media_count} media</td>
                         <td>${screenHtml}</td>
-                        <td style="white-space:nowrap;">
-                            <a href="/room/${encodeURIComponent(r.room_id)}?name=Admin" target="_blank" class="btn btn-cyan">🔗 Vào</a>
+                        <td style="white-space:nowrap; display:flex; gap:5px; flex-wrap:wrap;">
+                            <a href="/room/${encRoom}?name=Admin" target="_blank" class="btn btn-cyan">🔗 Vào</a>
+                            <a href="/api/admin/backup/${encRoom}" class="btn btn-green" title="Tải tệp sao lưu JSON của phòng này">📥 Tải JSON</a>
                             <button type="button" class="btn btn-warn" onclick="clearRoomBoard('${r.room_id}')">🧹 Xóa vẽ</button>
-                            <button type="button" class="btn btn-danger" onclick="deleteRoom('${r.room_id}')">🗑️ Xóa phòng</button>
+                            <button type="button" class="btn btn-danger" onclick="deleteRoom('${r.room_id}')">🗑️ Xóa</button>
                         </td>
                     `;
                     rTbody.appendChild(tr);

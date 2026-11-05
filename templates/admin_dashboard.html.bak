@@ -2,32 +2,291 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>SyncSpace - Quản trị hệ thống</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SyncSpace - Trung Tâm Giám Sát Hệ Thống (Admin)</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px; font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b0c10; color: #e2e8f0; }
+.admin-wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.admin-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(255,255,255,0.04); padding: 18px 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); }
+.admin-top h1 { margin: 0; font-size: 22px; color: #00d2ff; display: flex; align-items: center; gap: 10px; }
+.live-pill { background: rgba(46, 213, 115, 0.16); color: #2ed573; border: 1px solid rgba(46, 213, 115, 0.4); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.metric-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.metric-title { font-size: 12px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: flex; justify-content: space-between; }
+.metric-val { font-size: 26px; font-weight: 800; color: #fff; }
+.metric-sub { font-size: 12px; color: #94a3b8; }
+.progress-track { width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: #00d2ff; transition: width 0.4s ease, background 0.3s ease; }
+.panel-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.panel-header h3 { margin: 0; font-size: 16px; color: #00d2ff; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 11px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); }
+th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.btn { border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+.btn-cyan { background: rgba(0, 210, 255, 0.18); color: #00d2ff; border: 1px solid rgba(0, 210, 255, 0.35); }
+.btn-cyan:hover { background: #00d2ff; color: #000; }
+.btn-warn { background: rgba(255, 165, 2, 0.18); color: #ffa502; border: 1px solid rgba(255, 165, 2, 0.35); }
+.btn-warn:hover { background: #ffa502; color: #000; }
+.btn-danger { background: rgba(255, 71, 87, 0.2); color: #ff6b81; border: 1px solid rgba(255, 71, 87, 0.4); }
+.btn-danger:hover { background: #ff4757; color: #fff; }
+.user-tag { display: inline-block; background: rgba(0, 210, 255, 0.14); color: #00d2ff; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 2px; font-weight: 600; }
+.ban-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.ban-row input { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #14161f; color: #fff; font-size: 13px; }
+.grid-2col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+@media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
+</style>
 </head>
-<body style="background: #0f0f13; color: #fff; padding: 40px; overflow: auto;">
-<div style="max-width: 850px; margin: 0 auto;">
-<h1 style="color: #00d2ff; margin-bottom: 8px;">⚡ Bảng Điều Khiển Admin</h1>
-<p style="color: #aaa; margin-top: 0;">Quản lý các phòng làm việc và giải phóng tài nguyên VPS.</p>
-<div style="background: rgba(255,255,255,0.04); padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); margin-top: 20px;">
-<h3 style="margin-top: 0;">Danh sách Phòng đã khởi tạo ({{ rooms|length }})</h3>
-<ul style="list-style: none; padding: 0; margin: 0;">
-{% for r, info in rooms.items() %}
-<li style="display: flex; justify-content: space-between; align-items: center; padding: 14px 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+<body>
+<div class="admin-wrap">
+<div class="admin-top">
 <div>
-<strong style="color: #00d2ff; font-size: 16px;">Phòng: {{ r }}</strong>
-<span style="margin-left: 12px; font-size: 13px; color: #55efc4;">👥 {{ info.user_count }} người đang online</span>
+<h1>⚡ SyncSpace Server Monitor & Admin</h1>
+<div style="font-size:12px; color:#94a3b8; margin-top:4px;">Giám sát tài nguyên VPS (CPU / RAM / Disk) & Quản lý phòng thời gian thực</div>
 </div>
-<form action="/api/admin/delete/{{ r }}" method="POST" style="margin:0; padding:0; width:auto; background:none; box-shadow:none; border:none; display:inline;">
-<button type="submit" style="background: #ff4757; color: #fff; padding: 8px 16px; font-size: 13px; border-radius: 8px;">Xóa & Giải phóng</button>
+<div style="display:flex; gap:10px; align-items:center;">
+<span id="sync-status" class="live-pill">● Đang cập nhật 2s/lần</span>
+<button type="button" id="btn-cleanup" class="btn btn-warn">🧹 Dọn rác Uploads</button>
+<a href="/" class="btn btn-cyan">← Trang chủ</a>
+</div>
+</div>
+
+<div class="metrics-grid">
+<div class="metric-card">
+<div class="metric-title"><span>🖥️ CPU Máy Chủ</span><span id="cpu-cores">-- Cores</span></div>
+<div id="cpu-val" class="metric-val">--%</div>
+<div class="progress-track"><div id="cpu-bar" class="progress-fill"></div></div>
+<div id="cpu-load" class="metric-sub">Load Avg: --</div>
+</div>
+
+<div class="metric-card">
+<div class="metric-title"><span>🧠 Bộ Nhớ RAM</span><span id="ram-total">-- MB</span></div>
+<div id="ram-val" class="metric-val">--%</div>
+<div class="progress-track"><div id="ram-bar" class="progress-fill"></div></div>
+<div id="ram-detail" class="metric-sub">Đã dùng: -- MB</div>
+</div>
+
+<div class="metric-card">
+<div class="metric-title"><span>💾 Ổ Cứng VPS</span><span id="disk-total">-- GB</span></div>
+<div id="disk-val" class="metric-val">--%</div>
+<div class="progress-track"><div id="disk-bar" class="progress-fill"></div></div>
+<div id="disk-detail" class="metric-sub">Uploads: -- MB | DB: -- MB</div>
+</div>
+
+<div class="metric-card">
+<div class="metric-title"><span>🌐 Trạng Thái Mạng</span><span>Socket.IO</span></div>
+<div id="conn-val" class="metric-val">0 kết nối</div>
+<div id="uptime-val" class="metric-sub" style="color:#2ed573; font-weight:700;">Uptime: --</div>
+<div id="rooms-count-sub" class="metric-sub">Tổng số phòng: 0</div>
+</div>
+</div>
+
+<div class="panel-box">
+<div class="panel-header">
+<h3>🏠 Danh Sách Phòng Hoạt Động & Lưu Trữ</h3>
+</div>
+<div style="overflow-x:auto;">
+<table>
+<thead>
+<tr>
+<th>Mã Phòng</th>
+<th>Đang Online</th>
+<th>Dữ Liệu Bảng</th>
+<th>Chia Sẻ Màn Hình</th>
+<th>Thao Tác</th>
+</tr>
+</thead>
+<tbody id="rooms-tbody">
+<tr><td colspan="5" style="color:#888;">Đang tải dữ liệu...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div class="grid-2col">
+<div class="panel-box">
+<div class="panel-header">
+<h3>👥 Thành Viên Đang Kết Nối Trực Tuyến</h3>
+</div>
+<div style="overflow-x:auto;">
+<table>
+<thead>
+<tr>
+<th>Tên</th>
+<th>Phòng</th>
+<th>Địa chỉ IP</th>
+<th>Giờ vào</th>
+<th>Chặn</th>
+</tr>
+</thead>
+<tbody id="users-tbody">
+<tr><td colspan="5" style="color:#888;">Chưa có người dùng kết nối.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div class="panel-box">
+<div class="panel-header">
+<h3>🚫 Quản Lý Chặn IP (Banned IPs)</h3>
+</div>
+<form id="ban-form" class="ban-row">
+<input type="text" id="ban-ip-input" placeholder="Nhập địa chỉ IP cần chặn..." required style="flex:1;">
+<button type="submit" class="btn btn-danger">Chặn IP</button>
 </form>
-</li>
-{% else %}
-<p style="color: #888;">Chưa có phòng nào đang hoạt động.</p>
-{% endfor %}
-</ul>
+<div id="banned-list" style="display:flex; flex-direction:column; gap:6px;"></div>
 </div>
-<a href="/" style="display: inline-block; margin-top: 25px; color: #00d2ff; text-decoration: none; font-weight: bold;">← Quay về Trang chủ</a>
 </div>
+</div>
+
+<script>
+function colorForPercent(p) {
+    if (p < 65) return '#2ed573';
+    if (p < 85) return '#ffa502';
+    return '#ff4757';
+}
+
+function clearRoomBoard(roomId) {
+    if (!confirm('Xóa toàn bộ nét vẽ của phòng ' + roomId + '?')) return;
+    fetch('/api/admin/clear/' + encodeURIComponent(roomId), { method: 'POST' })
+        .then(() => fetchStats());
+}
+
+function deleteRoom(roomId) {
+    if (!confirm('Đóng phòng ' + roomId + ' và xóa toàn bộ dữ liệu của phòng này?')) return;
+    fetch('/api/admin/delete/' + encodeURIComponent(roomId), {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' }
+    }).then(() => fetchStats());
+}
+
+function banIp(ip) {
+    if (!ip || !confirm('Chặn địa chỉ IP: ' + ip + '?')) return;
+    fetch('/api/admin/ban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: ip })
+    }).then(() => fetchStats());
+}
+
+function unbanIp(ip) {
+    fetch('/api/admin/unban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: ip })
+    }).then(() => fetchStats());
+}
+
+document.getElementById('ban-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const inp = document.getElementById('ban-ip-input');
+    const ip = inp.value.trim();
+    if (!ip) return;
+    banIp(ip);
+    inp.value = '';
+});
+
+document.getElementById('btn-cleanup').addEventListener('click', () => {
+    fetch('/api/admin/cleanup_uploads', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            alert('Đã dọn dẹp ' + (d.removed || 0) + ' tệp rác không còn sử dụng!');
+            fetchStats();
+        });
+});
+
+function fetchStats() {
+    fetch('/api/admin/stats')
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.system) return;
+            const s = data.system;
+            document.getElementById('cpu-val').innerText = s.cpu_percent + '%';
+            document.getElementById('cpu-cores').innerText = s.cpu_cores + ' Cores';
+            document.getElementById('cpu-load').innerText = 'Load Avg: ' + (s.load_avg || []).join(' / ');
+            const cpuBar = document.getElementById('cpu-bar');
+            cpuBar.style.width = Math.min(100, s.cpu_percent) + '%';
+            cpuBar.style.background = colorForPercent(s.cpu_percent);
+
+            document.getElementById('ram-val').innerText = s.ram_percent + '%';
+            document.getElementById('ram-total').innerText = s.ram_total_mb + ' MB';
+            document.getElementById('ram-detail').innerText = `Đã dùng: ${s.ram_used_mb} MB / ${s.ram_total_mb} MB`;
+            const ramBar = document.getElementById('ram-bar');
+            ramBar.style.width = Math.min(100, s.ram_percent) + '%';
+            ramBar.style.background = colorForPercent(s.ram_percent);
+
+            document.getElementById('disk-val').innerText = s.disk_percent + '%';
+            document.getElementById('disk-total').innerText = `${s.disk_used_gb} / ${s.disk_total_gb} GB`;
+            document.getElementById('disk-detail').innerText = `Uploads: ${s.uploads_mb} MB | DB: ${s.db_mb} MB`;
+            const diskBar = document.getElementById('disk-bar');
+            diskBar.style.width = Math.min(100, s.disk_percent) + '%';
+            diskBar.style.background = colorForPercent(s.disk_percent);
+
+            document.getElementById('conn-val').innerText = s.online_connections + ' kết nối';
+            document.getElementById('uptime-val').innerText = 'Uptime: ' + s.uptime;
+            document.getElementById('rooms-count-sub').innerText = 'Tổng số phòng: ' + (data.rooms ? data.rooms.length : 0);
+
+            const rTbody = document.getElementById('rooms-tbody');
+            rTbody.innerHTML = '';
+            if (!data.rooms || data.rooms.length === 0) {
+                rTbody.innerHTML = '<tr><td colspan="5" style="color:#888;">Chưa có phòng nào.</td></tr>';
+            } else {
+                data.rooms.forEach(r => {
+                    const tr = document.createElement('tr');
+                    const usersHtml = (r.users || []).map(u => `<span class="user-tag">👤 ${u}</span>`).join('') || '<span style="color:#666;">Trống</span>';
+                    const screenHtml = r.screen_sharing ? `<span style="color:#2ed573; font-weight:700;">🖥️ ${r.screen_sharing}</span>` : '<span style="color:#666;">Không</span>';
+                    tr.innerHTML = `
+                        <td><strong style="color:#00d2ff; font-size:14px;">${r.room_id}</strong></td>
+                        <td><b>${r.user_count}</b> người<br>${usersHtml}</td>
+                        <td>✏️ ${r.strokes} nét | 🔤 ${r.texts} chữ | 📝 ${r.stickies} note | 🎬 ${r.media_count} media</td>
+                        <td>${screenHtml}</td>
+                        <td style="white-space:nowrap;">
+                            <a href="/room/${encodeURIComponent(r.room_id)}?name=Admin" target="_blank" class="btn btn-cyan">🔗 Vào</a>
+                            <button type="button" class="btn btn-warn" onclick="clearRoomBoard('${r.room_id}')">🧹 Xóa vẽ</button>
+                            <button type="button" class="btn btn-danger" onclick="deleteRoom('${r.room_id}')">🗑️ Xóa phòng</button>
+                        </td>
+                    `;
+                    rTbody.appendChild(tr);
+                });
+            }
+
+            const uTbody = document.getElementById('users-tbody');
+            uTbody.innerHTML = '';
+            if (!data.users || data.users.length === 0) {
+                uTbody.innerHTML = '<tr><td colspan="5" style="color:#888;">Chưa có ai trực tuyến.</td></tr>';
+            } else {
+                data.users.forEach(u => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><b>${u.username}</b></td>
+                        <td><span style="color:#00d2ff;">${u.room}</span></td>
+                        <td><code>${u.ip}</code></td>
+                        <td>${u.joined_at}</td>
+                        <td><button type="button" class="btn btn-danger" onclick="banIp('${u.ip}')">🚫 Ban IP</button></td>
+                    `;
+                    uTbody.appendChild(tr);
+                });
+            }
+
+            const bList = document.getElementById('banned-list');
+            bList.innerHTML = '';
+            if (!data.banned_ips || data.banned_ips.length === 0) {
+                bList.innerHTML = '<div style="color:#888; font-size:12px;">Chưa có IP nào bị chặn.</div>';
+            } else {
+                data.banned_ips.forEach(ip => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:rgba(255,71,87,0.1); border:1px solid rgba(255,71,87,0.3); border-radius:8px;';
+                    row.innerHTML = `<code>${ip}</code><button type="button" class="btn btn-cyan" onclick="unbanIp('${ip}')">✅ Gỡ Ban</button>`;
+                    bList.appendChild(row);
+                });
+            }
+        })
+        .catch(() => {});
+}
+
+fetchStats();
+setInterval(fetchStats, 2000);
+</script>
 </body>
 </html>
