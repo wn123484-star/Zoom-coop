@@ -262,32 +262,52 @@ def mark_room_dirty(room_id):
         dirty_rooms.add(room_id)
 
 def flush_dirty_rooms():
+    last_gc_time = time.time()
     while True:
         time.sleep(2.5)
-        if not dirty_rooms:
-            continue
-        to_save = list(dirty_rooms)
-        dirty_rooms.clear()
-        for room_id in to_save:
-            if room_id not in room_states:
-                continue
+        now = time.time()
+        if dirty_rooms:
+            to_save = list(dirty_rooms)
+            dirty_rooms.clear()
+            for room_id in to_save:
+                if room_id not in room_states:
+                    continue
+                try:
+                    state_data = room_states[room_id]
+                    if room_id in chess_games:
+                        state_data['chess_game'] = chess_games[room_id]
+                    if room_id in memory_games:
+                        state_data['memory_game'] = memory_games[room_id]
+                    xo_data = xo_games.get(room_id, init_xo_game())
+                    state_str = json.dumps(state_data)
+                    xo_str = json.dumps(xo_data)
+                    with db_lock:
+                        conn = get_db()
+                        conn.execute(
+                            'INSERT OR REPLACE INTO room_data (room_id, state_json, xo_json, updated_at) VALUES (?, ?, ?, ?)',
+                            (room_id, state_str, xo_str, now)
+                        )
+                        conn.commit()
+                        conn.close()
+                except Exception:
+                    pass
+
+        if now - last_gc_time > 60.0:
+            last_gc_time = now
             try:
-                state_data = room_states[room_id]
-                if room_id in chess_games:
-                    state_data['chess_game'] = chess_games[room_id]
-                if room_id in memory_games:
-                    state_data['memory_game'] = memory_games[room_id]
-                xo_data = xo_games.get(room_id, init_xo_game())
-                state_str = json.dumps(state_data)
-                xo_str = json.dumps(xo_data)
-                with db_lock:
-                    conn = get_db()
-                    conn.execute(
-                        'INSERT OR REPLACE INTO room_data (room_id, state_json, xo_json, updated_at) VALUES (?, ?, ?, ?)',
-                        (room_id, state_str, xo_str, time.time())
-                    )
-                    conn.commit()
-                    conn.close()
+                active_room_ids_with_users = {u.get('room') for u in list(connected_users.values()) if u.get('room')}
+                for r_id in list(room_states.keys()):
+                    if r_id not in active_room_ids_with_users and r_id not in dirty_rooms:
+                        info = active_rooms.get(r_id, {})
+                        last_active = info.get('last_active', info.get('created_at', 0))
+                        if now - last_active > 600.0:
+                            save_room_immediately(r_id)
+                            room_states.pop(r_id, None)
+                            xo_games.pop(r_id, None)
+                            chess_games.pop(r_id, None)
+                            memory_games.pop(r_id, None)
+                            screen_shares.pop(r_id, None)
+                            active_rooms.pop(r_id, None)
             except Exception:
                 pass
 
@@ -469,7 +489,7 @@ def web_proxy():
         target_url = 'https://' + target_url
     parsed = urllib.parse.urlparse(target_url)
     host = (parsed.hostname or '').lower()
-    if not host or host in ('localhost', '127.0.0.1', '0.0.0.0') or host.startswith('192.168.') or host.startswith('10.'):
+    if not host or host in ('localhost', '127.0.0.1', '0.0.0.0') or host.startswith('192.168.') or host.startswith('10.') or host.startswith('172.'):
         return "URL nội bộ không được phép truy cập qua Proxy.", 403
     try:
         ctx = ssl.create_default_context()
@@ -478,12 +498,14 @@ def web_proxy():
         req = urllib.request.Request(
             target_url,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
             }
         )
-        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+            final_url = resp.geturl() or target_url
+            final_parsed = urllib.parse.urlparse(final_url)
             content_type = resp.headers.get('Content-Type', 'text/html; charset=utf-8')
             raw_bytes = resp.read(6 * 1024 * 1024)
             if 'text/html' in content_type.lower():
@@ -492,15 +514,34 @@ def web_proxy():
                 if m:
                     charset = m.group(1)
                 html_str = raw_bytes.decode(charset, errors='replace')
-                base_url = f"{parsed.scheme}://{parsed.netloc}/"
-                base_tag = f'<base href="{base_url}">'
+                html_str = re.sub(r'<meta[^>]*http-equiv=["\']?(?:Content-Security-Policy|X-Frame-Options)["\']?[^>]*>', '', html_str, flags=re.I)
+                base_url = f"{final_parsed.scheme}://{final_parsed.netloc}/"
+                helper_script = f"""<base href="{base_url}"><script>
+                document.addEventListener('click', function(e) {{
+                    var a = e.target.closest('a');
+                    if (a && a.href && /^https?:\\/\\//i.test(a.href) && a.target !== '_blank') {{
+                        e.preventDefault();
+                        window.location.href = '/web-proxy?url=' + encodeURIComponent(a.href);
+                    }}
+                }}, true);
+                document.addEventListener('submit', function(e) {{
+                    var f = e.target;
+                    if (f && (!f.method || f.method.toUpperCase() === 'GET') && f.action) {{
+                        e.preventDefault();
+                        var u = new URL(f.action, '{base_url}');
+                        var fd = new FormData(f);
+                        fd.forEach(function(v, k) {{ u.searchParams.set(k, v); }});
+                        window.location.href = '/web-proxy?url=' + encodeURIComponent(u.toString());
+                    }}
+                }}, true);
+                </script>"""
                 if re.search(r'<head[^>]*>', html_str, re.I):
-                    html_str = re.sub(r'(<head[^>]*>)', r'\1' + base_tag, html_str, count=1, flags=re.I)
+                    html_str = re.sub(r'(<head[^>]*>)', r'\1' + helper_script, html_str, count=1, flags=re.I)
                 else:
-                    html_str = base_tag + html_str
+                    html_str = helper_script + html_str
                 return Response(html_str, mimetype='text/html')
             return Response(raw_bytes, content_type=content_type)
-    except Exception as e:
+    except Exception:
         fallback_html = f"""<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><style>
         body {{ font-family: system-ui, sans-serif; background: #14161f; color: #eee; padding: 24px; text-align: center; }}
         .box {{ max-width: 480px; margin: 20px auto; background: rgba(255,255,255,0.06); padding: 20px; border-radius: 12px; border: 1px solid rgba(0,210,255,0.3); }}
@@ -955,6 +996,23 @@ def handle_draw_stroke(data):
         stroke = data.get('stroke')
         if not room_id or not isinstance(stroke, dict):
             return
+        if room_id in active_rooms:
+            active_rooms[room_id]['last_active'] = time.time()
+        pts = stroke.get('points')
+        if isinstance(pts, list) and len(pts) > 2:
+            compact_pts = [pts[0]]
+            for pt in pts[1:-1]:
+                prev = compact_pts[-1]
+                dx = pt.get('x', 0) - prev.get('x', 0)
+                dy = pt.get('y', 0) - prev.get('y', 0)
+                if dx * dx + dy * dy >= 1.8:
+                    compact_pts.append({'x': round(pt.get('x', 0), 1), 'y': round(pt.get('y', 0), 1)})
+            compact_pts.append({'x': round(pts[-1].get('x', 0), 1), 'y': round(pts[-1].get('y', 0), 1)})
+            if len(compact_pts) > 600:
+                step = max(1, len(compact_pts) // 600)
+                compact_pts = compact_pts[::step] + [compact_pts[-1]]
+            stroke['points'] = compact_pts
+        stroke.pop('_bbox', None)
         state = get_room_state(room_id)
         state['draw_history'].append(stroke)
         if len(state['draw_history']) > 1200:
