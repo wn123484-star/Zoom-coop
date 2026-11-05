@@ -124,7 +124,7 @@
 </div>
 <div id="media-content" class="media-content">
 <div class="empty-media-box">
-<p class="empty-media-text">🌐 Dán <b>URL Trang Web bất kỳ</b>, link <b>YouTube</b> hoặc tải lên <b>Ảnh, Video, MP3, PDF, Excel, Word, HTML</b> để cả phòng cùng xem!<br><small style="color:#00d2ff;">(Nếu trang web cần đăng nhập tài khoản, hãy bấm <b>📡 Chiếu Tab Đăng Nhập</b> để mọi người nhìn thấy giống hệt màn hình của bạn)</small></p>
+<p class="empty-media-text">🌐 Dán <b>URL Trang Web bất kỳ</b>, link <b>YouTube</b>, nhấn <b>Ctrl+V để dán ảnh chụp màn hình</b> hoặc tải lên <b>Ảnh, Video, MP3, PDF, Excel, Word, HTML</b>!<br><small style="color:#00d2ff;">(Nếu trang web cần đăng nhập tài khoản, hãy bấm <b>📡 Chiếu Tab Đăng Nhập</b> để mọi người nhìn thấy giống hệt màn hình của bạn)</small></p>
 </div>
 </div>
 <button type="button" id="btn-unlock-audio" class="unlock-audio-banner" style="display: none;">🔊 Chạm vào đây để Bật tiếng & Đồng bộ Video với phòng</button>
@@ -145,6 +145,7 @@
 <button type="button" id="btn-copy-link" class="info-pill mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
 <span id="online-badge" class="info-pill online-badge" title="Số người đang trực tuyến thực tế">👥 <b id="online-count">1</b></span>
 <span id="ping-badge" class="info-pill ping-badge" title="Độ trễ phản hồi máy chủ (Ping)"><i id="ping-dot" class="ping-dot good"></i> <b id="ping-val">-- ms</b></span>
+<span id="timer-pill" class="info-pill" style="display:none; color:#ff4757; font-weight:800;">⏱️ <b id="timer-display">05:00</b></span>
 
 <button type="button" id="tool-pan" class="tool-btn active" title="Kéo di chuyển mặt bảng (Mặc định)">✋<span>Kéo bảng</span></button>
 
@@ -207,6 +208,8 @@
 <button type="button" class="sub-shape-btn" data-tool="circle" data-icon="◯" data-label="Hình tròn">◯ Hình tròn / Elip</button>
 <button type="button" class="sub-shape-btn" data-tool="triangle" data-icon="△" data-label="Tam giác">△ Hình tam giác</button>
 <button type="button" class="sub-shape-btn" data-tool="diamond" data-icon="◇" data-label="Hình thoi">◇ Hình thoi</button>
+<button type="button" class="sub-shape-btn" data-tool="star" data-icon="⭐" data-label="Ngôi sao">⭐ Hình ngôi sao</button>
+<button type="button" class="sub-shape-btn" data-tool="hexagon" data-icon="⬢" data-label="Lục giác">⬢ Hình lục giác</button>
 </div>
 </div>
 
@@ -272,11 +275,24 @@
 </div>
 
 <div id="popover-games" class="tool-popover glass-effect">
-<div class="popover-title">🎮 Chọn Trò Chơi Chung Trên Bảng</div>
+<div class="popover-title">🎮 Trò Chơi & Tiện Ích Chung</div>
 <div class="popover-grid single-col">
 <button type="button" id="btn-game-chess" class="game-menu-btn">♟️ Cờ Vua Quốc Tế (Chuẩn Chess.com)</button>
 <button type="button" id="btn-game-xo" class="game-menu-btn">⭕ Cờ Caro XO 20x20</button>
 <button type="button" id="btn-game-memory" class="game-menu-btn">🃏 Lật Thẻ Trí Nhớ (Memory Match)</button>
+<button type="button" id="btn-roll-dice" class="game-menu-btn">🎲 Tung Xúc Xắc Ngẫu Nhiên (2 viên)</button>
+<button type="button" id="btn-start-timer-5" class="game-menu-btn">⏱️ Bật Hẹn Giờ Thảo Luận (5 phút)</button>
+<button type="button" id="btn-stop-timer" class="game-menu-btn">⏹️ Tắt Đồng Hồ Hẹn Giờ</button>
+</div>
+</div>
+
+<div id="popover-backup" class="tool-popover glass-effect">
+<div class="popover-title">📦 Sao Lưu & Khôi Phục Bản Thảo Phòng</div>
+<div class="popover-grid single-col">
+<a href="/api/room/{{ room_id }}/export" class="game-menu-btn" style="text-decoration:none;">📥 Tải gói Sao lưu phòng này (.JSON)</a>
+<button type="button" id="btn-import-room-json" class="game-menu-btn">📤 Nạp bản Sao lưu (.JSON) vào phòng</button>
+<button type="button" id="tool-export" class="game-menu-btn">🖼️ Xuất ảnh chụp mặt bảng (.PNG)</button>
+<input type="file" id="room-json-file-input" accept=".json" style="display:none;">
 </div>
 </div>
 
@@ -288,10 +304,10 @@
 <button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn Ảnh, Video, PDF, Excel, Word, HTML từ máy để hiển thị ngay">📤<span>Đăng Ảnh / Tài Liệu</span></button>
 <button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
 <button type="button" id="tool-media" class="dock-btn" title="Mở Trạm Media, Xem Web URL & YouTube chung">🌐<span>Web URL / Media</span></button>
-<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Mở kho trò chơi tương tác">🎮<span>Trò Chơi ▾</span></button>
+<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Mở kho trò chơi, xúc xắc & hẹn giờ">🎮<span>Trò Chơi & Tiện Ích ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
-<button type="button" id="tool-export" class="dock-btn secondary" title="Lưu ảnh chụp bảng">💾<span>Lưu ảnh</span></button>
+<button type="button" id="group-backup-btn" class="dock-btn secondary group-trigger-btn" data-popover="popover-backup" title="Sao lưu JSON, Khôi phục JSON hoặc Xuất ảnh PNG">📦<span>Sao lưu ▾</span></button>
 </div>
 <button type="button" class="scroll-arrow-btn right" data-target="bottom-strip" style="display:none;" title="Cuộn sang phải">▶</button>
 </div>

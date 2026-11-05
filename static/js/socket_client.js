@@ -11,12 +11,24 @@ const socket = io({
 let cachedRoomState = null;
 let pingIntervalId = null;
 window.ROOM_USERS = [];
+window.workspaceScale = 1;
+
+window.getWorkspaceCoords = function(clientX, clientY) {
+    const boardEl = document.getElementById('board') || document.getElementById('workspace');
+    if (!boardEl) return { x: 2500, y: 2500 };
+    const rect = boardEl.getBoundingClientRect();
+    const scale = window.workspaceScale || 1;
+    return {
+        x: Math.round(((clientX - rect.left) / scale) * 10) / 10,
+        y: Math.round(((clientY - rect.top) / scale) * 10) / 10
+    };
+};
 
 window.addEventListener('error', (e) => {
-    console.warn('Caught runtime error:', e.message);
+    console.warn('Runtime error:', e.message);
 });
 window.addEventListener('unhandledrejection', (e) => {
-    console.warn('Caught unhandled rejection:', e.reason);
+    console.warn('Unhandled rejection:', e.reason);
 });
 
 let localClientId = localStorage.getItem('syncspace_client_id');
@@ -39,12 +51,12 @@ window.bindSafeButton = function(el, handler) {
         e.preventDefault();
         e.stopPropagation();
         const now = Date.now();
-        if (now - lastTrigger < 200) return;
+        if (now - lastTrigger < 180) return;
         lastTrigger = now;
         try {
             handler(e);
         } catch (err) {
-            console.warn(err);
+            console.error(err);
         }
     };
     el.addEventListener('click', runHandler);
@@ -143,6 +155,8 @@ function applyFullRoomState(state) {
     if (window.loadXoState && state.xo_game) window.loadXoState(state.xo_game);
     if (window.loadChessState && state.chess_game) window.loadChessState(state.chess_game);
     if (window.loadMemoryState && state.memory_game) window.loadMemoryState(state.memory_game);
+    if (window.loadDiceState && state.dice_state) window.loadDiceState(state.dice_state);
+    if (window.loadTimerState && state.timer_state) window.loadTimerState(state.timer_state);
     if (window.loadChatHistory && state.chat) window.loadChatHistory(state.chat);
     if (state.users) {
         updateOnlineUsersBadge(state.users);

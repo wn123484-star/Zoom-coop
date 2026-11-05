@@ -1,6 +1,23 @@
-const socket = io({ reconnection: true, reconnectionAttempts: 25, reconnectionDelay: 800, autoConnect: false });
+const socket = io({
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 600,
+    reconnectionDelayMax: 3000,
+    timeout: 20000,
+    transports: ['websocket', 'polling'],
+    upgrade: true,
+    autoConnect: false
+});
 let cachedRoomState = null;
 let pingIntervalId = null;
+window.ROOM_USERS = [];
+
+window.addEventListener('error', (e) => {
+    console.warn('Caught runtime error:', e.message);
+});
+window.addEventListener('unhandledrejection', (e) => {
+    console.warn('Caught unhandled rejection:', e.reason);
+});
 
 let localClientId = localStorage.getItem('syncspace_client_id');
 if (!localClientId) {
@@ -24,7 +41,11 @@ window.bindSafeButton = function(el, handler) {
         const now = Date.now();
         if (now - lastTrigger < 200) return;
         lastTrigger = now;
-        handler(e);
+        try {
+            handler(e);
+        } catch (err) {
+            console.warn(err);
+        }
     };
     el.addEventListener('click', runHandler);
     el.addEventListener('touchend', runHandler, { passive: false });
@@ -86,6 +107,9 @@ window.makeWidgetResizable = function(widgetEl, minW, minH, isBoardSpace, onResi
 window.showToast = function(text) {
     const container = document.getElementById('toast-container');
     if (!container) return;
+    while (container.children.length >= 3) {
+        container.firstElementChild.remove();
+    }
     const el = document.createElement('div');
     el.className = 'toast-msg';
     el.innerText = text;
@@ -94,6 +118,17 @@ window.showToast = function(text) {
         el.remove();
     }, 2600);
 };
+
+function updateOnlineUsersBadge(usersList) {
+    if (!Array.isArray(usersList)) return;
+    window.ROOM_USERS = usersList;
+    const countEl = document.getElementById('online-count');
+    if (countEl) countEl.innerText = usersList.length;
+    const badgeEl = document.getElementById('online-badge');
+    if (badgeEl) {
+        badgeEl.title = 'Đang online: ' + usersList.join(', ');
+    }
+}
 
 function applyFullRoomState(state) {
     if (!state) return;
@@ -110,8 +145,7 @@ function applyFullRoomState(state) {
     if (window.loadMemoryState && state.memory_game) window.loadMemoryState(state.memory_game);
     if (window.loadChatHistory && state.chat) window.loadChatHistory(state.chat);
     if (state.users) {
-        const countEl = document.getElementById('online-count');
-        if (countEl) countEl.innerText = state.users.length;
+        updateOnlineUsersBadge(state.users);
     }
 }
 
@@ -153,12 +187,30 @@ socket.on('pong_check', (data) => {
 });
 
 socket.on('connect', () => {
+    const valEl = document.getElementById('ping-val');
+    const dotEl = document.getElementById('ping-dot');
+    if (valEl) valEl.innerText = 'Đã kết nối';
+    if (dotEl) dotEl.className = 'ping-dot good';
     socket.emit('join_room', {
         room_id: ROOM_ID,
         username: window.USERNAME || 'Thành viên',
         client_id: window.CLIENT_ID
     });
     startPingMonitor();
+});
+
+socket.on('disconnect', () => {
+    const valEl = document.getElementById('ping-val');
+    const dotEl = document.getElementById('ping-dot');
+    if (valEl) valEl.innerText = 'Mất mạng...';
+    if (dotEl) dotEl.className = 'ping-dot bad';
+});
+
+socket.on('connect_error', () => {
+    const valEl = document.getElementById('ping-val');
+    const dotEl = document.getElementById('ping-dot');
+    if (valEl) valEl.innerText = 'Đang nối lại...';
+    if (dotEl) dotEl.className = 'ping-dot bad';
 });
 
 socket.on('room_state', (state) => {
@@ -170,8 +222,7 @@ socket.on('room_state', (state) => {
 
 socket.on('room_users', (data) => {
     if (data && data.users) {
-        const countEl = document.getElementById('online-count');
-        if (countEl) countEl.innerText = data.users.length;
+        updateOnlineUsersBadge(data.users);
     }
 });
 
@@ -180,6 +231,17 @@ window.addEventListener('DOMContentLoaded', () => {
     const nameInput = document.getElementById('name-modal-input');
     const nameForm = document.getElementById('name-modal-form');
     const btnEditName = document.getElementById('btn-edit-name');
+    const onlineBadge = document.getElementById('online-badge');
+
+    if (onlineBadge) {
+        onlineBadge.style.cursor = 'pointer';
+        window.bindSafeButton(onlineBadge, () => {
+            const list = window.ROOM_USERS || [];
+            if (list.length > 0 && window.showToast) {
+                window.showToast('👥 Đang trong phòng (' + list.length + '): ' + list.join(', '));
+            }
+        });
+    }
 
     function openNameModal(prefill) {
         if (!nameModal) return;

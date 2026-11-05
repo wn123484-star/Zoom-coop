@@ -1,6 +1,6 @@
 (function () {
-    if (window.__nividaLiquidCatLoaded) return;
-    window.__nividaLiquidCatLoaded = true;
+    if (window.__nividaLiquidCatV23) return;
+    window.__nividaLiquidCatV23 = true;
 
     const CAT_BREEDS = {
         nivida_cyber: {
@@ -66,218 +66,160 @@
         return a + (b - a) * Math.min(1, Math.max(0, t));
     }
 
-    class LiquidSoftBodyJS {
+    class LocalSoftBody {
         constructor(x, y) {
             this.x = x;
             this.y = y;
             this.vx = 0;
             this.vy = 0;
             this.numNodes = 12;
-            this.baseRx = 34;
-            this.baseRy = 25;
-            this.targetScaleX = 1.12;
+            this.baseRx = 33;
+            this.baseRy = 24;
+            this.targetScaleX = 1.10;
             this.targetScaleY = 0.90;
-            this.smoothScaleX = 1.12;
+            this.smoothScaleX = 1.10;
             this.smoothScaleY = 0.90;
+            this.wobblePhase = 0;
             this.nodes = [];
             for (let i = 0; i < this.numNodes; i++) {
                 const ang = (2 * Math.PI * i) / this.numNodes;
                 this.nodes.push({
-                    x: x + this.baseRx * Math.cos(ang),
-                    y: y + this.baseRy * Math.sin(ang),
+                    ox: this.baseRx * Math.cos(ang),
+                    oy: this.baseRy * Math.sin(ang),
                     vx: 0,
                     vy: 0
                 });
             }
         }
 
-        resetNodesExact() {
+        resetDeformation() {
             const rx = this.baseRx * this.smoothScaleX;
             const ry = this.baseRy * this.smoothScaleY;
             for (let i = 0; i < this.numNodes; i++) {
                 const ang = (2 * Math.PI * i) / this.numNodes;
-                this.nodes[i].x = this.x + rx * Math.cos(ang);
-                this.nodes[i].y = this.y + ry * Math.sin(ang);
+                this.nodes[i].ox = rx * Math.cos(ang);
+                this.nodes[i].oy = ry * Math.sin(ang);
                 this.nodes[i].vx = 0;
                 this.nodes[i].vy = 0;
             }
         }
 
-        setPosition(newX, newY, newVx = null, newVy = null) {
-            const dx = newX - this.x;
-            const dy = newY - this.y;
-            this.x = newX;
-            this.y = newY;
-            if (newVx !== null) this.vx = newVx;
-            if (newVy !== null) this.vy = newVy;
+        triggerJiggle(impulseX, impulseY) {
             for (let i = 0; i < this.numNodes; i++) {
-                this.nodes[i].x += dx;
-                this.nodes[i].y += dy;
-                this.nodes[i].vx = 0;
-                this.nodes[i].vy = 0;
+                const ang = (2 * Math.PI * i) / this.numNodes;
+                this.nodes[i].vx += Math.cos(ang) * impulseX;
+                this.nodes[i].vy += Math.sin(ang) * impulseY;
             }
         }
 
         setLiquidState(st) {
             if (st.includes('sploot') || st.includes('melt') || st.includes('puddle')) {
-                this.targetScaleX = 1.46;
-                this.targetScaleY = 0.58;
+                this.targetScaleX = 1.42;
+                this.targetScaleY = 0.60;
             } else if (st.includes('loaf') || st.includes('sleep')) {
-                this.targetScaleX = 1.24;
-                this.targetScaleY = 0.76;
+                this.targetScaleX = 1.22;
+                this.targetScaleY = 0.78;
             } else if (st.includes('run') || st.includes('sprint') || st.includes('zoom')) {
-                this.targetScaleX = 1.34;
-                this.targetScaleY = 0.68;
-            } else if (st.includes('jump') || st.includes('flip') || st.includes('reach') || st.includes('dance')) {
+                this.targetScaleX = 1.30;
+                this.targetScaleY = 0.72;
+            } else if (st.includes('climb')) {
                 this.targetScaleX = 0.88;
-                this.targetScaleY = 1.22;
+                this.targetScaleY = 1.18;
+            } else if (st.includes('jump') || st.includes('flip') || st.includes('dance')) {
+                this.targetScaleX = 0.92;
+                this.targetScaleY = 1.16;
             } else {
-                this.targetScaleX = 1.10;
-                this.targetScaleY = 0.90;
+                this.targetScaleX = 1.08;
+                this.targetScaleY = 0.92;
             }
         }
 
-        stepPhysics(dt, floorY, perches, minX, maxX, isDragging, passThroughPerch) {
+        stepLocalJelly(dt, speedMag) {
             const safeDt = Math.min(0.025, Math.max(0.004, dt));
-            this.smoothScaleX = lerpVal(this.smoothScaleX, this.targetScaleX, safeDt * 9.0);
-            this.smoothScaleY = lerpVal(this.smoothScaleY, this.targetScaleY, safeDt * 9.0);
-
-            const prevY = this.y;
-            if (!isDragging) {
-                const gravity = this.vy > 120 ? 680 : 940;
-                this.vy += gravity * safeDt;
-                this.x += this.vx * safeDt;
-                this.y += this.vy * safeDt;
-
-                if (!passThroughPerch && this.vy >= 0) {
-                    for (let i = 0; i < perches.length; i++) {
-                        const p = perches[i];
-                        if (this.x >= p.x1 && this.x <= p.x2) {
-                            if (prevY <= p.y && this.y >= p.y - 4) {
-                                if (this.vy > 180) {
-                                    this.smoothScaleX = 1.38;
-                                    this.smoothScaleY = 0.65;
-                                }
-                                this.y = p.y;
-                                this.vy = 0;
-                                this.vx *= 0.80;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (this.y >= floorY) {
-                    if (this.vy > 200) {
-                        this.smoothScaleX = 1.44;
-                        this.smoothScaleY = 0.60;
-                    }
-                    this.y = floorY;
-                    this.vy = 0;
-                    this.vx *= 0.82;
-                }
-                if (this.y < 58) {
-                    this.y = 58;
-                    if (this.vy < 0) this.vy = 40;
-                }
-                if (this.x < minX) {
-                    this.x = minX;
-                    this.vx = Math.abs(this.vx) * 0.6;
-                } else if (this.x > maxX) {
-                    this.x = maxX;
-                    this.vx = -Math.abs(this.vx) * 0.6;
-                }
-            }
+            this.smoothScaleX = lerpVal(this.smoothScaleX, this.targetScaleX, safeDt * 10);
+            this.smoothScaleY = lerpVal(this.smoothScaleY, this.targetScaleY, safeDt * 10);
+            this.wobblePhase += safeDt * (6 + Math.min(14, speedMag * 0.04));
 
             const rx = this.baseRx * this.smoothScaleX;
             const ry = this.baseRy * this.smoothScaleY;
-            const maxStretch = 16;
 
             for (let i = 0; i < this.numNodes; i++) {
                 const ang = (2 * Math.PI * i) / this.numNodes;
-                const idealX = this.x + rx * Math.cos(ang);
-                const idealY = this.y + ry * Math.sin(ang);
-                const n = this.nodes[i];
+                const breath = Math.sin(this.wobblePhase + i * 0.55) * 1.2;
+                const idealOx = (rx + breath) * Math.cos(ang);
+                const idealOy = (ry - breath * 0.6) * Math.sin(ang);
 
-                const dx = idealX - n.x;
-                const dy = idealY - n.y;
-                if (Math.hypot(dx, dy) > maxStretch * 2.2) {
-                    n.x = idealX;
-                    n.y = idealY;
-                    n.vx = 0;
-                    n.vy = 0;
-                } else {
-                    n.vx = (n.vx + dx * 22 * safeDt) * 0.68;
-                    n.vy = (n.vy + dy * 22 * safeDt) * 0.68;
-                    n.x += n.vx;
-                    n.y += n.vy;
-                    const errX = n.x - idealX;
-                    const errY = n.y - idealY;
-                    if (Math.abs(errX) > maxStretch) n.x = idealX + Math.sign(errX) * maxStretch;
-                    if (Math.abs(errY) > maxStretch) n.y = idealY + Math.sign(errY) * maxStretch;
-                }
+                const n = this.nodes[i];
+                const dx = idealOx - n.ox;
+                const dy = idealOy - n.oy;
+                n.vx = (n.vx + dx * 36 * safeDt) * 0.72;
+                n.vy = (n.vy + dy * 36 * safeDt) * 0.72;
+                n.ox += n.vx;
+                n.oy += n.vy;
+
+                if (Math.abs(n.ox - idealOx) > 9) n.ox = idealOx + Math.sign(n.ox - idealOx) * 9;
+                if (Math.abs(n.oy - idealOy) > 9) n.oy = idealOy + Math.sign(n.oy - idealOy) * 9;
             }
         }
     }
 
     class WebLiquidCatAssistant {
         constructor() {
-            const savedState = this.loadSavedCatState();
-            this.floorY = window.innerHeight - 54;
-            const startX = savedState.x || Math.min(window.innerWidth - 200, Math.max(460, window.innerWidth * 0.65));
-            const startY = savedState.y ? Math.min(this.floorY, Math.max(80, savedState.y)) : this.floorY;
+            const oldCanvas = document.getElementById('nividaLiquidCatCanvas');
+            if (oldCanvas) oldCanvas.remove();
+            const oldHit = document.getElementById('nividaCatHitbox');
+            if (oldHit) oldHit.remove();
+            const oldBub = document.getElementById('nividaCatSpeechBubble');
+            if (oldBub) oldBub.remove();
+            const oldBtn = document.getElementById('nividaCatOpenBtn');
+            if (oldBtn) oldBtn.remove();
+            const oldDock = document.getElementById('nividaCatControlDock');
+            if (oldDock) oldDock.remove();
 
-            this.softBody = new LiquidSoftBodyJS(startX, startY);
-            this.softBody.resetNodesExact();
+            const saved = this.loadSavedCatState();
+            this.floorY = window.innerHeight - 52;
+            this.ceilingY = 64;
+            this.leftWallX = 58;
+            this.rightWallX = window.innerWidth - 58;
 
-            this.breedKey = savedState.breedKey && CAT_BREEDS[savedState.breedKey] ? savedState.breedKey : 'nivida_cyber';
+            const startX = saved.x ? Math.min(this.rightWallX, Math.max(this.leftWallX, saved.x)) : Math.round(window.innerWidth * 0.70);
+            const startY = saved.y ? Math.min(this.floorY, Math.max(this.ceilingY, saved.y)) : this.floorY;
+
+            this.softBody = new LocalSoftBody(startX, startY);
+            this.breedKey = saved.breedKey && CAT_BREEDS[saved.breedKey] ? saved.breedKey : 'nivida_cyber';
             this.breed = CAT_BREEDS[this.breedKey];
-            this.state = savedState.state || 'sitting';
-            this.expr = savedState.expr || 'normal';
-            this.direction = savedState.direction || -1;
-            this.stateTimer = 5.0;
+            this.state = saved.state || 'sitting';
+            this.expr = saved.expr || 'normal';
+            this.direction = saved.direction || -1;
+            this.surfaceMode = saved.surfaceMode || 'floor';
+            this.stateTimer = 4.5;
             this.animTime = 0;
+
             this.targetX = null;
             this.targetY = null;
-            this.passThroughTimer = 0;
             this.isDragging = false;
             this.dragMoved = false;
-            this.mousePos = { x: startX, y: startY - 30 };
+            this.mousePos = { x: startX, y: startY };
             this.particles = [];
             this.bodyTilt = 0;
             this.blinkTimer = 3.5;
             this.eyeOpen = 1.0;
             this.bubbleTimeout = null;
-            this.groqReady = false;
             this.channel = null;
-            this.perches = [];
 
             this.injectStylesAndDOM();
             this.resizeCanvas();
             this.bindEvents();
             this.initCrossTabSync();
-            this.fetchBackendInit();
 
-            if (savedState.bubbleText && (Date.now() - (savedState.ts || 0) < 10000)) {
-                this.showBubble(savedState.bubbleText, 6000, false);
+            if (saved.bubbleText && (Date.now() - (saved.ts || 0) < 9000)) {
+                this.showBubble(saved.bubbleText, 5500, false);
             } else {
-                this.showBubble('Meow~ Bấm vào ô Chat góc trái để bảo Mèo tìm đồ, bỏ giỏ hàng, đổi nền tối hoặc kéo thả Mèo nhảy khắp màn hình nha! 🐾', 7000, false);
+                this.showBubble('Meow~ Em có thể leo tường, đi dọc trần web và nhảy khắp các khung sản phẩm! Bấm vào em để ra lệnh tìm đồ, bỏ giỏ hàng nha! 🐾', 6500, false);
             }
 
             this.lastTs = performance.now();
             requestAnimationFrame((ts) => this.loop(ts));
-        }
-
-        buildPerches() {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            this.perches = [
-                { x1: w * 0.08, x2: w * 0.34, y: h * 0.68 },
-                { x1: w * 0.66, x2: w * 0.92, y: h * 0.66 },
-                { x1: w * 0.35, x2: w * 0.65, y: h * 0.48 },
-                { x1: w * 0.14, x2: w * 0.40, y: h * 0.30 },
-                { x1: w * 0.60, x2: w * 0.88, y: h * 0.28 }
-            ];
         }
 
         loadSavedCatState() {
@@ -293,6 +235,7 @@
                 const payload = {
                     x: Math.round(this.softBody.x),
                     y: Math.round(this.softBody.y),
+                    surfaceMode: this.surfaceMode,
                     breedKey: this.breedKey,
                     state: this.state,
                     expr: this.expr,
@@ -318,45 +261,16 @@
                             this.breed = CAT_BREEDS[this.breedKey];
                         }
                         if (typeof d.x === 'number' && typeof d.y === 'number') {
-                            this.softBody.setPosition(
-                                Math.min(window.innerWidth - 65, Math.max(65, d.x)),
-                                Math.min(this.floorY, Math.max(65, d.y)),
-                                0, 0
-                            );
-                            this.softBody.resetNodesExact();
+                            this.softBody.x = Math.min(this.rightWallX, Math.max(this.leftWallX, d.x));
+                            this.softBody.y = Math.min(this.floorY, Math.max(this.ceilingY, d.y));
+                            this.surfaceMode = d.surfaceMode || 'floor';
+                            this.softBody.resetDeformation();
                         }
-                        if (d.state) this.setCatState(d.state, 5.0, d.expr || 'normal', false);
+                        if (d.state) this.setCatState(d.state, 4.5, d.expr || 'normal', false);
                         if (d.bubbleText) this.showBubble(d.bubbleText, 5500, false);
                     };
                 }
             } catch {}
-        }
-
-        async fetchBackendInit() {
-            try {
-                const res = await fetch('/api/settings/cat-assistant/init');
-                if (res.ok) {
-                    const data = await res.json();
-                    this.groqReady = Boolean(data.groq_ready);
-                    this.updateGroqBadge();
-                }
-            } catch {}
-        }
-
-        updateGroqBadge() {
-            const badge = document.getElementById('catGroqStatusBadge');
-            const keyRow = document.getElementById('catGroqKeyInputRow');
-            if (!badge) return;
-            if (this.groqReady) {
-                badge.textContent = '🟢 Groq AI: Đã Kết Nối';
-                badge.style.background = 'rgb(22, 163, 74)';
-            } else {
-                badge.textContent = '🔑 Bấm nhập Groq Key';
-                badge.style.background = 'rgb(217, 119, 6)';
-                if (keyRow && !sessionStorage.getItem('cat_key_row_closed')) {
-                    keyRow.classList.remove('d-none');
-                }
-            }
         }
 
         injectStylesAndDOM() {
@@ -375,8 +289,8 @@
                 }
                 .nivida-cat-hitbox {
                     position: fixed;
-                    width: 112px;
-                    height: 92px;
+                    width: 108px;
+                    height: 88px;
                     cursor: grab;
                     z-index: 10045;
                     border-radius: 50%;
@@ -387,32 +301,20 @@
                 }
                 .nivida-cat-bubble {
                     position: fixed;
-                    max-width: 310px;
-                    min-width: 175px;
+                    max-width: 300px;
+                    min-width: 170px;
                     background: rgb(15, 23, 42);
                     color: rgb(248, 250, 252);
                     border: 2px solid rgb(118, 185, 0);
                     border-radius: 14px;
                     padding: 8px 12px;
-                    font-size: 0.79rem;
+                    font-size: 0.78rem;
                     font-weight: 600;
-                    line-height: 1.42;
+                    line-height: 1.4;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.45);
                     z-index: 10048;
                     pointer-events: auto;
                     transition: opacity 0.18s ease;
-                }
-                .nivida-cat-bubble::after {
-                    content: '';
-                    position: absolute;
-                    bottom: -9px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    border-width: 9px 8px 0;
-                    border-style: solid;
-                    border-color: rgb(118, 185, 0) transparent;
-                    display: block;
-                    width: 0;
                 }
                 .nivida-cat-bubble.d-none {
                     opacity: 0;
@@ -420,9 +322,9 @@
                 }
                 .nivida-cat-dock {
                     position: fixed;
-                    bottom: 64px;
+                    bottom: 16px;
                     left: 16px;
-                    width: min(415px, calc(100vw - 32px));
+                    width: min(395px, calc(100vw - 32px));
                     background: rgba(15, 23, 42, 0.96);
                     color: rgb(248, 250, 252);
                     border: 2px solid rgb(118, 185, 0);
@@ -454,7 +356,7 @@
                 }
                 .cat-toggle-pill {
                     position: fixed;
-                    bottom: 64px;
+                    bottom: 16px;
                     left: 16px;
                     z-index: 10049;
                     background: linear-gradient(135deg, rgb(15, 23, 42), rgb(30, 41, 59));
@@ -462,7 +364,7 @@
                     border: 2px solid rgb(118, 185, 0);
                     border-radius: 999px;
                     padding: 7px 15px;
-                    font-size: 0.82rem;
+                    font-size: 0.81rem;
                     font-weight: 800;
                     box-shadow: 0 6px 20px rgba(0,0,0,0.45);
                     cursor: pointer;
@@ -471,7 +373,7 @@
                     gap: 6px;
                 }
                 .cat-product-tray {
-                    max-height: 165px;
+                    max-height: 160px;
                     overflow-y: auto;
                     margin-top: 8px;
                     padding-top: 6px;
@@ -483,32 +385,21 @@
             const wrap = document.createElement('div');
             wrap.innerHTML = `
                 <canvas id="nividaLiquidCatCanvas" class="nivida-cat-canvas"></canvas>
-                <div id="nividaCatHitbox" class="nivida-cat-hitbox" title="Bấm vào Mèo để Chat hoặc Nắm kéo Mèo nhảy lên cao khắp màn hình!"></div>
+                <div id="nividaCatHitbox" class="nivida-cat-hitbox" title="Bấm vào Mèo để Chat hoặc Nắm kéo Mèo thả lên trần / bất kỳ đâu!"></div>
                 <div id="nividaCatSpeechBubble" class="nivida-cat-bubble d-none"></div>
 
                 <button type="button" id="nividaCatOpenBtn" class="cat-toggle-pill ${dockMinimized ? '' : 'd-none'}">
-                    <span>🐱 Mở Khung Chat Mèo AI &amp; Cài Đặt Key</span>
+                    <span>🐾 Ra Lệnh Cho Mèo AI</span>
                 </button>
 
                 <div id="nividaCatControlDock" class="nivida-cat-dock ${dockMinimized ? 'd-none' : ''}">
                     <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom border-secondary flex-wrap gap-1">
-                        <div class="d-flex align-items-center gap-1">
-                            <strong class="small" style="color:rgb(163, 230, 53);">🐱 Chat Với Mèo Lỏng AI</strong>
-                            <span id="catGroqStatusBadge" class="badge rounded-pill" style="font-size:0.64rem; background:rgb(217, 119, 6); cursor:pointer;" title="Bấm để đóng/mở ô nhập Groq API Key">🔑 Bấm nhập Groq Key</span>
-                        </div>
+                        <strong class="small" style="color:rgb(163, 230, 53);">🐱 Mèo Lỏng Trợ Lý AI</strong>
                         <div class="d-flex gap-1 align-items-center">
-                            <button type="button" id="catKeyConfigBtn" class="cat-action-chip" style="border-color:rgb(250,204,21); color:rgb(250,204,21);" title="Cấu hình khóa Groq API Key">🔑 Cài Key AI</button>
-                            <button type="button" id="catJumpHighBtn" class="cat-action-chip" title="Cho Mèo nhảy vọt lên bậc cao trên màn hình">🚀 Nhảy Cao</button>
+                            <button type="button" id="catClimbCeilingBtn" class="cat-action-chip" title="Cho Mèo leo lên đi dọc trần web">🐾 Leo Trần</button>
+                            <button type="button" id="catParkourBtn" class="cat-action-chip" title="Cho Mèo nhảy Parkour khắp màn hình">🚀 Nhảy Khắp Màn</button>
                             <button type="button" id="catBreedSwitchBtn" class="cat-action-chip" title="Đổi màu lông & giống mèo">🎨 Đổi Mèo</button>
-                            <button type="button" id="catDockCloseBtn" class="cat-action-chip" title="Thu gọn bảng điều khiển">Thu gọn [–]</button>
-                        </div>
-                    </div>
-
-                    <div id="catGroqKeyInputRow" class="p-2 mb-2 rounded border border-warning d-none" style="background:rgba(234, 179, 8, 0.12);">
-                        <div class="small fw-bold text-warning mb-1" style="font-size:0.72rem;">🔑 Cấu hình Khóa Groq AI (Dùng chung cho Mèo &amp; Hệ thống):</div>
-                        <div class="input-group input-group-sm">
-                            <input type="password" id="catGroqKeyField" class="form-control form-control-sm" style="background:rgb(15,23,42); color:rgb(255,255,255);" placeholder="Dán mã Groq API Key (bắt đầu bằng gsk_...) vào đây">
-                            <button type="button" id="catSaveGroqKeyBtn" class="btn btn-warning btn-sm fw-bold text-dark">💾 Lưu Key</button>
+                            <button type="button" id="catDockCloseBtn" class="cat-action-chip" title="Thu gọn khung chat">Ẩn [–]</button>
                         </div>
                     </div>
 
@@ -530,7 +421,7 @@
                     </div>
 
                     <form id="nividaCatCmdForm" class="d-flex gap-1">
-                        <input type="text" id="nividaCatCmdInput" class="form-control form-control-sm" style="background:rgb(30,41,59); color:rgb(255,255,255); border-color:rgb(118,185,0);" placeholder="💬 Gõ lệnh cho Mèo (VD: kiếm tai nghe sony, bỏ balo vào giỏ)..." required>
+                        <input type="text" id="nividaCatCmdInput" class="form-control form-control-sm" style="background:rgb(30,41,59); color:rgb(255,255,255); border-color:rgb(118,185,0);" placeholder="💬 Gõ lệnh (VD: kiếm tai nghe, bỏ chuột vào giỏ, nền tối)..." required>
                         <button type="submit" id="nividaCatSendBtn" class="btn btn-nvidia btn-sm px-3 fw-bold">Gửi</button>
                     </form>
 
@@ -551,29 +442,71 @@
             if (!this.canvas) return;
             this.canvas.width = window.innerWidth;
             this.canvas.height = window.innerHeight;
-            this.floorY = window.innerHeight - 54;
-            this.buildPerches();
-            if (this.softBody.y > this.floorY) {
-                this.softBody.setPosition(this.softBody.x, this.floorY, 0, 0);
-            }
-            this.softBody.resetNodesExact();
+            this.floorY = window.innerHeight - 52;
+            this.ceilingY = 64;
+            this.leftWallX = 58;
+            this.rightWallX = window.innerWidth - 58;
+            this.softBody.x = Math.min(this.rightWallX, Math.max(this.leftWallX, this.softBody.x));
+            this.softBody.y = Math.min(this.floorY, Math.max(this.ceilingY, this.softBody.y));
+            this.softBody.resetDeformation();
         }
 
-        jumpToHighPerch() {
-            if (!this.perches.length) this.buildPerches();
-            const p = this.perches[Math.floor(Math.random() * this.perches.length)];
-            const tx = p.x1 + 40 + Math.random() * Math.max(40, (p.x2 - p.x1 - 80));
-            const ty = p.y;
-            const dx = tx - this.softBody.x;
-            const dy = ty - this.softBody.y;
-            this.direction = dx >= 0 ? 1 : -1;
-            const flightT = 0.68;
-            this.softBody.vx = Math.max(-680, Math.min(680, dx / flightT));
-            this.softBody.vy = Math.max(-1350, Math.min(-480, (dy - 0.5 * 940 * flightT * flightT) / flightT));
-            this.passThroughTimer = 0.28;
-            this.setCatState('jump_starfish_soar', 1.2, 'starry_hyped_grin');
+        pickRandomScreenPerchPoint() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            const domCards = Array.from(document.querySelectorAll('.product-card, .banner-box, .bg-surface'));
+            const validRects = [];
+            for (let i = 0; i < domCards.length; i++) {
+                const r = domCards[i].getBoundingClientRect();
+                if (r.width > 120 && r.top > 85 && r.top < h - 90) {
+                    validRects.push(r);
+                }
+            }
+            if (validRects.length > 0 && Math.random() < 0.65) {
+                const chosen = validRects[Math.floor(Math.random() * validRects.length)];
+                const tx = Math.max(this.leftWallX, Math.min(this.rightWallX, chosen.left + chosen.width * (0.25 + Math.random() * 0.5)));
+                const ty = Math.max(this.ceilingY, Math.min(this.floorY, chosen.top - 18));
+                return { x: tx, y: ty, mode: 'perch' };
+            }
+            const roll = Math.random();
+            if (roll < 0.30) {
+                return {
+                    x: 120 + Math.random() * Math.max(150, w - 240),
+                    y: this.ceilingY,
+                    mode: 'ceiling'
+                };
+            } else if (roll < 0.55) {
+                return {
+                    x: 100 + Math.random() * Math.max(150, w - 200),
+                    y: Math.round(h * (0.25 + Math.random() * 0.45)),
+                    mode: 'perch'
+                };
+            }
+            return {
+                x: 100 + Math.random() * Math.max(150, w - 200),
+                y: this.floorY,
+                mode: 'floor'
+            };
+        }
+
+        goToCeilingWalk() {
+            const w = window.innerWidth;
+            this.surfaceMode = 'ceiling';
+            this.targetX = 120 + Math.random() * Math.max(160, w - 240);
+            this.targetY = this.ceilingY;
+            this.setCatState('climb_spider_scramble', 6.5, 'starry_hyped_grin');
+            this.softBody.triggerJiggle(5, -6);
+            this.spawnParticle('sparkle');
+        }
+
+        goToRandom2DTarget() {
+            const pt = this.pickRandomScreenPerchPoint();
+            this.surfaceMode = pt.mode;
+            this.targetX = pt.x;
+            this.targetY = pt.y;
+            this.setCatState('jump_starfish_soar', 5.5, 'pure_joy_beam');
+            this.softBody.triggerJiggle(6, -6);
             this.spawnParticle('dust');
-            this.spawnParticle('star');
         }
 
         bindEvents() {
@@ -581,11 +514,11 @@
 
             document.addEventListener('visibilitychange', () => {
                 this.lastTs = performance.now();
-                this.softBody.resetNodesExact();
+                this.softBody.resetDeformation();
             });
             window.addEventListener('focus', () => {
                 this.lastTs = performance.now();
-                this.softBody.resetNodesExact();
+                this.softBody.resetDeformation();
             });
 
             window.addEventListener('mousemove', (e) => {
@@ -593,9 +526,10 @@
                 this.mousePos.y = e.clientY;
                 if (this.isDragging) {
                     this.dragMoved = true;
-                    const nx = Math.max(60, Math.min(window.innerWidth - 60, e.clientX));
-                    const ny = Math.max(60, Math.min(this.floorY, e.clientY));
-                    this.softBody.setPosition(nx, ny, 0, 0);
+                    this.softBody.x = Math.max(this.leftWallX, Math.min(this.rightWallX, e.clientX));
+                    this.softBody.y = Math.max(this.ceilingY, Math.min(this.floorY, e.clientY));
+                    this.targetX = null;
+                    this.targetY = null;
                 }
             });
 
@@ -604,17 +538,30 @@
                 this.isDragging = true;
                 this.dragMoved = false;
                 this.targetX = null;
+                this.targetY = null;
                 this.setCatState('drag', 2.0, 'shocked', false);
             });
 
             window.addEventListener('mouseup', () => {
                 if (!this.isDragging) return;
                 this.isDragging = false;
-                this.softBody.resetNodesExact();
+                this.softBody.resetDeformation();
+                this.softBody.triggerJiggle(5, 5);
                 if (!this.dragMoved) {
                     this.onCatClicked();
                 } else {
-                    this.setCatState('fall_parachute', 2.5, 'uwu');
+                    if (this.softBody.y <= this.ceilingY + 28) {
+                        this.surfaceMode = 'ceiling';
+                        this.softBody.y = this.ceilingY;
+                        this.showBubble('Meow~ Đậu trên trần web ngắm xuống thích quá đi! 🐾✨', 4500);
+                    } else if (this.softBody.y < this.floorY - 35) {
+                        this.surfaceMode = 'perch';
+                        this.showBubble('Nyan~ Mèo đứng đậu ngay tại vị trí bạn vừa đặt nè! 🐾', 4500);
+                    } else {
+                        this.surfaceMode = 'floor';
+                        this.softBody.y = this.floorY;
+                    }
+                    this.setCatState('sitting', 8.0, 'uwu');
                     this.spawnParticle('star');
                     this.saveCatState();
                 }
@@ -623,49 +570,24 @@
             this.openBtn.addEventListener('click', () => this.toggleDock(true));
             document.getElementById('catDockCloseBtn').addEventListener('click', () => this.toggleDock(false));
 
-            document.getElementById('catJumpHighBtn').addEventListener('click', () => {
-                this.jumpToHighPerch();
-                this.showBubble('Meow~ Nhảy vọt lên tầng cao ngắm toàn cảnh trang web nè! 🚀🐾', 4500);
+            document.getElementById('catClimbCeilingBtn').addEventListener('click', () => {
+                this.goToCeilingWalk();
+                this.showBubble('Meow~ Đang leo lên trần trang web đi tuần tra nè! 🐾🕷️', 4500);
+            });
+
+            document.getElementById('catParkourBtn').addEventListener('click', () => {
+                this.goToRandom2DTarget();
+                this.showBubble('Hựaaa! Parkour bay nhảy khắp màn hình trình duyệt! 🚀🐾', 4500);
             });
 
             document.getElementById('catBreedSwitchBtn').addEventListener('click', () => {
                 const idx = (BREED_KEYS.indexOf(this.breedKey) + 1) % BREED_KEYS.length;
                 this.breedKey = BREED_KEYS[idx];
                 this.breed = CAT_BREEDS[this.breedKey];
-                this.softBody.resetNodesExact();
+                this.softBody.resetDeformation();
                 this.spawnParticle('sparkle');
                 this.showBubble(`Meow~ Đã đổi sang [${this.breed.name}]! 🐾✨`, 4500);
                 this.saveCatState();
-            });
-
-            const toggleKeyRow = () => {
-                const row = document.getElementById('catGroqKeyInputRow');
-                row.classList.toggle('d-none');
-                sessionStorage.setItem('cat_key_row_closed', row.classList.contains('d-none') ? '1' : '0');
-                if (!row.classList.contains('d-none')) {
-                    document.getElementById('catGroqKeyField')?.focus();
-                }
-            };
-            document.getElementById('catKeyConfigBtn').addEventListener('click', toggleKeyRow);
-            document.getElementById('catGroqStatusBadge').addEventListener('click', toggleKeyRow);
-
-            document.getElementById('catSaveGroqKeyBtn').addEventListener('click', async () => {
-                const k = document.getElementById('catGroqKeyField').value.trim();
-                if (!k) return;
-                const res = await fetch('/api/settings/cat-assistant/groq-key', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key: k })
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    this.groqReady = true;
-                    this.updateGroqBadge();
-                    document.getElementById('catGroqKeyInputRow').classList.add('d-none');
-                    this.showBubble('Meow~ Đã lưu khóa Groq AI thành công! Giờ bạn gõ lệnh gì vào ô Chat em cũng hiểu hết nha! 🧠🐾', 5500);
-                } else {
-                    this.showBubble(data.error || 'Khóa chưa hợp lệ!', 4000);
-                }
             });
 
             document.querySelectorAll('.cat-action-chip[data-cmd]').forEach(btn => {
@@ -690,16 +612,16 @@
             this.openBtn.classList.toggle('d-none', show);
             localStorage.setItem('nivida_cat_dock_minimized', show ? '0' : '1');
             if (show) {
-                setTimeout(() => document.getElementById('nividaCatCmdInput')?.focus(), 80);
+                setTimeout(() => document.getElementById('nividaCatCmdInput')?.focus(), 60);
             }
         }
 
         onCatClicked() {
             this.spawnParticle('heart');
             this.spawnParticle('sparkle');
-            this.softBody.vy = -260;
-            this.setCatState('sit_paw_wave_hi', 4.5, 'lovestruck_sparkle');
-            this.showBubble('Meow~ Khung Chat của Mèo đã mở ở góc trái! Bạn hãy gõ lệnh vào ô "Gõ lệnh cho Mèo" nhé! 🐾💬', 5500);
+            this.softBody.triggerJiggle(6, -6);
+            this.setCatState('sit_paw_wave_hi', 5.0, 'lovestruck_sparkle');
+            this.showBubble('Meow~ Bạn gõ lệnh vào khung Chat bên trái để bảo Mèo tìm đồ, bỏ giỏ hàng hoặc đổi giao diện nha! 🐾💬', 5500);
             this.toggleDock(true);
         }
 
@@ -708,9 +630,7 @@
             this.stateTimer = duration;
             this.expr = expr;
             this.softBody.setLiquidState(newState);
-            if (newState === 'double_flip' || newState === 'backflip') {
-                this.softBody.vy = -520;
-            }
+            this.softBody.triggerJiggle(4, -4);
             if (broadcast) this.saveCatState();
         }
 
@@ -735,10 +655,10 @@
             for (let i = 0; i < 2; i++) {
                 this.particles.push({
                     sym: symMap[type] || '✨',
-                    x: this.softBody.x + (Math.random() * 40 - 20),
-                    y: this.softBody.y - 36,
+                    x: this.softBody.x + (Math.random() * 36 - 18),
+                    y: this.softBody.y - 32,
                     vx: Math.random() * 36 - 18,
-                    vy: -45 - Math.random() * 35,
+                    vy: -40 - Math.random() * 30,
                     life: 1.0
                 });
             }
@@ -773,7 +693,7 @@
             const pt = data.particle || 'sparkle';
 
             if (st === 'double_flip' || st.includes('jump')) {
-                this.jumpToHighPerch();
+                this.goToRandom2DTarget();
             } else {
                 this.setCatState(st, 6.5, ex);
             }
@@ -792,11 +712,17 @@
                 if (typeof applySavedTheme === 'function') applySavedTheme();
             } else if (act === 'ADD_TO_CART' && data.product) {
                 const p = data.product;
-                this.targetX = Math.max(120, window.innerWidth - 110);
+                const cartBtn = document.getElementById('headerCartCount');
+                if (cartBtn) {
+                    const r = cartBtn.getBoundingClientRect();
+                    this.targetX = Math.max(this.leftWallX, Math.min(this.rightWallX, r.left));
+                    this.targetY = Math.max(this.ceilingY, r.bottom + 24);
+                    this.surfaceMode = 'ceiling';
+                }
                 if (typeof addToCartGlobal === 'function') {
                     addToCartGlobal(p);
                 }
-                this.renderProductTray([p], '🛒 Mèo vừa tha món này bỏ vào Giỏ hàng của bạn:');
+                this.renderProductTray([p], '🛒 Mèo vừa tha món này lên Giỏ hàng của bạn:');
             } else if (act === 'SEARCH_PRODUCTS' && Array.isArray(data.products)) {
                 this.renderProductTray(data.products, `🔍 Kết quả Mèo tìm thấy cho "${data.search_query || ''}":`);
             } else if (act === 'TRIGGER_CHECKIN') {
@@ -805,6 +731,7 @@
                 }
             } else if (act === 'NAVIGATE_PAGE' && data.target_url) {
                 this.targetX = window.innerWidth - 90;
+                this.targetY = this.ceilingY;
                 setTimeout(() => {
                     window.location.href = data.target_url;
                 }, 1100);
@@ -823,7 +750,7 @@
                 <div class="small fw-bold mb-1" style="color:rgb(163, 230, 53); font-size:0.74rem;">${titleText}</div>
                 ${products.map(p => `
                     <div class="d-flex justify-content-between align-items-center p-1 mb-1 rounded border border-secondary" style="background:rgb(30,41,59); font-size:0.74rem;">
-                        <div class="text-truncate me-2" style="max-width: 240px;">
+                        <div class="text-truncate me-2" style="max-width: 235px;">
                             <a href="/services/product/product-detail.html?id=${p.id}" class="text-white text-decoration-none fw-semibold">${p.name}</a>
                             <div style="color:rgb(163, 230, 53); font-weight:700;">${Number(p.price || 0).toLocaleString('vi-VN')} Xu</div>
                         </div>
@@ -840,7 +767,7 @@
             const rawDt = (ts - this.lastTs) / 1000;
             this.lastTs = ts;
             if (rawDt > 0.25) {
-                this.softBody.resetNodesExact();
+                this.softBody.resetDeformation();
             }
             const dt = Math.min(0.025, Math.max(0.004, rawDt || 0.016));
             this.updateCatBehavior(dt);
@@ -851,9 +778,6 @@
         updateCatBehavior(dt) {
             this.animTime += dt;
             this.stateTimer -= dt;
-            if (this.passThroughTimer > 0) {
-                this.passThroughTimer = Math.max(0, this.passThroughTimer - dt);
-            }
 
             this.blinkTimer -= dt;
             if (this.blinkTimer <= 0) {
@@ -868,37 +792,49 @@
             if (this.state === 'double_flip' || this.state === 'backflip') {
                 this.bodyTilt += dt * 680 * this.direction;
             } else {
-                this.bodyTilt = lerpVal(this.bodyTilt, 0, dt * 10);
+                const targetTilt = this.surfaceMode === 'ceiling' ? Math.sin(this.animTime * 6) * 4 : 0;
+                this.bodyTilt = lerpVal(this.bodyTilt, targetTilt, dt * 10);
             }
 
+            let speedMag = 0;
             if (!this.isDragging) {
-                if (this.targetX !== null) {
+                if (this.targetX !== null && this.targetY !== null) {
                     const dx = this.targetX - this.softBody.x;
-                    if (Math.abs(dx) < 28) {
+                    const dy = this.targetY - this.softBody.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 18) {
+                        this.softBody.x = this.targetX;
+                        this.softBody.y = this.targetY;
                         this.targetX = null;
-                        this.softBody.vx = 0;
-                        if (this.state === 'walking' || this.state === 'run_cheetah_sprint') {
-                            this.setCatState('sitting', 5.0, 'normal', false);
+                        this.targetY = null;
+                        this.softBody.triggerJiggle(5, 5);
+                        if (this.state === 'walking' || this.state.includes('jump') || this.state.includes('climb')) {
+                            this.setCatState('sitting', 5.5, 'normal', false);
                         }
                     } else {
-                        this.direction = dx >= 0 ? 1 : -1;
-                        const spd = this.state.includes('run') || this.state === 'carrying' ? 230 : 115;
-                        this.softBody.vx = this.direction * spd;
+                        if (Math.abs(dx) > 8) this.direction = dx >= 0 ? 1 : -1;
+                        const moveSpd = (this.state.includes('jump') || this.state.includes('run') || this.state === 'carrying') ? 320 : 165;
+                        const stepDist = Math.min(dist, moveSpd * dt);
+                        this.softBody.x += (dx / dist) * stepDist;
+                        this.softBody.y += (dy / dist) * stepDist;
+                        speedMag = moveSpd;
                     }
                 } else if (this.stateTimer <= 0) {
                     const r = Math.random();
-                    if (r < 0.26) {
-                        this.jumpToHighPerch();
-                    } else if (r < 0.56) {
-                        if (this.softBody.y < this.floorY - 40 && Math.random() < 0.45) {
-                            this.passThroughTimer = 0.65;
-                            this.softBody.vy = 90;
-                        }
-                        this.targetX = 120 + Math.random() * Math.max(180, window.innerWidth - 260);
+                    if (r < 0.35) {
+                        const pt = this.pickRandomScreenPerchPoint();
+                        this.surfaceMode = pt.mode;
+                        this.targetX = pt.x;
+                        this.targetY = pt.y;
+                        const moveState = Math.abs(pt.y - this.softBody.y) > 90 ? 'jump_starfish_soar' : 'walking';
+                        this.setCatState(moveState, 6.0, 'normal', false);
+                    } else if (r < 0.55) {
+                        this.targetX = 110 + Math.random() * Math.max(150, window.innerWidth - 220);
+                        this.targetY = this.softBody.y;
                         this.setCatState('walking', 5.5, 'normal', false);
-                    } else if (r < 0.74) {
+                    } else if (r < 0.72) {
                         this.setCatState('loaf_purr_toast', 6.0, 'content_purr', false);
-                    } else if (r < 0.88) {
+                    } else if (r < 0.86) {
                         this.setCatState('sploot_superman', 5.5, 'uwu', false);
                     } else {
                         this.setCatState('sitting', 5.0, 'normal', false);
@@ -906,21 +842,20 @@
                 }
             }
 
-            this.softBody.stepPhysics(
-                dt, this.floorY, this.perches, 65, window.innerWidth - 65,
-                this.isDragging, this.passThroughTimer > 0
-            );
+            this.softBody.x = Math.min(this.rightWallX, Math.max(this.leftWallX, this.softBody.x));
+            this.softBody.y = Math.min(this.floorY, Math.max(this.ceilingY, this.softBody.y));
+            this.softBody.stepLocalJelly(dt, speedMag);
 
             const cx = this.softBody.x;
             const cy = this.softBody.y;
             if (this.hitbox) {
-                this.hitbox.style.left = `${cx - 56}px`;
-                this.hitbox.style.top = `${cy - 54}px`;
+                this.hitbox.style.left = `${cx - 54}px`;
+                this.hitbox.style.top = `${cy - 48}px`;
             }
             if (this.bubbleEl && !this.bubbleEl.classList.contains('d-none')) {
                 const bw = this.bubbleEl.offsetWidth || 220;
                 const leftPos = Math.max(12, Math.min(window.innerWidth - bw - 16, cx - bw / 2));
-                const topPos = cy > 155 ? (cy - 126) : (cy + 42);
+                const topPos = cy > 150 ? (cy - 118) : (cy + 42);
                 this.bubbleEl.style.left = `${leftPos}px`;
                 this.bubbleEl.style.top = `${Math.max(10, topPos)}px`;
             }
@@ -939,77 +874,69 @@
             if (!ctx) return;
             ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-            const pts = this.softBody.nodes;
-            const num = pts.length;
-            let avgX = 0;
-            let avgY = 0;
-            for (let i = 0; i < num; i++) {
-                avgX += pts[i].x;
-                avgY += pts[i].y;
-            }
-            const cx = avgX / num;
-            const cy = avgY / num;
-
+            const cx = this.softBody.x;
+            const cy = this.softBody.y;
             const dir = this.direction;
             const b = this.breed;
             const st = this.state;
             const t = this.animTime;
-
-            ctx.save();
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-            ctx.beginPath();
-            ctx.ellipse(cx, cy + 26, 35 * this.softBody.smoothScaleX, 6, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
+            const scX = this.softBody.smoothScaleX;
+            const scY = this.softBody.smoothScaleY;
 
             ctx.save();
             ctx.translate(cx, cy);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+            ctx.beginPath();
+            ctx.ellipse(0, 26 * scY, 34 * scX, 5.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
             ctx.rotate((this.bodyTilt * Math.PI) / 180);
-            ctx.translate(-cx, -cy);
 
             const wag = Math.sin(t * (st.includes('dance') || st.includes('happy') ? 16 : 5.5)) * 14;
-            const tx = cx - 28 * dir * this.softBody.smoothScaleX;
-            const ty = cy + 4;
+            const tx = -26 * dir * scX;
+            const ty = 3 * scY;
             ctx.save();
             ctx.lineCap = 'round';
             ctx.strokeStyle = b.stroke;
-            ctx.lineWidth = b.tailStyle === 'fluffy' ? 14 : 10;
+            ctx.lineWidth = b.tailStyle === 'fluffy' ? 13 : 9.5;
             ctx.beginPath();
             ctx.moveTo(tx, ty);
-            ctx.bezierCurveTo(tx - 22 * dir, ty + 8, tx - 42 * dir, ty - 20 + wag, tx - 52 * dir, ty - 6 + wag);
+            ctx.bezierCurveTo(tx - 20 * dir, ty + 8, tx - 38 * dir, ty - 18 + wag, tx - 48 * dir, ty - 5 + wag);
             ctx.stroke();
             ctx.strokeStyle = b.pCol;
-            ctx.lineWidth = b.tailStyle === 'fluffy' ? 9 : 6;
+            ctx.lineWidth = b.tailStyle === 'fluffy' ? 8.5 : 5.5;
             ctx.stroke();
             ctx.restore();
 
             if (!st.includes('loaf') && !st.includes('sleep')) {
-                const walkSwing = (st === 'walking' || st.includes('run') || st === 'carrying')
-                    ? Math.sin(t * 14) * 10
-                    : 0;
+                const isMoving = (this.targetX !== null || st === 'walking' || st.includes('run') || st === 'carrying');
+                const walkSwing = isMoving ? Math.sin(t * 15) * 9 : 0;
                 ctx.save();
                 ctx.fillStyle = b.body;
                 ctx.strokeStyle = b.stroke;
-                ctx.lineWidth = 4;
-                [-16, 16].forEach((ox, idx) => {
-                    const lx = cx + ox * dir + (idx === 0 ? -walkSwing : walkSwing) * 0.6;
-                    const ly = cy + 12;
+                ctx.lineWidth = 3.8;
+                [-15, 15].forEach((ox, idx) => {
+                    const lx = ox * dir + (idx === 0 ? -walkSwing : walkSwing) * 0.6;
+                    const ly = 11 * scY;
                     ctx.beginPath();
-                    ctx.roundRect(lx - 6.5, ly, 13, 16, 6);
+                    ctx.roundRect(lx - 6, ly, 12, 15, 5.5);
                     ctx.fill();
                     ctx.stroke();
                 });
                 ctx.restore();
             }
 
+            const pts = this.softBody.nodes;
+            const num = pts.length;
             const bodyPath = new Path2D();
-            const startMidX = (pts[0].x + pts[num - 1].x) / 2;
-            const startMidY = (pts[0].y + pts[num - 1].y) / 2;
+            const startMidX = (pts[0].ox + pts[num - 1].ox) / 2;
+            const startMidY = (pts[0].oy + pts[num - 1].oy) / 2;
             bodyPath.moveTo(startMidX, startMidY);
             for (let i = 0; i < num; i++) {
                 const p1 = pts[i];
                 const p2 = pts[(i + 1) % num];
-                bodyPath.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+                bodyPath.quadraticCurveTo(p1.ox, p1.oy, (p1.ox + p2.ox) / 2, (p1.oy + p2.oy) / 2);
             }
             bodyPath.closePath();
 
@@ -1020,76 +947,77 @@
             ctx.save();
             ctx.clip(bodyPath);
             if (b.pattern !== 'solid') {
+                const bellyPath = new Path2D();
+                bellyPath.ellipse(2 * dir, 12 * scY, 21 * scX, 11 * scY, 0, 0, Math.PI * 2);
                 ctx.fillStyle = b.belly;
-                ctx.beginPath();
-                ctx.ellipse(cx, cy + 13 * this.softBody.smoothScaleY, 25 * this.softBody.smoothScaleX, 13 * this.softBody.smoothScaleY, 0, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.fill(bellyPath);
             }
-            ctx.fillStyle = b.pCol;
             if (b.pattern === 'calico' || b.pattern === 'cow') {
-                ctx.beginPath();
-                ctx.ellipse(cx - 10 * dir, cy - 8, 15, 12, 0, 0, Math.PI * 2);
-                ctx.fill();
+                const patchPath = new Path2D();
+                patchPath.ellipse(-9 * dir, -7 * scY, 14, 11, 0, 0, Math.PI * 2);
+                ctx.fillStyle = b.pCol;
+                ctx.fill(patchPath);
             } else if (b.pattern === 'stripes') {
-                [-12, 0, 12].forEach(off => {
-                    ctx.fillRect(cx + off - 2, cy - 24, 4, 14);
+                ctx.fillStyle = b.pCol;
+                [-11, 0, 11].forEach(off => {
+                    ctx.fillRect(off - 2, -24 * scY, 4, 12);
                 });
             }
             ctx.restore();
 
-            ctx.lineWidth = 4.5;
+            ctx.lineWidth = 4.2;
             ctx.strokeStyle = b.stroke;
             ctx.stroke(bodyPath);
             ctx.restore();
 
-            const bobY = (st === 'walking' || st.includes('dance')) ? -Math.abs(Math.sin(t * 12)) * 5 : 0;
-            const hx = cx + (st.includes('loaf') || st.includes('sleep') ? 18 : 26) * dir;
-            const hy = cy - (st.includes('sploot') ? 12 : 22) + bobY;
+            const bobY = (this.targetX !== null || st.includes('dance')) ? -Math.abs(Math.sin(t * 13)) * 4 : 0;
+            const hx = (st.includes('loaf') || st.includes('sleep') ? 17 : 23) * dir * scX;
+            const hy = -(st.includes('sploot') ? 11 : 19) * scY + bobY;
 
             ctx.save();
             ctx.translate(hx, hy);
             if (st === 'head_tilt' || st.includes('dance')) {
-                ctx.rotate(Math.sin(t * 6) * 0.16);
+                ctx.rotate(Math.sin(t * 6) * 0.15);
             }
 
             [-1, 1].forEach(side => {
                 ctx.save();
-                ctx.translate(side * 14, -16);
+                ctx.translate(side * 13, -15);
                 ctx.rotate(side * 0.22);
-                ctx.beginPath();
-                ctx.moveTo(-11, 4);
-                ctx.quadraticCurveTo(-7, -18, 0, -22);
-                ctx.quadraticCurveTo(7, -18, 11, 4);
-                ctx.closePath();
+                const earP = new Path2D();
+                earP.moveTo(-10, 4);
+                earP.quadraticCurveTo(-6, -17, 0, -20);
+                earP.quadraticCurveTo(6, -17, 10, 4);
+                earP.closePath();
                 ctx.fillStyle = b.pattern === 'points' ? b.pCol : b.body;
-                ctx.fill();
-                ctx.lineWidth = 4.2;
+                ctx.fill(earP);
+                ctx.lineWidth = 4.0;
                 ctx.strokeStyle = b.stroke;
-                ctx.stroke();
+                ctx.stroke(earP);
 
-                ctx.beginPath();
-                ctx.moveTo(-5, 2);
-                ctx.quadraticCurveTo(0, -13, 5, 2);
-                ctx.closePath();
+                const innerP = new Path2D();
+                innerP.moveTo(-4.5, 2);
+                innerP.quadraticCurveTo(0, -12, 4.5, 2);
+                innerP.closePath();
                 ctx.fillStyle = 'rgb(251, 207, 232)';
-                ctx.fill();
+                ctx.fill(innerP);
                 ctx.restore();
             });
 
-            const chewPuff = (st.includes('eat') || st.includes('boba')) ? Math.abs(Math.sin(t * 15)) * 4.5 : 0;
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 27 + chewPuff, 22, 0, 0, Math.PI * 2);
+            const chewPuff = (st.includes('eat') || st.includes('boba')) ? Math.abs(Math.sin(t * 15)) * 4.0 : 0;
+            const headPath = new Path2D();
+            headPath.ellipse(0, 0, 25 + chewPuff, 20, 0, 0, Math.PI * 2);
             ctx.fillStyle = b.body;
-            ctx.fill();
-            ctx.lineWidth = 4.5;
+            ctx.fill(headPath);
+            ctx.lineWidth = 4.2;
             ctx.strokeStyle = b.stroke;
-            ctx.stroke();
+            ctx.stroke(headPath);
 
             ctx.strokeStyle = b.stroke;
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.9;
             [-1, 1].forEach(wSide => {
-                const wx0 = wSide * (21 + chewPuff * 0.5);
-                const wx1 = wSide * (34 + chewPuff * 0.7);
+                const wx0 = wSide * (19 + chewPuff * 0.5);
+                const wx1 = wSide * (31 + chewPuff * 0.7);
                 ctx.beginPath();
                 ctx.moveTo(wx0, 2);
                 ctx.lineTo(wx1, 0);
@@ -1101,90 +1029,90 @@
             if (this.expr === 'cyber_visor_glow') {
                 ctx.fillStyle = 'rgba(6, 182, 212, 0.88)';
                 ctx.strokeStyle = 'rgb(2, 132, 199)';
-                ctx.lineWidth = 2.2;
+                ctx.lineWidth = 2.0;
                 ctx.beginPath();
-                ctx.roundRect(-21, -7, 42, 11, 4);
+                ctx.roundRect(-19, -7, 38, 10, 4);
                 ctx.fill();
                 ctx.stroke();
             } else if (this.expr === 'rich_sunglasses_gold') {
                 ctx.fillStyle = 'rgb(250, 204, 21)';
                 ctx.strokeStyle = 'rgb(120, 53, 15)';
-                ctx.lineWidth = 2.4;
+                ctx.lineWidth = 2.2;
                 ctx.beginPath();
-                ctx.roundRect(-20, -8, 17, 11, 3);
-                ctx.roundRect(3, -8, 17, 11, 3);
+                ctx.roundRect(-18, -8, 15, 10, 3);
+                ctx.roundRect(3, -8, 15, 10, 3);
                 ctx.fill();
                 ctx.stroke();
             } else if (st.includes('sleep') || this.expr === 'content_purr' || this.expr === 'sleepy_drool_bubble') {
                 ctx.strokeStyle = b.stroke;
-                ctx.lineWidth = 3.2;
-                [-10, 10].forEach(ex => {
+                ctx.lineWidth = 3.0;
+                [-9.5, 9.5].forEach(ex => {
                     ctx.beginPath();
-                    ctx.arc(ex, -2, 5.5, 0, Math.PI, false);
+                    ctx.arc(ex, -2, 5.0, 0, Math.PI, false);
                     ctx.stroke();
                 });
             } else {
-                const dx = this.mousePos.x - hx;
-                const dy = this.mousePos.y - hy;
+                const dx = this.mousePos.x - (cx + hx);
+                const dy = this.mousePos.y - (cy + hy);
                 const ang = Math.atan2(dy, dx);
-                const lookDist = Math.min(2.6, Math.hypot(dx, dy) * 0.015);
+                const lookDist = Math.min(2.4, Math.hypot(dx, dy) * 0.012);
                 const px = Math.cos(ang) * lookDist;
                 const py = Math.sin(ang) * lookDist;
 
-                [-10, 10].forEach((ex, idxE) => {
+                [-9.5, 9.5].forEach((ex, idxE) => {
                     ctx.fillStyle = idxE === 0 ? b.eyeColor : b.eyeColor2;
                     ctx.beginPath();
-                    ctx.ellipse(ex, -2, 7.2, 7.2 * this.eyeOpen, 0, 0, Math.PI * 2);
+                    ctx.ellipse(ex, -2, 6.8, 6.8 * this.eyeOpen, 0, 0, Math.PI * 2);
                     ctx.fill();
 
                     ctx.fillStyle = 'rgb(9, 13, 22)';
                     ctx.beginPath();
-                    ctx.ellipse(ex + px, -2 + py, 4.6, 5.6 * this.eyeOpen, 0, 0, Math.PI * 2);
+                    ctx.ellipse(ex + px, -2 + py, 4.3, 5.2 * this.eyeOpen, 0, 0, Math.PI * 2);
                     ctx.fill();
 
                     ctx.fillStyle = 'rgb(255, 255, 255)';
                     ctx.beginPath();
-                    ctx.arc(ex - 2 + px, -4 + py, 2.3, 0, Math.PI * 2);
+                    ctx.arc(ex - 1.8 + px, -3.8 + py, 2.1, 0, Math.PI * 2);
                     ctx.fill();
                 });
             }
 
             ctx.fillStyle = 'rgba(255, 145, 178, 0.82)';
             ctx.beginPath();
-            ctx.ellipse(-17, 5, 5.2, 3.4, 0, 0, Math.PI * 2);
-            ctx.ellipse(17, 5, 5.2, 3.4, 0, 0, Math.PI * 2);
+            ctx.ellipse(-15, 5, 4.8, 3.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(15, 5, 4.8, 3.2, 0, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.fillStyle = 'rgb(255, 107, 129)';
             ctx.beginPath();
-            ctx.moveTo(-3.5, 4.5);
-            ctx.lineTo(3.5, 4.5);
-            ctx.lineTo(0, 8.5);
+            ctx.moveTo(-3.2, 4.2);
+            ctx.lineTo(3.2, 4.2);
+            ctx.lineTo(0, 8.0);
             ctx.closePath();
             ctx.fill();
 
             ctx.strokeStyle = b.stroke;
-            ctx.lineWidth = 2.6;
+            ctx.lineWidth = 2.4;
             ctx.beginPath();
-            ctx.moveTo(-5.5, 9);
-            ctx.quadraticCurveTo(-2.8, 13, 0, 9);
-            ctx.quadraticCurveTo(2.8, 13, 5.5, 9);
+            ctx.moveTo(-5.0, 8.5);
+            ctx.quadraticCurveTo(-2.5, 12.2, 0, 8.5);
+            ctx.quadraticCurveTo(2.5, 12.2, 5.0, 8.5);
             ctx.stroke();
 
             if (st === 'drink_boba_tea') {
                 ctx.save();
-                ctx.translate(12 * dir, 16);
+                ctx.translate(11 * dir, 15);
                 ctx.fillStyle = 'rgb(253, 230, 138)';
                 ctx.strokeStyle = 'rgb(30, 41, 59)';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.roundRect(-8, -2, 16, 18, 3);
+                ctx.roundRect(-7, -2, 14, 16, 3);
                 ctx.fill();
                 ctx.stroke();
                 ctx.fillStyle = 'rgb(15, 23, 42)';
-                [-3, 0, 3].forEach(bx => {
+                [-2.5, 0, 2.5].forEach(bx => {
                     ctx.beginPath();
-                    ctx.arc(bx, 12, 1.8, 0, Math.PI * 2);
+                    ctx.arc(bx, 10, 1.6, 0, Math.PI * 2);
                     ctx.fill();
                 });
                 ctx.restore();

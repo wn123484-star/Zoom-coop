@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SyncSpace - Phòng {{ room_id }}</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230984e3'/><circle cx='32' cy='32' r='18' fill='%2300d2ff'/></svg>">
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="fade-in light-theme">
@@ -78,6 +79,62 @@
 <div class="widget-resizer" title="Kéo để chỉnh kích thước"></div>
 </div>
 
+<div id="dice-container" class="board-widget dice-widget glass-effect" style="display: none; left: 2320px; top: 2260px; width: 360px; height: 350px;">
+<div id="dice-header" class="widget-header">
+<span class="widget-title">🎲 Bàn Xúc Xắc 3D (Chung)</span>
+<div class="widget-controls">
+<button type="button" id="dice-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
+<button type="button" id="dice-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
+</div>
+</div>
+<div id="dice-body" class="widget-body dice-body">
+<div class="dice-count-bar">
+<span>Số lượng:</span>
+<button type="button" class="dice-cnt-btn" data-count="1">1 Viên</button>
+<button type="button" class="dice-cnt-btn active" data-count="2">2 Viên</button>
+<button type="button" class="dice-cnt-btn" data-count="3">3 Viên</button>
+</div>
+<div id="dice-stage" class="dice-stage">
+<div class="dice-cube" data-val="6">⚅</div>
+<div class="dice-cube" data-val="6">⚅</div>
+</div>
+<div id="dice-result-text" class="dice-result-text">Nhấn nút bên dưới để lắc xúc xắc!</div>
+<button type="button" id="btn-roll-dice-action" class="dice-roll-main-btn">🎲 LẮC XÚC XẮC NGAY</button>
+<div id="dice-history-list" class="dice-history-list">Chưa có lượt tung nào</div>
+</div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước"></div>
+</div>
+
+<div id="timer-container" class="board-widget timer-widget glass-effect" style="display: none; left: 2680px; top: 2260px; width: 350px; height: 310px;">
+<div id="timer-header" class="widget-header">
+<span class="widget-title">⏱️ Đồng Hồ Đếm Ngược / Pomodoro</span>
+<div class="widget-controls">
+<button type="button" id="timer-min-btn" class="widget-btn" title="Thu gọn hoặc Mở rộng">—</button>
+<button type="button" id="timer-close-btn" class="widget-btn close" title="Đóng cửa sổ">✕</button>
+</div>
+</div>
+<div id="timer-body" class="widget-body timer-body">
+<div class="timer-presets-row">
+<button type="button" class="timer-preset-btn" data-sec="60">1p</button>
+<button type="button" class="timer-preset-btn" data-sec="180">3p</button>
+<button type="button" class="timer-preset-btn active" data-sec="300">5p</button>
+<button type="button" class="timer-preset-btn" data-sec="600">10p</button>
+<button type="button" class="timer-preset-btn" data-sec="1500">25p</button>
+</div>
+<div id="timer-big-clock" class="timer-big-clock">05:00</div>
+<div class="timer-progress-wrap">
+<div id="timer-progress-bar" class="timer-progress-bar" style="width: 100%;"></div>
+</div>
+<div id="timer-status-sub" class="timer-status-sub">Sẵn sàng đếm ngược</div>
+<div class="timer-action-row">
+<button type="button" id="btn-timer-start" class="timer-act-btn start">▶️ Bắt đầu</button>
+<button type="button" id="btn-timer-pause" class="timer-act-btn pause">⏸️ Tạm dừng</button>
+<button type="button" id="btn-timer-reset" class="timer-act-btn reset">🔄 Đặt lại</button>
+</div>
+</div>
+<div class="widget-resizer" title="Kéo để chỉnh kích thước"></div>
+</div>
+
 <div id="screen-container" class="board-widget screen-widget glass-effect" style="display: none; left: 1960px; top: 2180px; width: 640px; height: 440px;">
 <div id="screen-header" class="widget-header">
 <span id="screen-title" class="widget-title">🖥️ Chia Sẻ Màn Hình Trực Tiếp</span>
@@ -145,7 +202,6 @@
 <button type="button" id="btn-copy-link" class="info-pill mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
 <span id="online-badge" class="info-pill online-badge" title="Số người đang trực tuyến thực tế">👥 <b id="online-count">1</b></span>
 <span id="ping-badge" class="info-pill ping-badge" title="Độ trễ phản hồi máy chủ (Ping)"><i id="ping-dot" class="ping-dot good"></i> <b id="ping-val">-- ms</b></span>
-<span id="timer-pill" class="info-pill" style="display:none; color:#ff4757; font-weight:800;">⏱️ <b id="timer-display">05:00</b></span>
 
 <button type="button" id="tool-pan" class="tool-btn active" title="Kéo di chuyển mặt bảng (Mặc định)">✋<span>Kéo bảng</span></button>
 
@@ -275,14 +331,13 @@
 </div>
 
 <div id="popover-games" class="tool-popover glass-effect">
-<div class="popover-title">🎮 Trò Chơi & Tiện Ích Chung</div>
+<div class="popover-title">🎮 Mở Vật Phẩm & Trò Chơi Lên Bảng</div>
 <div class="popover-grid single-col">
-<button type="button" id="btn-game-chess" class="game-menu-btn">♟️ Cờ Vua Quốc Tế (Chuẩn Chess.com)</button>
-<button type="button" id="btn-game-xo" class="game-menu-btn">⭕ Cờ Caro XO 20x20</button>
-<button type="button" id="btn-game-memory" class="game-menu-btn">🃏 Lật Thẻ Trí Nhớ (Memory Match)</button>
-<button type="button" id="btn-roll-dice" class="game-menu-btn">🎲 Tung Xúc Xắc Ngẫu Nhiên (2 viên)</button>
-<button type="button" id="btn-start-timer-5" class="game-menu-btn">⏱️ Bật Hẹn Giờ Thảo Luận (5 phút)</button>
-<button type="button" id="btn-stop-timer" class="game-menu-btn">⏹️ Tắt Đồng Hồ Hẹn Giờ</button>
+<button type="button" id="btn-game-chess" class="game-menu-btn">♟️ Bàn Cờ Vua Quốc Tế (Chuẩn Chess.com)</button>
+<button type="button" id="btn-game-xo" class="game-menu-btn">⭕ Bàn Cờ Caro XO 20x20</button>
+<button type="button" id="btn-game-memory" class="game-menu-btn">🃏 Bàn Lật Thẻ Trí Nhớ (Memory Match)</button>
+<button type="button" id="btn-game-dice" class="game-menu-btn">🎲 Bàn Xúc Xắc 3D (1 - 3 viên có hoạt ảnh)</button>
+<button type="button" id="btn-game-timer" class="game-menu-btn">⏱️ Đồng Hồ Đếm Ngược / Pomodoro Trên Bảng</button>
 </div>
 </div>
 
@@ -304,7 +359,7 @@
 <button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn Ảnh, Video, PDF, Excel, Word, HTML từ máy để hiển thị ngay">📤<span>Đăng Ảnh / Tài Liệu</span></button>
 <button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
 <button type="button" id="tool-media" class="dock-btn" title="Mở Trạm Media, Xem Web URL & YouTube chung">🌐<span>Web URL / Media</span></button>
-<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Mở kho trò chơi, xúc xắc & hẹn giờ">🎮<span>Trò Chơi & Tiện Ích ▾</span></button>
+<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Đặt Bàn Cờ, Xúc Xắc 3D, Đồng Hồ Đếm Ngược lên mặt bảng">🎮<span>Trò Chơi & Vật Phẩm ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
 <button type="button" id="group-backup-btn" class="dock-btn secondary group-trigger-btn" data-popover="popover-backup" title="Sao lưu JSON, Khôi phục JSON hoặc Xuất ảnh PNG">📦<span>Sao lưu ▾</span></button>
@@ -327,24 +382,28 @@
 </div>
 </div>
 <div class="setting-group">
-<label>Hình nền Sáng (Mặc định)</label>
+<label>Giao diện Sáng & Tươi Mới</label>
 <div class="bg-options">
-<button type="button" class="bg-opt-btn active" data-bg="bg-light-dots">⚪ Light Dots</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-grid">📐 Light Grid</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-paper">📜 Giấy Kraft ấm</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-pastel">🌈 Pastel Aurora</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-sakura">🌸 Anh Đào Sakura</button>
+<button type="button" class="bg-opt-btn active" data-bg="bg-light-dots">⚪ Chấm Sáng</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-grid">📐 Lưới Sáng</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-sakura">🌸 Hoa Anh Đào</button>
 <button type="button" class="bg-opt-btn" data-bg="bg-light-mint">🌿 Bạc Hà Mint</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-sunset">🌅 Hoàng Hôn</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-ocean">🌊 Đại Dương</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-paper">📜 Giấy Kraft Ấm</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-pastel">🌈 Pastel Aurora</button>
 </div>
 </div>
 <div class="setting-group">
-<label>Hình nền Tối & Đặc biệt</label>
+<label>Giao diện Tối & Chuyên Nghiệp</label>
 <div class="bg-options">
-<button type="button" class="bg-opt-btn" data-bg="bg-magical">✨ Huyền ảo</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-blueprint">🗺️ Blueprint Kỹ thuật</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-magical">✨ Huyền Ảo</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-galaxy">🌌 Tinh Vân Galaxy</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-forest">🌲 Rừng Đêm Zen</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-blueprint">🗺️ Bản Vẽ Kỹ Thuật</button>
 <button type="button" class="bg-opt-btn" data-bg="bg-cyberpunk">🌆 Cyberpunk</button>
 <button type="button" class="bg-opt-btn" data-bg="bg-matrix">💻 Lưới Neon</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-stars">🌌 Trời sao</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-stars">🌠 Trời Sao Đêm</button>
 <button type="button" class="bg-opt-btn" data-bg="bg-dots">🌑 Dark Dots</button>
 </div>
 </div>

@@ -23,9 +23,6 @@ const chatMessages = document.getElementById('chat-messages');
 const chatBadge = document.getElementById('chat-badge');
 let unreadChat = 0;
 
-let countdownInterval = null;
-let remainingSeconds = 0;
-
 window.makeWidgetResizable(chatContainer, 260, 220, false, null);
 
 window.closeAllPopovers = function() {
@@ -40,7 +37,7 @@ function openPopoverNearButton(popoverEl, triggerBtn) {
 
     const rect = triggerBtn.getBoundingClientRect();
     popoverEl.classList.add('open');
-    const popW = popoverEl.offsetWidth || 290;
+    const popW = popoverEl.offsetWidth || 295;
     const popH = popoverEl.offsetHeight || 220;
     let leftPos = rect.left + rect.width / 2 - popW / 2;
     leftPos = Math.max(10, Math.min(window.innerWidth - popW - 10, leftPos));
@@ -124,87 +121,6 @@ document.querySelectorAll('.stamp-opt-btn').forEach(btn => {
     });
 });
 
-const btnRollDice = document.getElementById('btn-roll-dice');
-if (btnRollDice) {
-    window.bindSafeButton(btnRollDice, () => {
-        window.closeAllPopovers();
-        socket.emit('roll_dice', { room_id: ROOM_ID, sender: window.USERNAME || 'Thành viên' });
-    });
-}
-
-socket.on('dice_rolled', (data) => {
-    if (!data) return;
-    const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-    const f1 = faces[(data.d1 || 1) - 1] || '🎲';
-    const f2 = faces[(data.d2 || 1) - 1] || '🎲';
-    const center = window.getWorkspaceCoords ? window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2) : { x: 2500, y: 2500 };
-    if (window.spawnFloatingStamp) {
-        window.spawnFloatingStamp(center.x, center.y, `${f1}${f2}`, `${data.sender}: ${data.total} nút`);
-    }
-    if (window.showToast) {
-        window.showToast(`🎲 ${data.sender} tung xúc xắc được ${data.d1} + ${data.d2} = ${data.total} nút!`);
-    }
-});
-
-const btnStartTimer5 = document.getElementById('btn-start-timer-5');
-const btnStopTimer = document.getElementById('btn-stop-timer');
-const timerPill = document.getElementById('timer-pill');
-const timerDisplay = document.getElementById('timer-display');
-
-function formatMMSS(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-}
-
-function startLocalCountdown(seconds) {
-    if (countdownInterval) clearInterval(countdownInterval);
-    remainingSeconds = seconds;
-    if (timerPill) timerPill.style.display = 'inline-flex';
-    if (timerDisplay) timerDisplay.innerText = formatMMSS(remainingSeconds);
-    countdownInterval = setInterval(() => {
-        remainingSeconds--;
-        if (remainingSeconds <= 0) {
-            clearInterval(countdownInterval);
-            countdownInterval = null;
-            if (timerDisplay) timerDisplay.innerText = '00:00';
-            if (window.showToast) window.showToast('⏰ Đã hết thời gian hẹn giờ thảo luận!');
-            setTimeout(() => {
-                if (timerPill) timerPill.style.display = 'none';
-            }, 5000);
-        } else if (timerDisplay) {
-            timerDisplay.innerText = formatMMSS(remainingSeconds);
-        }
-    }, 1000);
-}
-
-if (btnStartTimer5) {
-    window.bindSafeButton(btnStartTimer5, () => {
-        window.closeAllPopovers();
-        socket.emit('room_timer_action', { room_id: ROOM_ID, action: 'start', seconds: 300, sender: window.USERNAME });
-    });
-}
-
-if (btnStopTimer) {
-    window.bindSafeButton(btnStopTimer, () => {
-        window.closeAllPopovers();
-        socket.emit('room_timer_action', { room_id: ROOM_ID, action: 'stop', seconds: 0, sender: window.USERNAME });
-    });
-}
-
-socket.on('room_timer_sync', (data) => {
-    if (!data) return;
-    if (data.action === 'stop') {
-        if (countdownInterval) clearInterval(countdownInterval);
-        countdownInterval = null;
-        if (timerPill) timerPill.style.display = 'none';
-        if (window.showToast) window.showToast(`⏹️ ${data.sender || 'Thành viên'} đã tắt hẹn giờ.`);
-    } else if (data.action === 'start') {
-        startLocalCountdown(data.seconds || 300);
-        if (window.showToast) window.showToast(`⏱️ ${data.sender || 'Thành viên'} đã bật hẹn giờ ${Math.round((data.seconds || 300) / 60)} phút!`);
-    }
-});
-
 const btnImportRoomJson = document.getElementById('btn-import-room-json');
 const roomJsonFileInput = document.getElementById('room-json-file-input');
 if (btnImportRoomJson && roomJsonFileInput) {
@@ -252,7 +168,7 @@ window.addEventListener('paste', (e) => {
                     .then(data => {
                         if (data && data.url) {
                             const id = 'bmedia_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-                            const center = window.getWorkspaceCoords ? window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2) : { x: 2400, y: 2400 };
+                            const center = window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2);
                             const payload = {
                                 room_id: ROOM_ID,
                                 id: id,
@@ -433,6 +349,8 @@ const widgetMap = {
     xo: 'xo-container',
     chess: 'chess-container',
     memory: 'memory-container',
+    dice: 'dice-container',
+    timer: 'timer-container',
     media: 'media-container'
 };
 
@@ -462,7 +380,7 @@ function applySingleWidgetState(wName, st) {
 
 window.loadWidgetsState = function(widgets) {
     if (!widgets) return;
-    ['xo', 'chess', 'memory', 'media'].forEach(k => {
+    ['xo', 'chess', 'memory', 'dice', 'timer', 'media'].forEach(k => {
         if (widgets[k]) applySingleWidgetState(k, widgets[k]);
     });
 };

@@ -23,6 +23,9 @@ const chatMessages = document.getElementById('chat-messages');
 const chatBadge = document.getElementById('chat-badge');
 let unreadChat = 0;
 
+let countdownInterval = null;
+let remainingSeconds = 0;
+
 window.makeWidgetResizable(chatContainer, 260, 220, false, null);
 
 window.closeAllPopovers = function() {
@@ -119,6 +122,169 @@ document.querySelectorAll('.stamp-opt-btn').forEach(btn => {
         window.closeAllPopovers();
         if (window.showToast) window.showToast(`Chạm lên mặt bảng để thả ${emoji}`);
     });
+});
+
+const btnRollDice = document.getElementById('btn-roll-dice');
+if (btnRollDice) {
+    window.bindSafeButton(btnRollDice, () => {
+        window.closeAllPopovers();
+        socket.emit('roll_dice', { room_id: ROOM_ID, sender: window.USERNAME || 'Thành viên' });
+    });
+}
+
+socket.on('dice_rolled', (data) => {
+    if (!data) return;
+    const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+    const f1 = faces[(data.d1 || 1) - 1] || '🎲';
+    const f2 = faces[(data.d2 || 1) - 1] || '🎲';
+    const center = window.getWorkspaceCoords ? window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2) : { x: 2500, y: 2500 };
+    if (window.spawnFloatingStamp) {
+        window.spawnFloatingStamp(center.x, center.y, `${f1}${f2}`, `${data.sender}: ${data.total} nút`);
+    }
+    if (window.showToast) {
+        window.showToast(`🎲 ${data.sender} tung xúc xắc được ${data.d1} + ${data.d2} = ${data.total} nút!`);
+    }
+});
+
+const btnStartTimer5 = document.getElementById('btn-start-timer-5');
+const btnStopTimer = document.getElementById('btn-stop-timer');
+const timerPill = document.getElementById('timer-pill');
+const timerDisplay = document.getElementById('timer-display');
+
+function formatMMSS(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function startLocalCountdown(seconds) {
+    if (countdownInterval) clearInterval(countdownInterval);
+    remainingSeconds = seconds;
+    if (timerPill) timerPill.style.display = 'inline-flex';
+    if (timerDisplay) timerDisplay.innerText = formatMMSS(remainingSeconds);
+    countdownInterval = setInterval(() => {
+        remainingSeconds--;
+        if (remainingSeconds <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            if (timerDisplay) timerDisplay.innerText = '00:00';
+            if (window.showToast) window.showToast('⏰ Đã hết thời gian hẹn giờ thảo luận!');
+            setTimeout(() => {
+                if (timerPill) timerPill.style.display = 'none';
+            }, 5000);
+        } else if (timerDisplay) {
+            timerDisplay.innerText = formatMMSS(remainingSeconds);
+        }
+    }, 1000);
+}
+
+if (btnStartTimer5) {
+    window.bindSafeButton(btnStartTimer5, () => {
+        window.closeAllPopovers();
+        socket.emit('room_timer_action', { room_id: ROOM_ID, action: 'start', seconds: 300, sender: window.USERNAME });
+    });
+}
+
+if (btnStopTimer) {
+    window.bindSafeButton(btnStopTimer, () => {
+        window.closeAllPopovers();
+        socket.emit('room_timer_action', { room_id: ROOM_ID, action: 'stop', seconds: 0, sender: window.USERNAME });
+    });
+}
+
+socket.on('room_timer_sync', (data) => {
+    if (!data) return;
+    if (data.action === 'stop') {
+        if (countdownInterval) clearInterval(countdownInterval);
+        countdownInterval = null;
+        if (timerPill) timerPill.style.display = 'none';
+        if (window.showToast) window.showToast(`⏹️ ${data.sender || 'Thành viên'} đã tắt hẹn giờ.`);
+    } else if (data.action === 'start') {
+        startLocalCountdown(data.seconds || 300);
+        if (window.showToast) window.showToast(`⏱️ ${data.sender || 'Thành viên'} đã bật hẹn giờ ${Math.round((data.seconds || 300) / 60)} phút!`);
+    }
+});
+
+const btnImportRoomJson = document.getElementById('btn-import-room-json');
+const roomJsonFileInput = document.getElementById('room-json-file-input');
+if (btnImportRoomJson && roomJsonFileInput) {
+    window.bindSafeButton(btnImportRoomJson, () => {
+        window.closeAllPopovers();
+        roomJsonFileInput.click();
+    });
+    roomJsonFileInput.addEventListener('change', () => {
+        if (!roomJsonFileInput.files || roomJsonFileInput.files.length === 0) return;
+        const fd = new FormData();
+        fd.append('file', roomJsonFileInput.files[0]);
+        fetch(`/api/room/${encodeURIComponent(ROOM_ID)}/import`, { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(d => {
+                roomJsonFileInput.value = '';
+                if (d && d.ok) {
+                    if (window.showToast) window.showToast('✅ Đã khôi phục bản sao lưu JSON cho phòng!');
+                } else {
+                    if (window.showToast) window.showToast('❌ Lỗi nạp tệp JSON!');
+                }
+            })
+            .catch(() => {
+                roomJsonFileInput.value = '';
+                if (window.showToast) window.showToast('❌ Lỗi kết nối khi nạp tệp JSON!');
+            });
+    });
+}
+
+window.addEventListener('paste', (e) => {
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) {
+        return;
+    }
+    const items = (e.clipboardData || window.clipboardData || {}).items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+            const file = item.getAsFile();
+            if (file) {
+                const fd = new FormData();
+                fd.append('file', file, file.name || `clipboard_${Date.now()}.png`);
+                if (window.showToast) window.showToast('📋 Đang tải ảnh từ Clipboard lên mặt bảng...');
+                fetch('/upload', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data && data.url) {
+                            const id = 'bmedia_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+                            const center = window.getWorkspaceCoords ? window.getWorkspaceCoords(window.innerWidth / 2, window.innerHeight / 2) : { x: 2400, y: 2400 };
+                            const payload = {
+                                room_id: ROOM_ID,
+                                id: id,
+                                kind: data.kind || 'image',
+                                url: data.url,
+                                name: data.name || 'Ảnh Clipboard',
+                                owner: window.USERNAME || 'Thành viên',
+                                x: Math.round(center.x - 200) + 'px',
+                                y: Math.round(center.y - 150) + 'px',
+                                w: 420,
+                                h: 320
+                            };
+                            socket.emit('new_board_media', payload);
+                            socket.emit('join_room', {
+                                room_id: ROOM_ID,
+                                username: window.USERNAME || 'Thành viên',
+                                client_id: window.CLIENT_ID
+                            });
+                            if (window.showToast) window.showToast('✅ Đã dán ảnh lên mặt bảng!');
+                        }
+                    })
+                    .catch(() => {});
+                break;
+            }
+        }
+    }
+});
+
+socket.on('system_broadcast', (data) => {
+    if (data && data.msg && window.showToast) {
+        window.showToast(`📢 [THÔNG BÁO ADMIN]: ${data.msg}`);
+    }
 });
 
 function setupScrollStrip(stripId) {

@@ -75,6 +75,12 @@ body.light-theme .user-pill b { color: #d68910; }
 .online-badge { color: #55efc4; font-weight: 600; }
 body.light-theme .online-badge { color: #00b894; }
 
+.ping-badge { font-family: monospace; font-size: 11px; gap: 6px; }
+.ping-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ping-dot.good { background: #2ed573; box-shadow: 0 0 6px #2ed573; }
+.ping-dot.medium { background: #ffa502; box-shadow: 0 0 6px #ffa502; }
+.ping-dot.bad { background: #ff4757; box-shadow: 0 0 6px #ff4757; }
+
 .toolbar button, .group-trigger-btn { flex-shrink: 0; background: rgba(20, 20, 28, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: #d2dae2; border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 4px 14px rgba(0,0,0,0.42); padding: 6px 12px; min-height: 36px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; transition: all 0.15s ease; touch-action: manipulation; }
 .toolbar button em, .group-trigger-btn em { font-style: normal; font-size: 14px; }
 .group-trigger-btn small { font-size: 10px; opacity: 0.75; margin-left: 2px; }
@@ -86,16 +92,17 @@ body.light-theme .toolbar button, body.light-theme .group-trigger-btn { backgrou
 
 .color-preview-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; display: inline-block; flex-shrink: 0; box-shadow: 0 0 4px rgba(0,0,0,0.4); }
 
-.tool-popover { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); width: 290px; max-width: calc(100vw - 20px); border-radius: 16px; padding: 12px; display: none !important; flex-direction: column; gap: 10px; z-index: 95; pointer-events: none; }
+.tool-popover { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); width: 295px; max-width: calc(100vw - 20px); border-radius: 16px; padding: 12px; display: none !important; flex-direction: column; gap: 10px; z-index: 95; pointer-events: none; }
 .tool-popover.open { display: flex !important; pointer-events: auto !important; animation: fadeIn 0.15s ease-out; }
 .popover-title { font-size: 11px; font-weight: 800; color: #00d2ff; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); }
 body.light-theme .popover-title { color: #0984e3; border-color: rgba(0,0,0,0.1); }
 .popover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .popover-grid.single-col { grid-template-columns: 1fr; }
-.sub-tool-btn, .sub-shape-btn, .game-menu-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #eee; padding: 8px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.14s; touch-action: manipulation; }
-body.light-theme .sub-tool-btn, body.light-theme .sub-shape-btn, body.light-theme .game-menu-btn { background: rgba(0,0,0,0.05); color: #222; border-color: rgba(0,0,0,0.12); }
-.sub-tool-btn:hover, .sub-shape-btn:hover, .game-menu-btn:hover { background: rgba(0, 210, 255, 0.18); border-color: #00d2ff; }
+.sub-tool-btn, .sub-shape-btn, .game-menu-btn, .screen-mode-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #eee; padding: 8px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.14s; touch-action: manipulation; }
+body.light-theme .sub-tool-btn, body.light-theme .sub-shape-btn, body.light-theme .game-menu-btn, body.light-theme .screen-mode-btn { background: rgba(0,0,0,0.05); color: #222; border-color: rgba(0,0,0,0.12); }
+.sub-tool-btn:hover, .sub-shape-btn:hover, .game-menu-btn:hover, .screen-mode-btn:hover { background: rgba(0, 210, 255, 0.18); border-color: #00d2ff; }
 .sub-tool-btn.active, .sub-shape-btn.active { background: #00d2ff; color: #000; border-color: #00d2ff; font-weight: 700; }
+.screen-mode-btn.stop-mode { background: rgba(255, 71, 87, 0.18); color: #ff4757; border-color: #ff4757; font-weight: 700; }
 
 .stamp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .stamp-opt-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-size: 22px; padding: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.15s; touch-action: manipulation; }
@@ -151,19 +158,32 @@ body.light-theme .bottom-status-bar { color: #222; }
 .widget-resizer { position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; cursor: nwse-resize; z-index: 30; touch-action: none; background: linear-gradient(135deg, transparent 50%, rgba(0, 210, 255, 0.75) 50%); border-bottom-right-radius: 10px; pointer-events: auto; }
 .widget-resizer:hover { background: linear-gradient(135deg, transparent 40%, #00d2ff 40%); }
 
-.board-text-box { position: absolute; min-width: 150px; min-height: 54px; background: transparent; border: 1.5px dashed rgba(0, 210, 255, 0.45); border-radius: 8px; pointer-events: auto; display: flex; flex-direction: column; transition: border-color 0.15s, background 0.15s; touch-action: none; }
-.board-text-box:hover, .board-text-box.editing { border-color: #00d2ff; background: rgba(15, 15, 24, 0.14); }
-body.light-theme .board-text-box:hover, body.light-theme .board-text-box.editing { background: rgba(255, 255, 255, 0.55); border-color: #0984e3; }
-.text-box-toolbar { display: inline-flex; align-items: center; justify-content: space-between; gap: 4px; background: rgba(20, 20, 28, 0.92); border: 1px solid rgba(0, 210, 255, 0.4); border-radius: 8px; padding: 3px 6px; position: absolute; top: -34px; left: 0; white-space: nowrap; z-index: 20; box-shadow: 0 4px 12px rgba(0,0,0,0.45); opacity: 0.25; transition: opacity 0.15s; }
-.board-text-box:hover .text-box-toolbar, .board-text-box.editing .text-box-toolbar { opacity: 1; }
+.board-text-box { position: absolute; min-width: 150px; min-height: 54px; background: transparent !important; border: 1.5px dashed transparent !important; border-radius: 8px; pointer-events: auto; display: flex; flex-direction: column; transition: border-color 0.15s, background 0.15s; touch-action: none; }
+.board-text-box .text-box-toolbar { display: none !important; opacity: 0 !important; pointer-events: none !important; align-items: center; justify-content: space-between; gap: 5px; background: rgba(20, 20, 28, 0.95); border: 1px solid rgba(0, 210, 255, 0.55); border-radius: 10px; padding: 4px 8px; position: absolute; top: -40px; left: 0; white-space: nowrap; z-index: 25; box-shadow: 0 6px 16px rgba(0,0,0,0.45); }
+.board-text-box .widget-resizer { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+.board-text-box.editing { border: 1.5px dashed #00d2ff !important; background: rgba(15, 15, 24, 0.08) !important; }
+body.light-theme .board-text-box.editing { border: 1.5px dashed #0984e3 !important; background: rgba(255, 255, 255, 0.45) !important; }
+.board-text-box.editing .text-box-toolbar { display: inline-flex !important; opacity: 1 !important; pointer-events: auto !important; }
+.board-text-box.editing .widget-resizer { display: block !important; opacity: 1 !important; pointer-events: auto !important; }
 .tbox-drag-handle { cursor: grab; font-size: 11px; color: #00d2ff; font-weight: 700; padding: 2px 6px; user-select: none; }
 .tbox-drag-handle:active { cursor: grabbing; }
-.tbox-btn { background: rgba(255,255,255,0.12); border: none; color: #fff; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
+.tbox-btn { background: rgba(255,255,255,0.14); border: none; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; cursor: pointer; touch-action: manipulation; }
 .tbox-btn:hover { background: #00d2ff; color: #000; }
 .tbox-btn.del { color: #ff6b81; }
 .tbox-btn.del:hover { background: #ff4757; color: #fff; }
+.tbox-color-wrap { display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; border-left: 1px solid rgba(255,255,255,0.18); border-right: 1px solid rgba(255,255,255,0.18); }
+.tbox-color-dot { width: 15px; height: 15px; border-radius: 50%; cursor: pointer; border: 1.5px solid rgba(255,255,255,0.7); transition: transform 0.12s; }
+.tbox-color-dot:hover { transform: scale(1.25); }
+.tbox-color-input { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border: 1.5px solid #fff; border-radius: 50%; padding: 0; background: none; cursor: pointer; overflow: hidden; }
+.tbox-color-input::-webkit-color-swatch-wrapper { padding: 0; }
+.tbox-color-input::-webkit-color-swatch { border: none; border-radius: 50%; }
 .text-box-editor { flex: 1; width: 100%; height: 100%; min-height: 44px; padding: 8px 10px; border: none; outline: none; resize: none; background: transparent; color: #0984e3; font-family: 'Inter', system-ui, sans-serif; font-weight: 700; font-size: 20px; line-height: 1.35; user-select: text !important; -webkit-user-select: text !important; cursor: text; touch-action: auto; overflow: auto; }
-.text-box-editor::placeholder { color: rgba(120, 130, 150, 0.65); font-weight: 500; }
+.text-box-editor::placeholder { color: transparent; }
+.board-text-box.editing .text-box-editor::placeholder { color: rgba(120, 130, 150, 0.65); font-weight: 500; }
+
+.screen-body { background: #050508; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; overflow: hidden; position: relative; }
+#screen-video, #screen-fallback-img { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.live-stream-badge { background: #ff4757; color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 12px; letter-spacing: 0.5px; animation: pulseBanner 1s infinite alternate; }
 
 .settings-overlay { position: fixed; top: 56px; right: 12px; width: 310px; max-width: calc(100vw - 24px); border-radius: 14px; display: none !important; flex-direction: column; z-index: 85; pointer-events: none; }
 .settings-overlay.active { display: flex !important; pointer-events: auto !important; animation: fadeIn 0.18s ease-out; }
