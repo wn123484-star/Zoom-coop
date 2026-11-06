@@ -3,28 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SyncSpace - Trung Tâm Giám Sát & Sao Lưu (Admin)</title>
+<title>Bảng Chung Online - Trung Tâm Giám Sát RAM & Quản Trị Chuyên Sâu</title>
 <style>
 * { box-sizing: border-box; }
-body { margin: 0; padding: 24px; font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b0c10; color: #e2e8f0; }
-.admin-wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-.admin-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(255,255,255,0.04); padding: 18px 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); }
-.admin-top h1 { margin: 0; font-size: 22px; color: #00d2ff; display: flex; align-items: center; gap: 10px; }
+body { margin: 0; padding: 20px; font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b0c10; color: #e2e8f0; }
+.admin-wrap { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.admin-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(255,255,255,0.04); padding: 16px 22px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); }
+.admin-top h1 { margin: 0; font-size: 20px; color: #00d2ff; display: flex; align-items: center; gap: 10px; }
 .live-pill { background: rgba(46, 213, 115, 0.16); color: #2ed573; border: 1px solid rgba(46, 213, 115, 0.4); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
-.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-.metric-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
-.metric-title { font-size: 12px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: flex; justify-content: space-between; }
-.metric-val { font-size: 26px; font-weight: 800; color: #fff; }
-.metric-sub { font-size: 12px; color: #94a3b8; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.metric-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.metric-title { font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: flex; justify-content: space-between; }
+.metric-val { font-size: 24px; font-weight: 800; color: #fff; }
+.metric-sub { font-size: 12px; color: #94a3b8; line-height: 1.4; }
 .progress-track { width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden; }
 .progress-fill { height: 100%; width: 0%; background: #00d2ff; transition: width 0.4s ease, background 0.3s ease; }
-.panel-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; }
+.panel-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 18px 20px; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
-.panel-header h3 { margin: 0; font-size: 16px; color: #00d2ff; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { padding: 11px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.panel-header h3 { margin: 0; font-size: 15px; color: #00d2ff; display: flex; align-items: center; gap: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); }
 th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercase; }
-.btn { border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; }
+.btn { border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; white-space: nowrap; }
 .btn-cyan { background: rgba(0, 210, 255, 0.18); color: #00d2ff; border: 1px solid rgba(0, 210, 255, 0.35); }
 .btn-cyan:hover { background: #00d2ff; color: #000; }
 .btn-green { background: rgba(46, 213, 115, 0.18); color: #2ed573; border: 1px solid rgba(46, 213, 115, 0.4); }
@@ -33,10 +33,22 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 .btn-warn:hover { background: #ffa502; color: #000; }
 .btn-danger { background: rgba(255, 71, 87, 0.2); color: #ff6b81; border: 1px solid rgba(255, 71, 87, 0.4); }
 .btn-danger:hover { background: #ff4757; color: #fff; }
+.btn-purple { background: rgba(165, 94, 234, 0.2); color: #d6a2e8; border: 1px solid rgba(165, 94, 234, 0.45); }
+.btn-purple:hover { background: #a55eea; color: #fff; }
 .user-tag { display: inline-block; background: rgba(0, 210, 255, 0.14); color: #00d2ff; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 2px; font-weight: 600; }
-.ban-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.ban-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .ban-row input { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #14161f; color: #fff; font-size: 13px; }
-.grid-2col { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; }
+.grid-2col { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
+.grid-3col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.ram-stacked-bar { width: 100%; height: 18px; background: rgba(255,255,255,0.06); border-radius: 10px; overflow: hidden; display: flex; margin: 10px 0; border: 1px solid rgba(255,255,255,0.12); }
+.ram-seg { height: 100%; transition: width 0.35s ease; }
+.ram-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; margin-bottom: 12px; }
+.ram-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ram-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.ram-item-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.status-badge-ram { padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 800; }
+.status-badge-ram.on-ram { background: rgba(46, 213, 115, 0.2); color: #2ed573; }
+.status-badge-ram.on-disk { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
 @media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -44,14 +56,17 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 <div class="admin-wrap">
 <div class="admin-top">
 <div>
-<h1>⚡ SyncSpace Server Monitor & Backup Center</h1>
-<div style="font-size:12px; color:#94a3b8; margin-top:4px;">Giám sát CPU / RAM / Disk, Sao lưu & Khôi phục Phòng (JSON / ZIP)</div>
+<h1>⚡ Trung Tâm Giám Sát RAM, Bảo Mật & Quản Trị Hệ Thống</h1>
+<div style="font-size:12px; color:#94a3b8; margin-top:4px;">Phân tích chi tiết RAM, Giải phóng bộ nhớ thông minh, Quản lý Phòng & Sao lưu toàn diện</div>
 </div>
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-<span id="sync-status" class="live-pill">● Đang cập nhật 2s/lần</span>
-<a href="/api/admin/backup_all_zip" class="btn btn-green">📦 Tải Full Backup (.ZIP)</a>
-<button type="button" id="btn-cleanup" class="btn btn-warn">🧹 Dọn rác Uploads</button>
+<span id="sync-status" class="live-pill">● Trực tiếp 2s/lần</span>
+<button type="button" id="btn-free-ram-all" class="btn btn-green">⚡ Giải Phóng RAM Toàn Diện</button>
+<a href="/api/admin/backup_all_zip" class="btn btn-cyan">📦 Tải Full Backup (.ZIP)</a>
+<button type="button" id="btn-cleanup" class="btn btn-warn">🧹 Dọn Rác Uploads</button>
+<button type="button" id="btn-vacuum-db" class="btn btn-purple">🗜️ Nén SQLite DB</button>
 <a href="/" class="btn btn-cyan">← Trang chủ</a>
+<a href="/admin-logout" class="btn btn-danger">🚪 Đăng xuất</a>
 </div>
 </div>
 
@@ -64,69 +79,115 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 </div>
 
 <div class="metric-card">
-<div class="metric-title"><span>🧠 Bộ Nhớ RAM</span><span id="ram-total">-- MB</span></div>
+<div class="metric-title"><span>🧠 Bộ Nhớ RAM VPS</span><span id="ram-total">-- MB</span></div>
 <div id="ram-val" class="metric-val">--%</div>
 <div class="progress-track"><div id="ram-bar" class="progress-fill"></div></div>
-<div id="ram-detail" class="metric-sub">Đã dùng: -- MB</div>
+<div id="ram-detail" class="metric-sub">Đang dùng: -- MB | Trống: -- MB</div>
 </div>
 
 <div class="metric-card">
-<div class="metric-title"><span>💾 Ổ Cứng VPS</span><span id="disk-total">-- GB</span></div>
-<div id="disk-val" class="metric-val">--%</div>
-<div class="progress-track"><div id="disk-bar" class="progress-fill"></div></div>
-<div id="disk-detail" class="metric-sub">Uploads: -- MB | DB: -- MB</div>
+<div class="metric-title"><span>🐍 RAM Riêng SyncSpace</span><span id="gc-count">-- Objects</span></div>
+<div id="app-rss-val" class="metric-val" style="color:#00d2ff;">-- MB</div>
+<div id="app-ram-sub" class="metric-sub">Phòng nạp RAM: 0 | Đệm OS: -- MB</div>
 </div>
 
 <div class="metric-card">
-<div class="metric-title"><span>🌐 Trạng Thái Mạng</span><span>Socket.IO</span></div>
+<div class="metric-title"><span>💾 Ổ Cứng & Kết Nối</span><span id="disk-total">-- GB</span></div>
 <div id="conn-val" class="metric-val">0 kết nối</div>
+<div id="disk-detail" class="metric-sub">Uploads: -- MB | DB: -- MB</div>
 <div id="uptime-val" class="metric-sub" style="color:#2ed573; font-weight:700;">Uptime: --</div>
-<div id="rooms-count-sub" class="metric-sub">Tổng số phòng: 0</div>
 </div>
+</div>
+
+<div class="panel-box">
+<div class="panel-header">
+<h3>🔬 Phân Tích Chi Tiết RAM: Thứ Gì Đang Ngốn & Giải Phóng Từng Phần</h3>
+<div style="display:flex; gap:6px; flex-wrap:wrap;">
+<button type="button" class="btn btn-green" onclick="triggerFreeRam('all')">⚡ Giải phóng Tất cả</button>
+<button type="button" class="btn btn-cyan" onclick="triggerFreeRam('rooms')">💤 Cất phòng trống xuống Đĩa</button>
+<button type="button" class="btn btn-warn" onclick="triggerFreeRam('frames')">🖼️ Xóa đệm khung hình chiếu</button>
+<button type="button" class="btn btn-purple" onclick="triggerFreeRam('trim')">✂️ Cắt gọn nét vẽ cũ & GC</button>
+</div>
+</div>
+
+<div class="ram-stacked-bar">
+<div id="seg-app" class="ram-seg" style="background:#00d2ff; width:10%;" title="SyncSpace Python RSS"></div>
+<div id="seg-sys" class="ram-seg" style="background:#ffa502; width:30%;" title="Tiến trình hệ thống & dịch vụ khác"></div>
+<div id="seg-cache" class="ram-seg" style="background:#a55eea; width:20%;" title="Bộ đệm đĩa Linux (OS Buffers/Cache)"></div>
+</div>
+
+<div class="ram-legend">
+<span><i class="ram-dot" style="background:#00d2ff;"></i> <b>SyncSpace Server (Python RSS):</b> <b id="leg-app">-- MB</b></span>
+<span><i class="ram-dot" style="background:#ffa502;"></i> <b>Hệ điều hành & Docker Daemon:</b> <b id="leg-sys">-- MB</b></span>
+<span><i class="ram-dot" style="background:#a55eea;"></i> <b>Bộ đệm Đĩa Linux (Buffers/Cached):</b> <b id="leg-cache">-- MB</b></span>
+<span><i class="ram-dot" style="background:#2ed573;"></i> <b>RAM Trống Khả Dụng:</b> <b id="leg-free">-- MB</b></span>
 </div>
 
 <div class="grid-2col">
-<div class="panel-box">
-<div class="panel-header">
-<h3>📤 Khôi Phục / Nhập Dữ Liệu Phòng (Từ tệp .JSON hoặc .ZIP)</h3>
+<div style="display:flex; flex-direction:column; gap:8px;">
+<div style="font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase;">Chi tiết bộ nhớ bên trong ứng dụng SyncSpace</div>
+<div class="ram-item-card">
+<div>
+<b>🏠 Dữ liệu các phòng đang giữ trên RAM</b>
+<div id="ram-rooms-desc" style="font-size:11px; color:#94a3b8;">Đang nạp 0 phòng (-- KB)</div>
 </div>
-<form id="restore-form" class="ban-row">
-<input type="file" id="restore-file" accept=".json,.zip" required style="flex:1;">
-<input type="text" id="restore-room-id" placeholder="Mã phòng ghi đè (Tùy chọn)..." style="width:210px;">
-<button type="submit" class="btn btn-green">📤 Khôi phục ngay</button>
-</form>
-<div style="font-size:12px; color:#94a3b8;">Hỗ trợ khôi phục từng phòng từ tệp <code>.json</code> hoặc khôi phục toàn bộ máy chủ (kèm ảnh/video/tài liệu) từ gói <code>FullBackup.zip</code>.</div>
+<button type="button" class="btn btn-cyan" onclick="triggerFreeRam('rooms')">💤 Giải phóng</button>
+</div>
+<div class="ram-item-card">
+<div>
+<b>🖥️ Ảnh đệm chia sẻ màn hình (Screen Frames)</b>
+<div id="ram-frames-desc" style="font-size:11px; color:#94a3b8;">Dung lượng đệm: -- KB</div>
+</div>
+<button type="button" class="btn btn-warn" onclick="triggerFreeRam('frames')">🧹 Xóa đệm</button>
+</div>
+<div class="ram-item-card">
+<div>
+<b>✏️ Lịch sử nét vẽ & Đối tượng Python GC</b>
+<div id="ram-strokes-desc" style="font-size:11px; color:#94a3b8;">Nét vẽ: -- KB | Python Objects: --</div>
+</div>
+<button type="button" class="btn btn-purple" onclick="triggerFreeRam('trim')">⚡ Thu gom & Trim</button>
+</div>
+</div>
+
+<div>
+<div style="font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:6px;">Top Tiến Trình Đang Dùng RAM Trong Container / Máy Chủ</div>
+<div style="overflow-x:auto; max-height:190px;">
+<table>
+<thead>
+<tr>
+<th>PID</th>
+<th>Tiến trình</th>
+<th>Lệnh chạy</th>
+<th>RAM (RSS)</th>
+</tr>
+</thead>
+<tbody id="procs-tbody">
+<tr><td colspan="4" style="color:#888;">Đang đọc danh sách tiến trình...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
 </div>
 
 <div class="panel-box">
 <div class="panel-header">
-<h3>📢 Phát Thông Báo Toàn Hệ Thống (Broadcast)</h3>
-</div>
-<form id="broadcast-form" class="ban-row">
-<input type="text" id="broadcast-input" placeholder="Nhập thông báo gửi tới tất cả các phòng..." required style="flex:1;">
-<button type="submit" class="btn btn-cyan">📢 Gửi Thông Báo</button>
-</form>
-<div style="font-size:12px; color:#94a3b8;">Thông báo sẽ hiển thị nổi kèm âm báo nhẹ trên màn hình của mọi thành viên đang trực tuyến.</div>
-</div>
-</div>
-
-<div class="panel-box">
-<div class="panel-header">
-<h3>🏠 Danh Sách Phòng Hoạt Động & Sao Lưu Từng Phòng</h3>
+<h3>🏠 Quản Lý Phòng Hoạt Động, Dung Lượng RAM & Sao Lưu Từng Phòng</h3>
 </div>
 <div style="overflow-x:auto;">
 <table>
 <thead>
 <tr>
 <th>Mã Phòng</th>
+<th>Trạng Thái Lưu Trữ</th>
 <th>Đang Online</th>
-<th>Dữ Liệu Bảng</th>
+<th>Chi Tiết Nội Dung</th>
 <th>Chia Sẻ Màn Hình</th>
-<th>Sao Lưu & Quản Lý</th>
+<th>Thao Tác Quản Trị</th>
 </tr>
 </thead>
 <tbody id="rooms-tbody">
-<tr><td colspan="5" style="color:#888;">Đang tải dữ liệu...</td></tr>
+<tr><td colspan="6" style="color:#888;">Đang tải dữ liệu...</td></tr>
 </tbody>
 </table>
 </div>
@@ -144,8 +205,8 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 <th>Tên</th>
 <th>Phòng</th>
 <th>Địa chỉ IP</th>
-<th>Giờ vào</th>
-<th>Chặn</th>
+<th>Mic / Giờ vào</th>
+<th>Điều khiển</th>
 </tr>
 </thead>
 <tbody id="users-tbody">
@@ -163,7 +224,41 @@ th { color: #94a3b8; font-weight: 700; font-size: 11px; text-transform: uppercas
 <input type="text" id="ban-ip-input" placeholder="Nhập địa chỉ IP cần chặn..." required style="flex:1;">
 <button type="submit" class="btn btn-danger">Chặn IP</button>
 </form>
-<div id="banned-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+<div id="banned-list" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto;"></div>
+</div>
+</div>
+
+<div class="grid-3col">
+<div class="panel-box">
+<div class="panel-header">
+<h3>🔐 Đổi Mật Khẩu Admin</h3>
+</div>
+<form id="pwd-form" style="display:flex; flex-direction:column; gap:8px;">
+<input type="password" id="cur-pwd" placeholder="Mật khẩu Admin hiện tại..." required style="padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:#14161f; color:#fff;">
+<input type="password" id="new-pwd" placeholder="Mật khẩu Admin mới (ít nhất 6 ký tự)..." required minlength="6" style="padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:#14161f; color:#fff;">
+<button type="submit" class="btn btn-green" style="justify-content:center; padding:10px;">💾 Lưu Mật Khẩu Mới</button>
+</form>
+</div>
+
+<div class="panel-box">
+<div class="panel-header">
+<h3>📤 Khôi Phục Phòng (.JSON / .ZIP)</h3>
+</div>
+<form id="restore-form" style="display:flex; flex-direction:column; gap:8px;">
+<input type="file" id="restore-file" accept=".json,.zip" required style="padding:6px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:#14161f; color:#fff; font-size:12px;">
+<input type="text" id="restore-room-id" placeholder="Mã phòng ghi đè (Tùy chọn)..." style="padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:#14161f; color:#fff;">
+<button type="submit" class="btn btn-cyan" style="justify-content:center; padding:10px;">📤 Khôi Phục Dữ Liệu</button>
+</form>
+</div>
+
+<div class="panel-box">
+<div class="panel-header">
+<h3>📢 Phát Thông Báo Toàn Hệ Thống</h3>
+</div>
+<form id="broadcast-form" style="display:flex; flex-direction:column; gap:8px;">
+<input type="text" id="broadcast-input" placeholder="Nhập thông báo gửi tới mọi phòng..." required style="padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:#14161f; color:#fff;">
+<button type="submit" class="btn btn-purple" style="justify-content:center; padding:10px;">📢 Phát Thông Báo Ngay</button>
+</form>
 </div>
 </div>
 </div>
@@ -173,6 +268,45 @@ function colorForPercent(p) {
     if (p < 65) return '#2ed573';
     if (p < 85) return '#ffa502';
     return '#ff4757';
+}
+
+function triggerFreeRam(mode) {
+    fetch('/api/admin/free_ram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: mode || 'all' })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d && d.ok) {
+            alert(`⚡ Đã giải phóng RAM thành công!\n- Cất ${d.unloaded_rooms} phòng trống xuống đĩa\n- Xóa ${d.cleared_frames} bộ đệm khung hình\n- Dọn ${d.freed_gc_objects} đối tượng rác Python & gọi malloc_trim(0)\n- Giảm trực tiếp: ${d.saved_rss_mb} MB (App) / ${d.saved_sys_mb} MB (Hệ thống)`);
+            fetchStats();
+        }
+    });
+}
+
+document.getElementById('btn-free-ram-all').addEventListener('click', () => triggerFreeRam('all'));
+
+document.getElementById('btn-vacuum-db').addEventListener('click', () => {
+    fetch('/api/admin/vacuum_db', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d && d.ok) {
+                alert('🗜️ Đã nén tối ưu cơ sở dữ liệu SQLite (VACUUM) và thu hồi bộ nhớ đệm!');
+                fetchStats();
+            }
+        });
+});
+
+function unloadRoomRam(roomId) {
+    fetch('/api/admin/unload_room/' + encodeURIComponent(roomId), { method: 'POST' })
+        .then(() => fetchStats());
+}
+
+function clearRoomGames(roomId) {
+    if (!confirm('Xóa toàn bộ các bàn chơi (UNO, Cờ Cá Ngựa, Caro...) trong phòng ' + roomId + '?')) return;
+    fetch('/api/admin/clear_games/' + encodeURIComponent(roomId), { method: 'POST' })
+        .then(() => fetchStats());
 }
 
 function clearRoomBoard(roomId) {
@@ -186,6 +320,16 @@ function deleteRoom(roomId) {
     fetch('/api/admin/delete/' + encodeURIComponent(roomId), {
         method: 'POST',
         headers: { 'Accept': 'application/json' }
+    }).then(() => fetchStats());
+}
+
+function kickUser(sid, username) {
+    const reason = prompt('Nhập lý do mời ' + username + ' rời phòng:', 'Quản trị viên đã mời bạn rời khỏi phòng.');
+    if (reason === null) return;
+    fetch('/api/admin/kick_user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sid: sid, reason: reason })
     }).then(() => fetchStats());
 }
 
@@ -215,6 +359,27 @@ document.getElementById('ban-form').addEventListener('submit', (e) => {
     inp.value = '';
 });
 
+document.getElementById('pwd-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const curPwd = document.getElementById('cur-pwd').value;
+    const newPwd = document.getElementById('new-pwd').value;
+    fetch('/api/admin/change_password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: curPwd, new_password: newPwd })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d && d.ok) {
+            alert('✅ Đã cập nhật mật khẩu Admin mới thành công!');
+            document.getElementById('cur-pwd').value = '';
+            document.getElementById('new-pwd').value = '';
+        } else {
+            alert('❌ Lỗi: ' + ((d && d.error) || 'Không thể đổi mật khẩu'));
+        }
+    });
+});
+
 document.getElementById('restore-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const fileInput = document.getElementById('restore-file');
@@ -236,8 +401,7 @@ document.getElementById('restore-form').addEventListener('submit', (e) => {
             } else {
                 alert('❌ Lỗi: ' + ((d && d.error) || 'Không thể khôi phục'));
             }
-        })
-        .catch(() => alert('Lỗi kết nối khi tải tệp khôi phục!'));
+        });
 });
 
 document.getElementById('broadcast-form').addEventListener('submit', (e) => {
@@ -259,7 +423,7 @@ document.getElementById('btn-cleanup').addEventListener('click', () => {
     fetch('/api/admin/cleanup_uploads', { method: 'POST' })
         .then(r => r.json())
         .then(d => {
-            alert('Đã dọn dẹp ' + (d.removed || 0) + ' tệp rác không còn sử dụng!');
+            alert(`🧹 Đã dọn dẹp ${d.removed || 0} tệp rác (${d.freed_mb || 0} MB)!`);
             fetchStats();
         });
 });
@@ -279,40 +443,73 @@ function fetchStats() {
 
             document.getElementById('ram-val').innerText = s.ram_percent + '%';
             document.getElementById('ram-total').innerText = s.ram_total_mb + ' MB';
-            document.getElementById('ram-detail').innerText = `Đã dùng: ${s.ram_used_mb} MB / ${s.ram_total_mb} MB`;
+            document.getElementById('ram-detail').innerText = `Đang dùng: ${s.ram_used_mb} MB | Trống: ${s.ram_free_mb} MB`;
             const ramBar = document.getElementById('ram-bar');
             ramBar.style.width = Math.min(100, s.ram_percent) + '%';
             ramBar.style.background = colorForPercent(s.ram_percent);
 
-            document.getElementById('disk-val').innerText = s.disk_percent + '%';
+            document.getElementById('app-rss-val').innerText = s.app_rss_mb + ' MB';
+            document.getElementById('gc-count').innerText = s.gc_objects + ' Objs';
+            document.getElementById('app-ram-sub').innerText = `Phòng nạp RAM: ${s.rooms_in_ram} (${s.rooms_mem_kb} KB) | Đệm OS: ${s.ram_cached_mb} MB`;
+
             document.getElementById('disk-total').innerText = `${s.disk_used_gb} / ${s.disk_total_gb} GB`;
             document.getElementById('disk-detail').innerText = `Uploads: ${s.uploads_mb} MB | DB: ${s.db_mb} MB`;
-            const diskBar = document.getElementById('disk-bar');
-            diskBar.style.width = Math.min(100, s.disk_percent) + '%';
-            diskBar.style.background = colorForPercent(s.disk_percent);
-
             document.getElementById('conn-val').innerText = s.online_connections + ' kết nối';
             document.getElementById('uptime-val').innerText = 'Uptime: ' + s.uptime;
-            document.getElementById('rooms-count-sub').innerText = 'Tổng số phòng: ' + (data.rooms ? data.rooms.length : 0);
+
+            const totalM = Math.max(1, s.ram_total_mb);
+            const appPct = Math.min(100, (s.app_rss_mb / totalM) * 100);
+            const sysPct = Math.min(100 - appPct, (s.other_sys_mb / totalM) * 100);
+            const cachePct = Math.min(100 - appPct - sysPct, (s.ram_cached_mb / totalM) * 100);
+            document.getElementById('seg-app').style.width = appPct.toFixed(1) + '%';
+            document.getElementById('seg-sys').style.width = sysPct.toFixed(1) + '%';
+            document.getElementById('seg-cache').style.width = cachePct.toFixed(1) + '%';
+
+            document.getElementById('leg-app').innerText = s.app_rss_mb + ' MB';
+            document.getElementById('leg-sys').innerText = s.other_sys_mb + ' MB';
+            document.getElementById('leg-cache').innerText = s.ram_cached_mb + ' MB';
+            document.getElementById('leg-free').innerText = s.ram_free_mb + ' MB';
+
+            document.getElementById('ram-rooms-desc').innerText = `Đang nạp ${s.rooms_in_ram} phòng trên RAM (Chiếm ${s.rooms_mem_kb} KB)`;
+            document.getElementById('ram-frames-desc').innerText = `Khung hình chia sẻ màn hình đang lưu: ${s.screen_frames_kb} KB`;
+            document.getElementById('ram-strokes-desc').innerText = `Nét vẽ: ${s.strokes_mem_kb} KB | Đối tượng Python: ${s.gc_objects}`;
+
+            const pTbody = document.getElementById('procs-tbody');
+            pTbody.innerHTML = '';
+            if (!s.top_processes || s.top_processes.length === 0) {
+                pTbody.innerHTML = `<tr><td>${s.app_rss_mb > 0 ? 'Self' : '--'}</td><td><b>python (SyncSpace)</b></td><td>app.py</td><td><b>${s.app_rss_mb} MB</b></td></tr>`;
+            } else {
+                s.top_processes.forEach(p => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td><code>${p.pid}</code></td><td><b>${p.name}</b></td><td style="color:#94a3b8; font-size:11px;">${p.cmd}</td><td><b style="color:#00d2ff;">${p.rss_mb} MB</b></td>`;
+                    pTbody.appendChild(tr);
+                });
+            }
 
             const rTbody = document.getElementById('rooms-tbody');
             rTbody.innerHTML = '';
             if (!data.rooms || data.rooms.length === 0) {
-                rTbody.innerHTML = '<tr><td colspan="5" style="color:#888;">Chưa có phòng nào.</td></tr>';
+                rTbody.innerHTML = '<tr><td colspan="6" style="color:#888;">Chưa có phòng nào.</td></tr>';
             } else {
                 data.rooms.forEach(r => {
                     const tr = document.createElement('tr');
                     const usersHtml = (r.users || []).map(u => `<span class="user-tag">👤 ${u}</span>`).join('') || '<span style="color:#666;">Trống</span>';
                     const screenHtml = r.screen_sharing ? `<span style="color:#2ed573; font-weight:700;">🖥️ ${r.screen_sharing}</span>` : '<span style="color:#666;">Không</span>';
+                    const ramBadge = r.in_ram
+                        ? `<span class="status-badge-ram on-ram">⚡ Trên RAM: ${r.ram_kb} KB</span>`
+                        : `<span class="status-badge-ram on-disk">💾 Đã cất Đĩa: ${r.db_kb} KB</span>`;
                     const encRoom = encodeURIComponent(r.room_id);
                     tr.innerHTML = `
                         <td><strong style="color:#00d2ff; font-size:14px;">${r.room_id}</strong></td>
+                        <td>${ramBadge}</td>
                         <td><b>${r.user_count}</b> người<br>${usersHtml}</td>
-                        <td>✏️ ${r.strokes} nét | 🔤 ${r.texts} chữ | 📝 ${r.stickies} note | 🎬 ${r.media_count} media</td>
+                        <td>✏️ ${r.strokes} nét | 🔤 ${r.texts} chữ | 📝 ${r.stickies} note | 🎮 ${r.games_count} bàn chơi | 🎬 ${r.media_count} media</td>
                         <td>${screenHtml}</td>
                         <td style="white-space:nowrap; display:flex; gap:5px; flex-wrap:wrap;">
                             <a href="/room/${encRoom}?name=Admin" target="_blank" class="btn btn-cyan">🔗 Vào</a>
-                            <a href="/api/admin/backup/${encRoom}" class="btn btn-green" title="Tải tệp sao lưu JSON của phòng này">📥 Tải JSON</a>
+                            <a href="/api/admin/backup/${encRoom}" class="btn btn-green" title="Tải JSON">📥 JSON</a>
+                            ${r.in_ram ? `<button type="button" class="btn btn-purple" onclick="unloadRoomRam('${r.room_id}')" title="Lưu xuống SQLite và giải phóng khỏi RAM">💤 Giải phóng RAM</button>` : ''}
+                            <button type="button" class="btn btn-warn" onclick="clearRoomGames('${r.room_id}')" title="Xóa các bàn chơi trong phòng">🎮 Xóa Game</button>
                             <button type="button" class="btn btn-warn" onclick="clearRoomBoard('${r.room_id}')">🧹 Xóa vẽ</button>
                             <button type="button" class="btn btn-danger" onclick="deleteRoom('${r.room_id}')">🗑️ Xóa</button>
                         </td>
@@ -328,12 +525,16 @@ function fetchStats() {
             } else {
                 data.users.forEach(u => {
                     const tr = document.createElement('tr');
+                    const micBadge = u.voice ? '<span style="color:#2ed573; font-weight:700;">🎤 Đang bật Mic</span> | ' : '';
                     tr.innerHTML = `
                         <td><b>${u.username}</b></td>
                         <td><span style="color:#00d2ff;">${u.room}</span></td>
                         <td><code>${u.ip}</code></td>
-                        <td>${u.joined_at}</td>
-                        <td><button type="button" class="btn btn-danger" onclick="banIp('${u.ip}')">🚫 Ban IP</button></td>
+                        <td>${micBadge}${u.joined_at}</td>
+                        <td style="display:flex; gap:5px;">
+                            <button type="button" class="btn btn-warn" onclick="kickUser('${u.sid}', '${u.username}')">👢 Kick</button>
+                            <button type="button" class="btn btn-danger" onclick="banIp('${u.ip}')">🚫 Ban IP</button>
+                        </td>
                     `;
                     uTbody.appendChild(tr);
                 });

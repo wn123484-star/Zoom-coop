@@ -467,6 +467,9 @@ saver_thread.start()
 def add_header(response):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = '*'
+    response.headers.pop('Permissions-Policy', None)
     return response
 
 @app.before_request
@@ -506,17 +509,34 @@ def serve_uploaded_file(filename):
         return send_from_directory(upload_dir, filename, mimetype='text/html')
     return send_from_directory(upload_dir, filename)
 
-@app.route('/web-proxy')
+@app.route('/web-proxy', methods=['GET', 'POST', 'OPTIONS'])
 def web_proxy():
+    if request.method == 'OPTIONS':
+        return Response('', status=204)
     target_url = request.args.get('url', '').strip()
     if not target_url:
-        return "Thiếu địa chỉ URL", 400
+        return Response("Thiếu địa chỉ URL", status=400)
     if not target_url.startswith('http://') and not target_url.startswith('https://'):
         target_url = 'https://' + target_url
     parsed = urllib.parse.urlparse(target_url)
     host = (parsed.hostname or '').lower()
     if not host or host in ('localhost', '127.0.0.1', '0.0.0.0') or host.startswith('192.168.') or host.startswith('10.') or host.startswith('172.'):
-        return "URL nội bộ không được phép truy cập qua Proxy.", 403
+        return Response("URL nội bộ không được phép truy cập qua Proxy.", status=403)
+
+    strict_auth_domains = ('gemini.google.com', 'accounts.google.com', 'chatgpt.com', 'chat.openai.com', 'facebook.com', 'www.facebook.com', 'zalo.me', 'chat.zalo.me')
+    if any(host == d or host.endswith('.' + d) for d in strict_auth_domains):
+        auth_html = f"""<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><style>
+        body {{ font-family: system-ui, sans-serif; background: #14161f; color: #eee; padding: 28px; text-align: center; margin: 0; }}
+        .box {{ max-width: 480px; margin: 24px auto; background: rgba(255,255,255,0.06); padding: 24px; border-radius: 14px; border: 1px solid rgba(0,210,255,0.35); }}
+        a.btn {{ display: inline-block; margin-top: 14px; padding: 10px 18px; background: #00d2ff; color: #000; font-weight: 800; border-radius: 8px; text-decoration: none; }}
+        </style></head><body><div class="box">
+        <h3>🔒 Trang {host} yêu cầu phiên đăng nhập cá nhân</h3>
+        <p style="font-size:13px; color:#ccc; line-height:1.5;">Các dịch vụ như <b>Gemini, ChatGPT, Facebook, Zalo</b> bảo vệ cookie đăng nhập trực tiếp trên trình duyệt của bạn và chặn nhúng qua khung trung gian.</p>
+        <p style="font-size:13px; color:#55efc4; line-height:1.5;">💡 <b>Cách dùng chuẩn nhất:</b> Bạn hãy nhấn nút <b>"📡 Chiếu Tab"</b> trên thanh công cụ của khung này để mở trang và chia sẻ trực tiếp màn hình tab đã đăng nhập cho cả phòng cùng xem!</p>
+        <a class="btn" href="{target_url}" target="_blank">↗ Mở {host} ở Tab mới</a>
+        </div></body></html>"""
+        return Response(auth_html, mimetype='text/html')
+
     try:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
@@ -525,7 +545,7 @@ def web_proxy():
             target_url,
             headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept': '*/*',
                 'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
             }
         )
@@ -540,26 +560,68 @@ def web_proxy():
                 if m:
                     charset = m.group(1)
                 html_str = raw_bytes.decode(charset, errors='replace')
-                html_str = re.sub(r'<meta[^>]*http-equiv=["\']?(?:Content-Security-Policy|X-Frame-Options)["\']?[^>]*>', '', html_str, flags=re.I)
+                html_str = re.sub(r'<meta[^>]*http-equiv=["\']?(?:Content-Security-Policy|X-Frame-Options|Permissions-Policy)["\']?[^>]*>', '', html_str, flags=re.I)
                 base_url = f"{final_parsed.scheme}://{final_parsed.netloc}/"
                 helper_script = f"""<base href="{base_url}"><script>
-                document.addEventListener('click', function(e) {{
-                    var a = e.target.closest('a');
-                    if (a && a.href && /^https?:\\/\\//i.test(a.href) && a.target !== '_blank') {{
-                        e.preventDefault();
-                        window.location.href = '/web-proxy?url=' + encodeURIComponent(a.href);
+                (function() {{
+                    var BASE = {json.dumps(base_url)};
+                    function toProxyUrl(u) {{
+                        try {{
+                            var full = new URL(u, BASE).toString();
+                            if (/^(https?:)\\/\\//i.test(full)) {{
+                                if (/play\\.google\\.com\\/log|gen_204|analytics|doubleclick/i.test(full)) return null;
+                                return '/web-proxy?url=' + encodeURIComponent(full);
+                            }}
+                        }} catch (e) {{}}
+                        return u;
                     }}
-                }}, true);
-                document.addEventListener('submit', function(e) {{
-                    var f = e.target;
-                    if (f && (!f.method || f.method.toUpperCase() === 'GET') && f.action) {{
-                        e.preventDefault();
-                        var u = new URL(f.action, '{base_url}');
-                        var fd = new FormData(f);
-                        fd.forEach(function(v, k) {{ u.searchParams.set(k, v); }});
-                        window.location.href = '/web-proxy?url=' + encodeURIComponent(u.toString());
+                    if (window.fetch) {{
+                        var origFetch = window.fetch;
+                        window.fetch = function(input, init) {{
+                            try {{
+                                var u = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
+                                if (u && !u.startsWith('/web-proxy')) {{
+                                    var proxied = toProxyUrl(u);
+                                    if (proxied === null) return Promise.resolve(new Response('{{}}', {{ status: 200 }}));
+                                    input = proxied;
+                                }}
+                            }} catch (e) {{}}
+                            return origFetch.call(this, input, init).catch(function() {{
+                                return new Response('{{}}', {{ status: 200 }});
+                            }});
+                        }};
                     }}
-                }}, true);
+                    if (window.XMLHttpRequest) {{
+                        var origOpen = XMLHttpRequest.prototype.open;
+                        XMLHttpRequest.prototype.open = function(method, url) {{
+                            try {{
+                                if (typeof url === 'string' && !url.startsWith('/web-proxy')) {{
+                                    var proxied = toProxyUrl(url);
+                                    if (proxied === null) url = 'data:application/json,{{}}';
+                                    else url = proxied;
+                                }}
+                            }} catch (e) {{}}
+                            return origOpen.apply(this, arguments);
+                        }};
+                    }}
+                    document.addEventListener('click', function(e) {{
+                        var a = e.target.closest && e.target.closest('a');
+                        if (a && a.href && /^https?:\\/\\//i.test(a.href) && a.target !== '_blank') {{
+                            e.preventDefault();
+                            window.location.href = '/web-proxy?url=' + encodeURIComponent(a.href);
+                        }}
+                    }}, true);
+                    document.addEventListener('submit', function(e) {{
+                        var f = e.target;
+                        if (f && (!f.method || f.method.toUpperCase() === 'GET') && f.action) {{
+                            e.preventDefault();
+                            var u = new URL(f.action, BASE);
+                            var fd = new FormData(f);
+                            fd.forEach(function(v, k) {{ u.searchParams.set(k, v); }});
+                            window.location.href = '/web-proxy?url=' + encodeURIComponent(u.toString());
+                        }}
+                    }}, true);
+                }})();
                 </script>"""
                 if re.search(r'<head[^>]*>', html_str, re.I):
                     html_str = re.sub(r'(<head[^>]*>)', r'\1' + helper_script, html_str, count=1, flags=re.I)
@@ -573,9 +635,9 @@ def web_proxy():
         .box {{ max-width: 480px; margin: 20px auto; background: rgba(255,255,255,0.06); padding: 20px; border-radius: 12px; border: 1px solid rgba(0,210,255,0.3); }}
         a.btn {{ display: inline-block; margin-top: 12px; padding: 10px 16px; background: #00d2ff; color: #000; font-weight: 700; border-radius: 8px; text-decoration: none; }}
         </style></head><body><div class="box">
-        <h3>🌐 Trang web yêu cầu xác thực trình duyệt trực tiếp</h3>
+        <h3>🌐 Trang web yêu cầu mở trực tiếp</h3>
         <p style="font-size:13px; color:#aaa;">Trang <b>{target_url}</b> chặn kết nối tự động hoặc yêu cầu đăng nhập tài khoản cá nhân.</p>
-        <p style="font-size:13px; color:#55efc4;">💡 Mẹo: Bạn hãy nhấn nút <b>"📡 Chiếu Tab Đăng Nhập"</b> trên thanh công cụ khung Web để mở trang này và phát trực tiếp màn hình đã đăng nhập cho cả phòng cùng xem!</p>
+        <p style="font-size:13px; color:#55efc4;">💡 Mẹo: Bạn hãy nhấn nút <b>"📡 Chiếu Tab"</b> trên thanh công cụ khung Web để mở trang này và phát trực tiếp màn hình đã đăng nhập cho cả phòng cùng xem!</p>
         <a class="btn" href="{target_url}" target="_blank">↗ Mở trang này ở Tab mới</a>
         </div></body></html>"""
         return Response(fallback_html, mimetype='text/html')

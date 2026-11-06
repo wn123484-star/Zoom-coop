@@ -5,6 +5,8 @@ services:
       - "127.0.0.1:9042:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - MALLOC_ARENA_MAX=2
+      - MALLOC_TRIM_THRESHOLD_=65536
     volumes:
       - ./database:/app/database
       - ./static/uploads:/app/static/uploads

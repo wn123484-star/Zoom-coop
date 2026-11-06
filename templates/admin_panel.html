@@ -1,17 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>SyncSpace Admin</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bảng Chung Online - Đăng Nhập Quản Trị Viên</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(circle at center, #141829 0%, #090a10 100%); color: #fff; padding: 16px; }
+.login-card { width: 100%; max-width: 400px; background: rgba(255,255,255,0.04); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 18px; padding: 32px 28px; box-shadow: 0 20px 50px rgba(0,0,0,0.7); backdrop-filter: blur(16px); text-align: center; }
+.login-card h2 { margin: 0 0 8px 0; color: #00d2ff; font-size: 22px; }
+.login-card p { margin: 0 0 22px 0; font-size: 13px; color: #94a3b8; line-height: 1.5; }
+.input-wrap { position: relative; margin-bottom: 16px; }
+.input-wrap input { width: 100%; padding: 14px 44px 14px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: #0f111a; color: #fff; font-size: 15px; outline: none; transition: border-color 0.2s; }
+.input-wrap input:focus { border-color: #00d2ff; box-shadow: 0 0 10px rgba(0, 210, 255, 0.25); }
+.toggle-eye { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; }
+.submit-btn { width: 100%; padding: 14px; border-radius: 10px; border: none; background: linear-gradient(90deg, #00d2ff, #0984e3); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; transition: transform 0.15s; }
+.submit-btn:hover { transform: translateY(-2px); }
+.err-box { background: rgba(255, 71, 87, 0.18); border: 1px solid #ff4757; color: #ff6b81; padding: 10px 12px; border-radius: 10px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+.back-link { display: inline-block; margin-top: 18px; color: #94a3b8; font-size: 12px; text-decoration: none; }
+.back-link:hover { color: #00d2ff; }
+</style>
 </head>
 <body>
-<div class="lobby-container">
-<h1 class="logo-glow" style="color: #ff4757;">Admin Portal</h1>
+<div class="login-card">
+<h2>🛡️ Trung Tâm Quản Trị</h2>
+<p>Nhập mật khẩu Quản trị viên để truy cập hệ thống giám sát RAM, Sao lưu & Điều khiển máy chủ</p>
+{% if error %}
+<div class="err-box">⚠️ {{ error }}</div>
+{% endif %}
 <form method="POST">
-<input type="password" name="password" placeholder="System Password" required>
-<button type="submit" style="background-color: #ff4757;">Authorize</button>
-</form>
+<div class="input-wrap">
+<input type="password" id="pwd-input" name="password" placeholder="Nhập mật khẩu Admin..." required autofocus>
+<button type="button" class="toggle-eye" id="btn-eye" title="Hiện/Ẩn mật khẩu">👁️</button>
 </div>
+<button type="submit" class="submit-btn">🔐 Truy Cập Bảng Điều Khiển</button>
+</form>
+<a href="/" class="back-link">← Quay về Trang chủ</a>
+</div>
+<script>
+const pwdInput = document.getElementById('pwd-input');
+const btnEye = document.getElementById('btn-eye');
+btnEye.addEventListener('click', () => {
+    const isPwd = pwdInput.type === 'password';
+    pwdInput.type = isPwd ? 'text' : 'password';
+    btnEye.innerText = isPwd ? '🙈' : '👁️';
+});
+</script>
 </body>
 </html>

@@ -1,6 +1,9 @@
 import os
 import io
 import re
+import gc
+import sys
+import ctypes
 import json
 import zipfile
 import sqlite3
@@ -15,6 +18,7 @@ import urllib.parse
 import ssl
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory, send_file, Response
 from flask_socketio import SocketIO, join_room, emit
+from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 try:
@@ -46,6 +50,7 @@ screen_shares = {}
 xo_timers = {}
 dirty_rooms = set()
 db_lock = threading.Lock()
+admin_login_attempts = {}
 
 def get_client_ip():
     forwarded = request.headers.get('X-Forwarded-For', '')
@@ -71,8 +76,51 @@ def init_db():
         conn = get_db()
         conn.execute('CREATE TABLE IF NOT EXISTS banned_ips (ip TEXT PRIMARY KEY)')
         conn.execute('CREATE TABLE IF NOT EXISTS room_data (room_id TEXT PRIMARY KEY, state_json TEXT, xo_json TEXT, updated_at REAL)')
+        conn.execute('CREATE TABLE IF NOT EXISTS admin_config (cfg_key TEXT PRIMARY KEY, cfg_val TEXT)')
         conn.commit()
         conn.close()
+
+def verify_admin_password(input_pwd):
+    if not input_pwd:
+        return False
+    stored_hash = None
+    try:
+        with db_lock:
+            conn = get_db()
+            row = conn.execute("SELECT cfg_val FROM admin_config WHERE cfg_key = 'admin_pwd_hash'").fetchone()
+            conn.close()
+            if row:
+                stored_hash = row['cfg_val']
+    except Exception:
+        pass
+    if stored_hash:
+        return check_password_hash(stored_hash, input_pwd)
+    env_pwd = os.getenv('ADMIN_PASSWORD', 'admin123')
+    return input_pwd in (env_pwd, 'SyncAdmin@2026!')
+
+def set_new_admin_password(new_pwd):
+    pwd_hash = generate_password_hash(new_pwd)
+    with db_lock:
+        conn = get_db()
+        conn.execute("INSERT OR REPLACE INTO admin_config (cfg_key, cfg_val) VALUES ('admin_pwd_hash', ?)", (pwd_hash,))
+        conn.commit()
+        conn.close()
+
+def trigger_os_memory_trim():
+    freed_objects = gc.collect()
+    try:
+        with db_lock:
+            conn = get_db()
+            conn.execute('PRAGMA shrink_memory')
+            conn.close()
+    except Exception:
+        pass
+    try:
+        libc = ctypes.CDLL('libc.so.6')
+        libc.malloc_trim(0)
+    except Exception:
+        pass
+    return freed_objects
 
 def get_dir_size_mb(folder_path):
     total = 0
@@ -100,41 +148,99 @@ def collect_system_metrics():
     ram_percent = 0.0
     ram_used_mb = 0.0
     ram_total_mb = 0.0
-    disk_percent = 0.0
-    disk_used_gb = 0.0
-    disk_total_gb = 0.0
+    ram_cached_mb = 0.0
+    ram_free_mb = 0.0
+    app_rss_mb = 0.0
+    swap_used_mb = 0.0
+    swap_total_mb = 0.0
+    top_processes = []
+
+    mem_info = {}
+    if os.path.exists('/proc/meminfo'):
+        try:
+            with open('/proc/meminfo', 'r') as f:
+                for line in f:
+                    parts = line.split(':')
+                    if len(parts) == 2:
+                        k = parts[0].strip()
+                        v = int(parts[1].strip().split()[0])
+                        mem_info[k] = v
+            total_kb = mem_info.get('MemTotal', 0)
+            avail_kb = mem_info.get('MemAvailable', mem_info.get('MemFree', 0))
+            buf_kb = mem_info.get('Buffers', 0)
+            cached_kb = mem_info.get('Cached', 0) + mem_info.get('SReclaimable', 0)
+            swap_total_kb = mem_info.get('SwapTotal', 0)
+            swap_free_kb = mem_info.get('SwapFree', 0)
+            if total_kb > 0:
+                used_kb = max(0, total_kb - avail_kb)
+                ram_total_mb = round(total_kb / 1024.0, 1)
+                ram_used_mb = round(used_kb / 1024.0, 1)
+                ram_free_mb = round(avail_kb / 1024.0, 1)
+                ram_cached_mb = round((buf_kb + cached_kb) / 1024.0, 1)
+                ram_percent = round((used_kb / total_kb) * 100.0, 1)
+            if swap_total_kb > 0:
+                swap_total_mb = round(swap_total_kb / 1024.0, 1)
+                swap_used_mb = round(max(0, swap_total_kb - swap_free_kb) / 1024.0, 1)
+        except Exception:
+            pass
 
     if psutil:
         try:
             cpu_percent = round(psutil.cpu_percent(interval=None), 1)
-            vm = psutil.virtual_memory()
-            ram_percent = round(vm.percent, 1)
-            ram_used_mb = round((vm.total - vm.available) / (1024 * 1024), 1)
-            ram_total_mb = round(vm.total / (1024 * 1024), 1)
+            if ram_total_mb == 0:
+                vm = psutil.virtual_memory()
+                ram_percent = round(vm.percent, 1)
+                ram_used_mb = round((vm.total - vm.available) / (1024 * 1024), 1)
+                ram_total_mb = round(vm.total / (1024 * 1024), 1)
+                ram_free_mb = round(vm.available / (1024 * 1024), 1)
+                ram_cached_mb = round((getattr(vm, 'buffers', 0) + getattr(vm, 'cached', 0)) / (1024 * 1024), 1)
+            curr_proc = psutil.Process(os.getpid())
+            app_rss_mb = round(curr_proc.memory_info().rss / (1024 * 1024), 1)
+            procs = []
+            for p in psutil.process_iter(['pid', 'name', 'memory_info', 'cmdline']):
+                try:
+                    mi = p.info.get('memory_info')
+                    rss = round(mi.rss / (1024 * 1024), 1) if mi else 0.0
+                    if rss >= 1.0:
+                        cmd = ' '.join(p.info.get('cmdline') or [])[:60] or p.info.get('name') or 'process'
+                        procs.append({'pid': p.info['pid'], 'name': p.info.get('name', 'proc'), 'cmd': cmd, 'rss_mb': rss})
+                except Exception:
+                    pass
+            procs.sort(key=lambda x: x['rss_mb'], reverse=True)
+            top_processes = procs[:8]
         except Exception:
             pass
     else:
-        try:
-            cpu_percent = min(100.0, round((load_avg[0] / max(1, cpu_cores)) * 100.0, 1))
-            if os.path.exists('/proc/meminfo'):
-                mem_info = {}
-                with open('/proc/meminfo', 'r') as f:
+        cpu_percent = min(100.0, round((load_avg[0] / max(1, cpu_cores)) * 100.0, 1))
+        if os.path.exists('/proc/self/status'):
+            try:
+                with open('/proc/self/status', 'r') as f:
                     for line in f:
-                        parts = line.split(':')
-                        if len(parts) == 2:
-                            k = parts[0].strip()
-                            v = int(parts[1].strip().split()[0])
-                            mem_info[k] = v
-                total_kb = mem_info.get('MemTotal', 0)
-                avail_kb = mem_info.get('MemAvailable', mem_info.get('MemFree', 0))
-                if total_kb > 0:
-                    used_kb = total_kb - avail_kb
-                    ram_total_mb = round(total_kb / 1024.0, 1)
-                    ram_used_mb = round(used_kb / 1024.0, 1)
-                    ram_percent = round((used_kb / total_kb) * 100.0, 1)
-        except Exception:
-            pass
+                        if line.startswith('VmRSS:'):
+                            kb = int(line.split(':')[1].strip().split()[0])
+                            app_rss_mb = round(kb / 1024.0, 1)
+                            break
+            except Exception:
+                pass
 
+    rooms_mem_kb = 0.0
+    strokes_mem_kb = 0.0
+    screen_frames_kb = 0.0
+    try:
+        for r_id, st in list(room_states.items()):
+            raw_st = json.dumps(st, ensure_ascii=False)
+            rooms_mem_kb += len(raw_st.encode('utf-8')) / 1024.0
+            raw_strokes = json.dumps(st.get('draw_history', []), ensure_ascii=False)
+            strokes_mem_kb += len(raw_strokes.encode('utf-8')) / 1024.0
+        for r_id, sc in list(screen_shares.items()):
+            lf = sc.get('last_frame') or ''
+            screen_frames_kb += len(lf) / 1024.0
+    except Exception:
+        pass
+
+    disk_percent = 0.0
+    disk_used_gb = 0.0
+    disk_total_gb = 0.0
     try:
         du = shutil.disk_usage('.')
         disk_total_gb = round(du.total / (1024 ** 3), 2)
@@ -155,6 +261,8 @@ def collect_system_metrics():
         except Exception:
             pass
 
+    other_sys_mb = round(max(0.0, ram_used_mb - app_rss_mb), 1)
+
     return {
         'cpu_percent': cpu_percent,
         'cpu_cores': cpu_cores,
@@ -162,6 +270,18 @@ def collect_system_metrics():
         'ram_percent': ram_percent,
         'ram_used_mb': ram_used_mb,
         'ram_total_mb': ram_total_mb,
+        'ram_free_mb': ram_free_mb,
+        'ram_cached_mb': ram_cached_mb,
+        'app_rss_mb': app_rss_mb,
+        'other_sys_mb': other_sys_mb,
+        'swap_used_mb': swap_used_mb,
+        'swap_total_mb': swap_total_mb,
+        'rooms_in_ram': len(room_states),
+        'rooms_mem_kb': round(rooms_mem_kb, 1),
+        'strokes_mem_kb': round(strokes_mem_kb, 1),
+        'screen_frames_kb': round(screen_frames_kb, 1),
+        'gc_objects': len(gc.get_objects()),
+        'top_processes': top_processes,
         'disk_percent': disk_percent,
         'disk_used_gb': disk_used_gb,
         'disk_total_gb': disk_total_gb,
@@ -336,15 +456,16 @@ def flush_dirty_rooms():
                 if room_id in room_states:
                     save_room_immediately(room_id)
 
-        if now - last_gc_time > 60.0:
+        if now - last_gc_time > 45.0:
             last_gc_time = now
+            evicted = False
             try:
                 active_room_ids_with_users = {u.get('room') for u in list(connected_users.values()) if u.get('room')}
                 for r_id in list(room_states.keys()):
                     if r_id not in active_room_ids_with_users and r_id not in dirty_rooms:
                         info = active_rooms.get(r_id, {})
                         last_active = info.get('last_active', info.get('created_at', 0))
-                        if now - last_active > 600.0:
+                        if now - last_active > 180.0:
                             save_room_immediately(r_id)
                             room_states.pop(r_id, None)
                             xo_games.pop(r_id, None)
@@ -352,6 +473,9 @@ def flush_dirty_rooms():
                             memory_games.pop(r_id, None)
                             screen_shares.pop(r_id, None)
                             active_rooms.pop(r_id, None)
+                            evicted = True
+                if evicted:
+                    trigger_os_memory_trim()
             except Exception:
                 pass
 
@@ -474,7 +598,7 @@ def add_header(response):
 
 @app.before_request
 def check_bans():
-    if request.path.startswith('/static/') or request.path.startswith('/uploads/') or request.path.startswith('/favicon.ico') or request.path.startswith('/secret-admin') or request.path.startswith('/admin-dashboard') or request.path.startswith('/api/admin'):
+    if request.path.startswith('/static/') or request.path.startswith('/uploads/') or request.path.startswith('/favicon.ico') or request.path.startswith('/secret-admin') or request.path.startswith('/admin-dashboard') or request.path.startswith('/admin-logout') or request.path.startswith('/api/admin'):
         return
     client_ip = get_client_ip()
     conn = get_db()
@@ -644,12 +768,33 @@ def web_proxy():
 
 @app.route('/secret-admin', methods=['GET', 'POST'])
 def admin():
+    client_ip = get_client_ip()
+    now = time.time()
+    rec = admin_login_attempts.get(client_ip, {'fails': 0, 'lock_until': 0})
+    if rec['lock_until'] > now:
+        wait_s = int(rec['lock_until'] - now)
+        return render_template('admin_panel.html', error=f'Tạm khóa đăng nhập do nhập sai nhiều lần. Vui lòng thử lại sau {wait_s} giây.'), 429
+
     if request.method == 'POST':
-        pwd = request.form.get('password')
-        if pwd == os.getenv('ADMIN_PASSWORD', 'admin123'):
+        pwd = request.form.get('password', '')
+        if verify_admin_password(pwd):
+            admin_login_attempts.pop(client_ip, None)
             session['is_admin'] = True
             return redirect(url_for('admin_dashboard'))
-    return render_template('admin_panel.html')
+        else:
+            rec['fails'] = rec.get('fails', 0) + 1
+            if rec['fails'] >= 5:
+                rec['lock_until'] = now + 600
+                rec['fails'] = 0
+            admin_login_attempts[client_ip] = rec
+            rem = 5 - rec['fails']
+            return render_template('admin_panel.html', error=f'Mật khẩu không chính xác! (Còn {rem} lần thử trước khi khóa 10 phút)')
+    return render_template('admin_panel.html', error=None)
+
+@app.route('/admin-logout', methods=['POST', 'GET'])
+def admin_logout():
+    session.pop('is_admin', None)
+    return redirect(url_for('admin'))
 
 @app.route('/admin-dashboard')
 def admin_dashboard():
@@ -663,36 +808,66 @@ def admin_stats_api():
         return jsonify({'error': 'Unauthorized'}), 403
 
     all_room_ids = set(active_rooms.keys()) | set(room_states.keys())
+    db_rooms_meta = {}
     try:
         with db_lock:
             conn = get_db()
-            rows = conn.execute('SELECT room_id FROM room_data').fetchall()
+            rows = conn.execute('SELECT room_id, length(state_json) as sz, updated_at FROM room_data').fetchall()
             banned_rows = conn.execute('SELECT ip FROM banned_ips').fetchall()
             conn.close()
             for r in rows:
                 all_room_ids.add(r['room_id'])
+                db_rooms_meta[r['room_id']] = {
+                    'size_kb': round((r['sz'] or 0) / 1024.0, 1),
+                    'updated_at': r['updated_at']
+                }
             banned_ips = [r['ip'] for r in banned_rows]
     except Exception:
         banned_ips = []
 
     rooms_detail = []
     for r_id in sorted(all_room_ids):
-        st = get_room_state(r_id)
+        in_ram = r_id in room_states
         users_in = get_room_users(r_id)
         sc = screen_shares.get(r_id)
+        if in_ram:
+            st = room_states[r_id]
+            try:
+                ram_kb = round(len(json.dumps(st, ensure_ascii=False).encode('utf-8')) / 1024.0, 1)
+            except Exception:
+                ram_kb = 0.0
+            strokes_cnt = len(st.get('draw_history', []))
+            texts_cnt = len(st.get('texts', {}))
+            stickies_cnt = len(st.get('stickies', {}))
+            media_cnt = len(st.get('media_list', [])) + len(st.get('board_media', {}))
+            games_cnt = len(st.get('multi_widgets', {}))
+            chat_cnt = len(st.get('chat', []))
+        else:
+            ram_kb = 0.0
+            strokes_cnt = 0
+            texts_cnt = 0
+            stickies_cnt = 0
+            media_cnt = 0
+            games_cnt = 0
+            chat_cnt = 0
+
         rooms_detail.append({
             'room_id': r_id,
+            'in_ram': in_ram,
+            'ram_kb': ram_kb,
+            'db_kb': db_rooms_meta.get(r_id, {}).get('size_kb', 0.0),
             'user_count': len(users_in),
             'users': users_in,
-            'strokes': len(st.get('draw_history', [])),
-            'texts': len(st.get('texts', {})),
-            'stickies': len(st.get('stickies', {})),
-            'media_count': len(st.get('media_list', [])) + len(st.get('board_media', {})),
-            'chat_count': len(st.get('chat', [])),
+            'strokes': strokes_cnt,
+            'texts': texts_cnt,
+            'stickies': stickies_cnt,
+            'media_count': media_cnt,
+            'games_count': games_cnt,
+            'chat_count': chat_cnt,
             'screen_sharing': f"{sc.get('username')} ({sc.get('mode_label')})" if sc else None
         })
 
-    rooms_detail.sort(key=lambda x: (x['user_count'], x['strokes']), reverse=True)
+    rooms_detail.sort(key=lambda x: (x['user_count'], x['in_ram'], x['ram_kb']), reverse=True)
 
     live_users = []
     for sid, u in list(connected_users.items()):
@@ -701,6 +876,7 @@ def admin_stats_api():
             'username': u.get('username', 'Thành viên'),
             'room': u.get('room', ''),
             'ip': u.get('ip', 'Unknown'),
+            'voice': bool(u.get('voice', False)),
             'joined_at': time.strftime('%H:%M:%S', time.localtime(u.get('joined_at', time.time())))
         })
 
@@ -751,6 +927,7 @@ def admin_delete_room(room_id):
         conn.execute('DELETE FROM room_data WHERE room_id = ?', (room_id,))
         conn.commit()
         conn.close()
+    trigger_os_memory_trim()
     if request.headers.get('Accept') == 'application/json':
         return jsonify({'ok': True})
     return redirect(url_for('admin_dashboard'))
@@ -799,19 +976,187 @@ def admin_cleanup_uploads():
         for bm in st.get('board_media', {}).values():
             if bm.get('url'):
                 used_files.add(bm['url'].rsplit('/', 1)[-1])
+    try:
+        with db_lock:
+            conn = get_db()
+            rows = conn.execute('SELECT state_json FROM room_data').fetchall()
+            conn.close()
+            for row in rows:
+                try:
+                    st = json.loads(row['state_json'])
+                    for m in st.get('media_list', []):
+                        if m.get('url'):
+                            used_files.add(m['url'].rsplit('/', 1)[-1])
+                    for bm in st.get('board_media', {}).values():
+                        if bm.get('url'):
+                            used_files.add(bm['url'].rsplit('/', 1)[-1])
+                except Exception:
+                    pass
+    except Exception:
+        pass
     upload_dir = os.path.join(app.root_path, 'static', 'uploads')
     removed_count = 0
+    freed_mb = 0.0
     if os.path.exists(upload_dir):
         for fname in os.listdir(upload_dir):
             if fname == '.gitkeep':
                 continue
             if fname not in used_files:
+                fpath = os.path.join(upload_dir, fname)
                 try:
-                    os.remove(os.path.join(upload_dir, fname))
+                    sz = os.path.getsize(fpath)
+                    os.remove(fpath)
                     removed_count += 1
+                    freed_mb += sz / (1024 * 1024)
                 except Exception:
                     pass
-    return jsonify({'ok': True, 'removed': removed_count})
+    return jsonify({'ok': True, 'removed': removed_count, 'freed_mb': round(freed_mb, 2)})
+
+@app.route('/api/admin/free_ram', methods=['POST'])
+def admin_free_ram():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    mode = data.get('mode', 'all')
+    before_metrics = collect_system_metrics()
+    unloaded_rooms = 0
+    cleared_frames = 0
+    trimmed_strokes = 0
+
+    active_room_ids_with_users = {u.get('room') for u in list(connected_users.values()) if u.get('room')}
+
+    if mode in ('all', 'rooms'):
+        for r_id in list(room_states.keys()):
+            save_room_immediately(r_id)
+            if r_id not in active_room_ids_with_users:
+                room_states.pop(r_id, None)
+                xo_games.pop(r_id, None)
+                chess_games.pop(r_id, None)
+                memory_games.pop(r_id, None)
+                screen_shares.pop(r_id, None)
+                active_rooms.pop(r_id, None)
+                unloaded_rooms += 1
+
+    if mode in ('all', 'frames'):
+        for r_id, sc in list(screen_shares.items()):
+            if sc.get('last_frame'):
+                sc['last_frame'] = None
+                cleared_frames += 1
+
+    if mode in ('all', 'trim'):
+        for r_id, st in list(room_states.items()):
+            dh = st.get('draw_history', [])
+            if len(dh) > 600:
+                trimmed_strokes += len(dh) - 600
+                st['draw_history'] = dh[-600:]
+            ch = st.get('chat', [])
+            if len(ch) > 50:
+                st['chat'] = ch[-50:]
+            save_room_immediately(r_id)
+
+    try:
+        if os.path.exists('/proc/sys/vm/drop_caches'):
+            with open('/proc/sys/vm/drop_caches', 'w') as f:
+                f.write('3\n')
+    except Exception:
+        pass
+
+    freed_gc = trigger_os_memory_trim()
+    after_metrics = collect_system_metrics()
+    saved_rss = round(max(0.0, before_metrics['app_rss_mb'] - after_metrics['app_rss_mb']), 2)
+    saved_sys = round(max(0.0, before_metrics['ram_used_mb'] - after_metrics['ram_used_mb']), 2)
+
+    return jsonify({
+        'ok': True,
+        'unloaded_rooms': unloaded_rooms,
+        'cleared_frames': cleared_frames,
+        'trimmed_strokes': trimmed_strokes,
+        'freed_gc_objects': freed_gc,
+        'saved_rss_mb': saved_rss,
+        'saved_sys_mb': saved_sys,
+        'after': after_metrics
+    })
+
+@app.route('/api/admin/unload_room/<room_id>', methods=['POST'])
+def admin_unload_single_room(room_id):
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    if room_id in room_states:
+        save_room_immediately(room_id)
+        room_states.pop(room_id, None)
+        xo_games.pop(room_id, None)
+        chess_games.pop(room_id, None)
+        memory_games.pop(room_id, None)
+    trigger_os_memory_trim()
+    return jsonify({'ok': True, 'room_id': room_id})
+
+@app.route('/api/admin/clear_games/<room_id>', methods=['POST'])
+def admin_clear_room_games(room_id):
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    state = get_room_state(room_id)
+    state['multi_widgets'] = {}
+    save_room_immediately(room_id)
+    users_list = get_room_users(room_id)
+    live_bmedia = [compute_live_media(bm) for bm in state.get('board_media', {}).values()]
+    socketio.emit('room_state', {
+        'draw_history': state['draw_history'],
+        'texts': list(state.get('texts', {}).values()),
+        'stickies': list(state['stickies'].values()),
+        'board_media': live_bmedia,
+        'multi_widgets': [],
+        'media': compute_live_media(state['media']),
+        'media_list': state.get('media_list', [])[-30:],
+        'screen_share': screen_shares.get(room_id),
+        'chat': state['chat'][-50:],
+        'settings': state['settings'],
+        'widgets': state['widgets'],
+        'users': users_list
+    }, to=room_id)
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/kick_user', methods=['POST'])
+def admin_kick_user():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    sid = data.get('sid')
+    reason = data.get('reason') or 'Quản trị viên đã mời bạn rời khỏi phòng.'
+    if not sid or sid not in connected_users:
+        return jsonify({'error': 'Người dùng không còn kết nối'}), 404
+    socketio.emit('force_leave', {'msg': reason}, to=sid)
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/change_password', methods=['POST'])
+def admin_change_password():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    current_pwd = str(data.get('current_password', '')).strip()
+    new_pwd = str(data.get('new_password', '')).strip()
+    if not verify_admin_password(current_pwd):
+        return jsonify({'error': 'Mật khẩu hiện tại không đúng!'}), 400
+    if len(new_pwd) < 6:
+        return jsonify({'error': 'Mật khẩu mới phải có ít nhất 6 ký tự!'}), 400
+    set_new_admin_password(new_pwd)
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/vacuum_db', methods=['POST'])
+def admin_vacuum_db():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    for r_id in list(room_states.keys()):
+        save_room_immediately(r_id)
+    try:
+        with db_lock:
+            conn = get_db()
+            conn.execute('VACUUM')
+            conn.execute('PRAGMA shrink_memory')
+            conn.close()
+        trigger_os_memory_trim()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/admin/backup/<room_id>')
 def admin_backup_room(room_id):
@@ -819,7 +1164,7 @@ def admin_backup_room(room_id):
         return jsonify({'error': 'Unauthorized'}), 403
     state = get_room_state(room_id)
     payload = {
-        'backup_version': 22,
+        'backup_version': 28,
         'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'room_id': room_id,
         'state': state,
@@ -857,7 +1202,7 @@ def admin_backup_all_zip():
                     except Exception:
                         xo_obj = init_xo_game()
                     room_dump = {
-                        'backup_version': 22,
+                        'backup_version': 28,
                         'room_id': rid,
                         'updated_at': row['updated_at'],
                         'state': st_obj,
@@ -994,7 +1339,7 @@ def admin_broadcast():
 def room_export_json(room_id):
     state = get_room_state(room_id)
     payload = {
-        'backup_version': 22,
+        'backup_version': 28,
         'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'room_id': room_id,
         'state': state,
