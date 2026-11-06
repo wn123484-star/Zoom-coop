@@ -59,13 +59,19 @@ function create3DDiceDOM(initialVal, isSmall) {
         const v = (val >= 1 && val <= 6) ? val : 6;
         const target = CUBE_ROTATIONS[v];
         if (animateSpin) {
-            const randSpinsX = (Math.floor(Math.random() * 2) + 2) * 360;
-            const randSpinsY = (Math.floor(Math.random() * 2) + 2) * 360;
+            scene.classList.remove('dropping-dice');
+            void scene.offsetWidth;
+            scene.classList.add('dropping-dice');
+            const randSpinsX = (Math.floor(Math.random() * 2) + 3) * 360;
+            const randSpinsY = (Math.floor(Math.random() * 2) + 3) * 360;
             cube.style.transition = 'none';
-            cube.style.transform = `rotateX(${randSpinsX}deg) rotateY(${randSpinsY}deg) rotateZ(180deg)`;
+            cube.style.transform = `rotateX(${randSpinsX}deg) rotateY(${randSpinsY}deg) rotateZ(210deg)`;
             void cube.offsetWidth;
-            cube.style.transition = 'transform 0.72s cubic-bezier(0.18, 0.89, 0.32, 1.18)';
+            cube.style.transition = 'transform 0.88s cubic-bezier(0.22, 1, 0.36, 1)';
             cube.style.transform = `rotateX(${target.x}deg) rotateY(${target.y}deg) rotateZ(0deg)`;
+            setTimeout(() => {
+                scene.classList.remove('dropping-dice');
+            }, 950);
         } else {
             cube.style.transition = 'transform 0.25s ease';
             cube.style.transform = `rotateX(${target.x}deg) rotateY(${target.y}deg) rotateZ(0deg)`;
@@ -128,7 +134,8 @@ function makeInitialGameData(type, creatorName) {
         return {
             seats: { R: user, B: '🤖 Bot', Y: null, G: null },
             locked_players: { [user]: 'R' },
-            started: false,
+            turn_limit: 15,
+            turn_started_at: Date.now() / 1000,
             horses: { R: [-1, -1, -1, -1], B: [-1, -1, -1, -1], Y: [-1, -1, -1, -1], G: [-1, -1, -1, -1] },
             turn: 'R',
             dice: 6,
@@ -207,7 +214,7 @@ function makeInitialGameData(type, creatorName) {
 
 function getDefaultWidgetMeta(type, idx) {
     if (type === 'noitu') return { title: `🔤 Nối Từ Tiếng Việt #${idx}`, w: 460, h: 480, minW: 360, minH: 380 };
-    if (type === 'ludo') return { title: `🐎 Cờ Cá Ngựa #${idx}`, w: 500, h: 640, minW: 450, minH: 560 };
+    if (type === 'ludo') return { title: `🐎 Cờ Cá Ngựa #${idx}`, w: 500, h: 660, minW: 450, minH: 580 };
     if (type === 'chess') return { title: `♟️ Cờ Vua Quốc Tế #${idx}`, w: 480, h: 580, minW: 440, minH: 520 };
     if (type === 'xo') return { title: `⭕ Cờ Caro XO #${idx}`, w: 500, h: 580, minW: 380, minH: 440 };
     if (type === 'memory') return { title: `🃏 Lật Thẻ Trí Nhớ #${idx}`, w: 380, h: 440, minW: 340, minH: 400 };
@@ -616,8 +623,19 @@ function buildLudoInstanceUI(inst, bodyEl) {
     const wid = inst.data.id;
     bodyEl.innerHTML = `
         <div class="ludo-seats-bar"></div>
+        <div class="ludo-timer-config-bar">
+            <div style="display:flex; gap:4px; align-items:center;">
+                <span>⏱️ Thời gian lượt:</span>
+                <button type="button" class="ludo-topt-btn" data-sec="10">10s</button>
+                <button type="button" class="ludo-topt-btn active" data-sec="15">15s</button>
+                <button type="button" class="ludo-topt-btn" data-sec="30">30s</button>
+                <button type="button" class="ludo-topt-btn" data-sec="0">∞ Tắt</button>
+            </div>
+            <span class="ludo-countdown-badge">15s</span>
+        </div>
         <div class="ludo-board-wrap">
             <div class="ludo-board"></div>
+            <div class="ludo-board-DropOverlay" style="display:none;"></div>
         </div>
         <div class="ludo-controls-bar">
             <div class="ludo-3d-dice-mount"></div>
@@ -626,13 +644,29 @@ function buildLudoInstanceUI(inst, bodyEl) {
         </div>
     `;
     const seatsBar = bodyEl.querySelector('.ludo-seats-bar');
+    const toptBtns = bodyEl.querySelectorAll('.ludo-topt-btn');
+    const countdownBadge = bodyEl.querySelector('.ludo-countdown-badge');
     const boardEl = bodyEl.querySelector('.ludo-board');
+    const dropOverlay = bodyEl.querySelector('.ludo-board-DropOverlay');
     const diceMount = bodyEl.querySelector('.ludo-3d-dice-mount');
     const infoText = bodyEl.querySelector('.ludo-info-text');
     const rollBtn = bodyEl.querySelector('.ludo-roll-btn');
 
     const ludoCube = create3DDiceDOM(6, true);
     diceMount.appendChild(ludoCube.el);
+
+    const dropCenterCube = create3DDiceDOM(6, false);
+    dropOverlay.appendChild(dropCenterCube.el);
+
+    toptBtns.forEach(btn => {
+        window.bindSafeButton(btn, () => {
+            const gd = inst.data.game_data;
+            gd.turn_limit = parseInt(btn.getAttribute('data-sec'), 10);
+            gd.turn_started_at = Date.now() / 1000;
+            inst.render(false);
+            emitWidgetUpdate(wid, null, false);
+        });
+    });
 
     const cellsMap = {};
     for (let r = 0; r < 15; r++) {
@@ -676,11 +710,60 @@ function buildLudoInstanceUI(inst, bodyEl) {
         });
     });
 
-    function executeLudoHorseMove(color, hIdx, isBotCall) {
+    function startLudoTurnTimer() {
+        if (inst.timerInterval) {
+            clearInterval(inst.timerInterval);
+            inst.timerInterval = null;
+        }
+        const gd = inst.data.game_data;
+        if (!gd || gd.winner) {
+            countdownBadge.innerText = '--';
+            return;
+        }
+        const limit = gd.turn_limit !== undefined ? gd.turn_limit : 15;
+        if (limit <= 0) {
+            countdownBadge.innerText = '∞';
+            return;
+        }
+        const updateTick = () => {
+            const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - (gd.turn_started_at || Date.now() / 1000)));
+            const rem = Math.max(0, limit - elapsed);
+            countdownBadge.innerText = rem + 's';
+            if (rem <= 0) {
+                clearInterval(inst.timerInterval);
+                inst.timerInterval = null;
+                const me = window.USERNAME || 'Thành viên';
+                const activeCol = gd.turn;
+                const seatOwner = gd.seats[activeCol];
+                const shouldHandleTimeout = (seatOwner === me) || (seatOwner !== me && isDesignatedBotRunner(gd));
+                if (shouldHandleTimeout) {
+                    if (gd.phase === 'move') {
+                        const movables = [0, 1, 2, 3].filter(h => canMoveLudoHorse(gd, activeCol, h, gd.dice));
+                        if (movables.length > 0) {
+                            executeLudoHorseMove(activeCol, movables[0], true);
+                            return;
+                        }
+                    }
+                    const nextCol = getNextActiveLudoTurn(gd, activeCol);
+                    gd.turn = nextCol;
+                    gd.phase = 'roll';
+                    gd.turn_started_at = Date.now() / 1000;
+                    gd.status_text = `⏰ Hết ${limit}s! ${LUDO_LABELS[activeCol]} mất lượt → Chuyển sang ${LUDO_LABELS[nextCol]}!`;
+                    inst.render(false);
+                    emitWidgetUpdate(wid, null, false);
+                    scheduleBotCheck();
+                }
+            }
+        };
+        updateTick();
+        inst.timerInterval = setInterval(updateTick, 500);
+    }
+
+    function executeLudoHorseMove(color, hIdx, isBotOrAutoCall) {
         const gd = inst.data.game_data;
         const me = window.USERNAME || 'Thành viên';
         if (gd.winner || gd.turn !== color || gd.phase !== 'move') return;
-        if (!isBotCall && gd.seats[color] !== me) {
+        if (!isBotOrAutoCall && gd.seats[color] !== me) {
             if (window.showToast) window.showToast(`⏳ Đây là quân của ${gd.seats[color]}, bạn không thể đi hộ!`);
             return;
         }
@@ -715,11 +798,13 @@ function buildLudoInstanceUI(inst, bodyEl) {
         const bonusTurn = (dice === 6 || dice === 1 || kickedMsg !== '');
         if (bonusTurn) {
             gd.phase = 'roll';
+            gd.turn_started_at = Date.now() / 1000;
             gd.status_text = `${LUDO_LABELS[color]} được thưởng thêm lượt!${kickedMsg} Hãy tung xúc xắc!`;
         } else {
             const nextCol = getNextActiveLudoTurn(gd, color);
             gd.turn = nextCol;
             gd.phase = 'roll';
+            gd.turn_started_at = Date.now() / 1000;
             gd.status_text = `${kickedMsg} Lượt của ${LUDO_LABELS[nextCol]} (${gd.seats[nextCol] || 'Trống'}): Hãy tung xúc xắc!`;
         }
 
@@ -740,9 +825,9 @@ function buildLudoInstanceUI(inst, bodyEl) {
             return;
         }
 
-        gd.started = true;
         const val = Math.floor(Math.random() * 6) + 1;
         gd.dice = val;
+        gd.turn_started_at = Date.now() / 1000;
 
         const movableIndices = [0, 1, 2, 3].filter(h => canMoveLudoHorse(gd, activeCol, h, val));
         if (movableIndices.length === 0) {
@@ -767,8 +852,8 @@ function buildLudoInstanceUI(inst, bodyEl) {
             inst.render(true);
             emitWidgetUpdate(wid, 'roll', false);
             setTimeout(() => {
-                executeLudoHorseMove(activeCol, movableIndices[0], isBotCall);
-            }, 780);
+                executeLudoHorseMove(activeCol, movableIndices[0], true);
+            }, 950);
             return;
         }
 
@@ -796,7 +881,7 @@ function buildLudoInstanceUI(inst, bodyEl) {
                     executeLudoHorseMove(gd.turn, pick, true);
                 }
             }
-        }, 850);
+        }, 900);
     }
 
     window.bindSafeButton(rollBtn, () => {
@@ -804,7 +889,9 @@ function buildLudoInstanceUI(inst, bodyEl) {
     });
 
     inst.resetGame = () => {
+        const curLimit = (inst.data.game_data && inst.data.game_data.turn_limit !== undefined) ? inst.data.game_data.turn_limit : 15;
         inst.data.game_data = makeInitialGameData('ludo', window.USERNAME || 'Thành viên');
+        inst.data.game_data.turn_limit = curLimit;
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
     };
@@ -814,6 +901,9 @@ function buildLudoInstanceUI(inst, bodyEl) {
         if (!gd) return;
         const me = window.USERNAME || 'Thành viên';
         if (!gd.locked_players) gd.locked_players = {};
+
+        const curLimit = gd.turn_limit !== undefined ? gd.turn_limit : 15;
+        toptBtns.forEach(b => b.classList.toggle('active', parseInt(b.getAttribute('data-sec'), 10) === curLimit));
 
         LUDO_COLORS.forEach(c => {
             const occ = gd.seats[c];
@@ -916,11 +1006,21 @@ function buildLudoInstanceUI(inst, bodyEl) {
         });
 
         ludoCube.setFace(gd.dice || 6, !!animateRoll);
+        if (animateRoll) {
+            dropOverlay.style.display = 'block';
+            dropCenterCube.setFace(gd.dice || 6, true);
+            if (inst.dropHideTimer) clearTimeout(inst.dropHideTimer);
+            inst.dropHideTimer = setTimeout(() => {
+                dropOverlay.style.display = 'none';
+            }, 1150);
+        }
 
         infoText.innerText = gd.status_text || 'Hãy tung xúc xắc!';
         const isMyTurnToRoll = (!gd.winner && gd.phase === 'roll' && gd.seats[gd.turn] === me);
         rollBtn.disabled = !isMyTurnToRoll;
         rollBtn.innerText = isMyTurnToRoll ? '🎲 Tung Xúc Xắc' : `⏳ Lượt: ${gd.seats[gd.turn] || LUDO_LABELS[gd.turn]}`;
+
+        startLudoTurnTimer();
     };
 
     inst.render(false);
@@ -1299,8 +1399,8 @@ function buildDiceInstanceUI(inst, bodyEl) {
             <button type="button" class="dice-cnt-btn" data-count="3">3 Viên</button>
         </div>
         <div class="dice-stage"></div>
-        <div class="dice-result-text">Nhấn nút để lắc xúc xắc 3D!</div>
-        <button type="button" class="dice-roll-main-btn">🎲 LẮC XÚC XẮC 3D</button>
+        <div class="dice-result-text">Nhấn nút để thả rơi xúc xắc 3D!</div>
+        <button type="button" class="dice-roll-main-btn">🎲 TUNG XÚC XẮC RƠI TRÊN BÀN</button>
         <div class="dice-history-list">Chưa có lượt tung</div>
     `;
     bodyEl.classList.add('dice-body');
@@ -1599,6 +1699,7 @@ function mountOrUpdateMultiWidget(wObj, animType) {
         window.bindSafeButton(closeBtn, () => {
             if (inst.timerInterval) clearInterval(inst.timerInterval);
             if (inst.botTimer) clearTimeout(inst.botTimer);
+            if (inst.dropHideTimer) clearTimeout(inst.dropHideTimer);
             container.remove();
             delete multiInstances[wid];
             socket.emit('multi_widget_event', {
@@ -1676,6 +1777,7 @@ window.loadMultiWidgets = function(list) {
     Object.values(multiInstances).forEach(inst => {
         if (inst.timerInterval) clearInterval(inst.timerInterval);
         if (inst.botTimer) clearTimeout(inst.botTimer);
+        if (inst.dropHideTimer) clearTimeout(inst.dropHideTimer);
         if (inst.el) inst.el.remove();
     });
     Object.keys(multiInstances).forEach(k => delete multiInstances[k]);
@@ -1695,6 +1797,7 @@ socket.on('multi_widget_synced', (data) => {
         if (inst) {
             if (inst.timerInterval) clearInterval(inst.timerInterval);
             if (inst.botTimer) clearTimeout(inst.botTimer);
+            if (inst.dropHideTimer) clearTimeout(inst.dropHideTimer);
             if (inst.el) inst.el.remove();
             delete multiInstances[data.id];
         }

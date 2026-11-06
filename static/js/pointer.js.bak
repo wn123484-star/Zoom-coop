@@ -1,6 +1,8 @@
 const cursorsContainer = document.getElementById('cursors-container');
 const stampsLayer = document.getElementById('stamps-layer');
 const cursors = {};
+const pendingCursorUpdates = {};
+let cursorRafScheduled = false;
 let lastSend = 0;
 let localTouchEl = null;
 let localTouchTimer = null;
@@ -52,7 +54,7 @@ function broadcastPointerPosition(clientX, clientY, isTouch) {
         showLocalTouchIndicator(wx, wy);
     }
     const now = Date.now();
-    if (now - lastSend > 30 || isTouch) {
+    if (now - lastSend > 35 || isTouch) {
         socket.emit('mouse_move', {
             room_id: ROOM_ID,
             x: wx,
@@ -66,51 +68,81 @@ function broadcastPointerPosition(clientX, clientY, isTouch) {
 
 document.addEventListener('pointermove', (e) => {
     broadcastPointerPosition(e.clientX, e.clientY, e.pointerType === 'touch');
-});
+}, { passive: true });
 
 document.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'touch') {
         broadcastPointerPosition(e.clientX, e.clientY, true);
     }
-});
+}, { passive: true });
+
+function flushCursorDOMUpdates() {
+    cursorRafScheduled = false;
+    const now = Date.now();
+    Object.keys(pendingCursorUpdates).forEach(sid => {
+        const data = pendingCursorUpdates[sid];
+        delete pendingCursorUpdates[sid];
+        if (!cursors[sid]) {
+            const el = document.createElement('div');
+            el.className = 'cursor';
+            const dot = document.createElement('div');
+            dot.className = 'cursor-dot';
+            const name = document.createElement('div');
+            name.className = 'cursor-name';
+            el.appendChild(dot);
+            el.appendChild(name);
+            cursorsContainer.appendChild(el);
+            cursors[sid] = { el: el, nameEl: name, lastSeen: now };
+        }
+        const item = cursors[sid];
+        item.lastSeen = now;
+        const label = (data.touching ? '👆 ' : '') + (data.username || 'Thành viên');
+        if (item.nameEl.innerText !== label) {
+            item.nameEl.innerText = label;
+        }
+        item.el.classList.toggle('touching', !!data.touching);
+        item.el.style.transform = `translate3d(${data.x}px, ${data.y}px, 0)`;
+    });
+}
 
 socket.on('mouse_update', (data) => {
-    if (!cursors[data.sid]) {
-        const el = document.createElement('div');
-        el.className = 'cursor';
-        const dot = document.createElement('div');
-        dot.className = 'cursor-dot';
-        const name = document.createElement('div');
-        name.className = 'cursor-name';
-        el.appendChild(dot);
-        el.appendChild(name);
-        cursorsContainer.appendChild(el);
-        cursors[data.sid] = el;
+    if (!data || !data.sid) return;
+    pendingCursorUpdates[data.sid] = data;
+    if (!cursorRafScheduled) {
+        cursorRafScheduled = true;
+        requestAnimationFrame(flushCursorDOMUpdates);
     }
-    const cursorEl = cursors[data.sid];
-    const nameEl = cursorEl.querySelector('.cursor-name');
-    if (nameEl) {
-        nameEl.innerText = (data.touching ? '👆 ' : '') + (data.username || 'Thành viên');
-    }
-    cursorEl.classList.toggle('touching', !!data.touching);
-    cursorEl.style.transform = `translate3d(${data.x}px, ${data.y}px, 0)`;
 });
 
-socket.on('remove_cursor', (data) => {
-    if (data && data.sid && cursors[data.sid]) {
-        cursors[data.sid].remove();
-        delete cursors[data.sid];
+function removeCursorBySid(sid) {
+    delete pendingCursorUpdates[sid];
+    if (cursors[sid]) {
+        if (cursors[sid].el) cursors[sid].el.remove();
+        delete cursors[sid];
     }
+}
+
+setInterval(() => {
+    const now = Date.now();
+    Object.keys(cursors).forEach(sid => {
+        if (now - cursors[sid].lastSeen > 45000) {
+            removeCursorBySid(sid);
+        }
+    });
+}, 15000);
+
+socket.on('remove_cursor', (data) => {
+    if (data && data.sid) removeCursorBySid(data.sid);
 });
 
 socket.on('user_disconnected', (data) => {
     if (data && data.users) {
+        window.ROOM_USERS = data.users;
         const countEl = document.getElementById('online-count');
         if (countEl) countEl.innerText = data.users.length;
     }
-    if (cursors[data.sid]) {
-        cursors[data.sid].remove();
-        delete cursors[data.sid];
+    if (data && data.sid) {
+        removeCursorBySid(data.sid);
     }
 });
 

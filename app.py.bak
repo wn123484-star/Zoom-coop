@@ -244,6 +244,7 @@ def default_room_state():
         'texts': {},
         'stickies': {},
         'board_media': {},
+        'multi_widgets': {},
         'media': None,
         'media_list': [],
         'chat': [],
@@ -847,6 +848,7 @@ def restore_single_room_dict(room_id, data_obj):
         'texts': list(st.get('texts', {}).values()),
         'stickies': list(st['stickies'].values()),
         'board_media': live_bmedia,
+        'multi_widgets': list(st.get('multi_widgets', {}).values()),
         'media': compute_live_media(st['media']),
         'media_list': st.get('media_list', [])[-30:],
         'xo_game': xo_games[room_id],
@@ -1031,6 +1033,7 @@ def handle_join(data):
             'texts': list(state.get('texts', {}).values()),
             'stickies': list(state['stickies'].values()),
             'board_media': live_bmedia,
+            'multi_widgets': list(state.get('multi_widgets', {}).values()),
             'media': compute_live_media(state['media']),
             'media_list': state.get('media_list', [])[-30:],
             'xo_game': xo_games[room_id],
@@ -1409,6 +1412,54 @@ def handle_widget_state(data):
     state['widgets'][w_name] = w_info
     mark_room_dirty(room_id)
     emit('widget_updated', {'widget': w_name, 'state': w_info}, to=room_id, include_self=False)
+
+@socketio.on('multi_widget_event')
+def handle_multi_widget_event(data):
+    try:
+        room_id = data.get('room_id')
+        action = data.get('action')
+        if not room_id or not action:
+            return
+        state = get_room_state(room_id)
+        if 'multi_widgets' not in state or not isinstance(state['multi_widgets'], dict):
+            state['multi_widgets'] = {}
+        mw_map = state['multi_widgets']
+
+        if action == 'create':
+            w_obj = data.get('widget')
+            if not isinstance(w_obj, dict) or 'id' not in w_obj:
+                return
+            mw_map[w_obj['id']] = w_obj
+            mark_room_dirty(room_id)
+            emit('multi_widget_synced', {'action': 'create', 'widget': w_obj}, to=room_id)
+        elif action == 'update':
+            wid = data.get('id')
+            if not wid or wid not in mw_map:
+                if isinstance(data.get('widget'), dict) and 'id' in data['widget']:
+                    wid = data['widget']['id']
+                    mw_map[wid] = data['widget']
+                else:
+                    return
+            target = mw_map[wid]
+            for k in ('x', 'y', 'w', 'h', 'minimized', 'title', 'game_data'):
+                if k in data:
+                    target[k] = data[k]
+            mark_room_dirty(room_id)
+            include_self = bool(data.get('echo', False))
+            emit('multi_widget_synced', {
+                'action': 'update',
+                'id': wid,
+                'widget': target,
+                'anim': data.get('anim')
+            }, to=room_id, include_self=include_self)
+        elif action == 'delete':
+            wid = data.get('id')
+            if wid and wid in mw_map:
+                del mw_map[wid]
+                mark_room_dirty(room_id)
+            emit('multi_widget_synced', {'action': 'delete', 'id': wid}, to=room_id)
+    except Exception:
+        pass
 
 @socketio.on('dice_roll')
 def handle_dice_roll(data):

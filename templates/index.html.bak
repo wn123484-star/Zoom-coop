@@ -1,28 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SyncSpace</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SyncSpace - Không gian hợp tác thời gian thực</title>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 <div class="lobby-container">
 <h1 class="logo-glow">SyncSpace</h1>
 <form id="join-form">
-<input type="text" id="username" placeholder="Your Display Name" required autocomplete="off">
-<input type="text" id="room_id" placeholder="Room ID" required autocomplete="off">
-<button type="submit">Join Workspace</button>
+<input type="text" id="username" placeholder="Nhập tên hiển thị của bạn..." required autocomplete="off" maxlength="35">
+<input type="text" id="room_id" placeholder="Nhập mã phòng (VD: team1)..." required autocomplete="off" maxlength="40">
+<button type="submit">Vào Phòng Ngay</button>
 </form>
 </div>
 <script>
-document.getElementById('join-form').addEventListener('submit', function(e) {
-e.preventDefault();
-const name = document.getElementById('username').value.trim();
-const room = document.getElementById('room_id').value.trim();
-if(name && room) {
-window.location.href = `/room/${room}?name=${encodeURIComponent(name)}`;
+const savedName = localStorage.getItem('syncspace_username');
+if (savedName) {
+    document.getElementById('username').value = savedName;
 }
+document.getElementById('join-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const name = document.getElementById('username').value.trim();
+    const room = document.getElementById('room_id').value.trim();
+    if (name && room) {
+        localStorage.setItem('syncspace_username', name);
+        window.location.href = `/room/${encodeURIComponent(room)}?name=${encodeURIComponent(name)}`;
+    }
 });
 </script>
 </body>

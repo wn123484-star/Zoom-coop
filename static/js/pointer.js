@@ -43,13 +43,10 @@ window.spawnFloatingStamp = function(x, y, emoji, sender) {
 };
 
 function broadcastPointerPosition(clientX, clientY, isTouch) {
-    if (!socket || !socket.connected) return;
-    const ws = document.getElementById('workspace');
-    if (!ws) return;
-    const rect = ws.getBoundingClientRect();
-    const scale = window.workspaceScale || 1;
-    const wx = Math.round((clientX - rect.left) / scale);
-    const wy = Math.round((clientY - rect.top) / scale);
+    if (!socket || !socket.connected || !window.getWorkspaceCoords) return;
+    const pos = window.getWorkspaceCoords(clientX, clientY);
+    const wx = Math.round(pos.x);
+    const wy = Math.round(pos.y);
     if (isTouch) {
         showLocalTouchIndicator(wx, wy);
     }
