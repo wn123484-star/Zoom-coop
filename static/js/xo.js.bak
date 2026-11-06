@@ -26,6 +26,31 @@ const memoryMinBtn = document.getElementById('memory-min-btn');
 const memoryCloseBtn = document.getElementById('memory-close-btn');
 const memoryHeader = document.getElementById('memory-header');
 
+const diceContainer = document.getElementById('dice-container');
+const diceHeader = document.getElementById('dice-header');
+const diceMinBtn = document.getElementById('dice-min-btn');
+const diceCloseBtn = document.getElementById('dice-close-btn');
+const diceStage = document.getElementById('dice-stage');
+const diceResultText = document.getElementById('dice-result-text');
+const diceHistoryList = document.getElementById('dice-history-list');
+const btnRollDiceAction = document.getElementById('btn-roll-dice-action');
+let selectedDiceCount = 2;
+let diceAnimInterval = null;
+
+const timerContainer = document.getElementById('timer-container');
+const timerHeader = document.getElementById('timer-header');
+const timerMinBtn = document.getElementById('timer-min-btn');
+const timerCloseBtn = document.getElementById('timer-close-btn');
+const timerBigClock = document.getElementById('timer-big-clock');
+const timerProgressBar = document.getElementById('timer-progress-bar');
+const timerStatusSub = document.getElementById('timer-status-sub');
+const btnTimerStart = document.getElementById('btn-timer-start');
+const btnTimerPause = document.getElementById('btn-timer-pause');
+const btnTimerReset = document.getElementById('btn-timer-reset');
+let boardTimerInterval = null;
+let boardTimerDuration = 300;
+let boardTimerRemaining = 300;
+
 function setupBoardWidgetDragAndResize(wName, container, header, minW, minH) {
     if (!container || !header) return;
     const syncState = () => {
@@ -93,6 +118,8 @@ function setupBoardWidgetDragAndResize(wName, container, header, minW, minH) {
 const syncXoState = setupBoardWidgetDragAndResize('xo', xoContainer, xoHeader, 360, 420);
 const syncChessState = setupBoardWidgetDragAndResize('chess', chessContainer, chessHeader, 440, 520);
 const syncMemoryState = setupBoardWidgetDragAndResize('memory', memoryContainer, memoryHeader, 340, 400);
+const syncDiceState = setupBoardWidgetDragAndResize('dice', diceContainer, diceHeader, 310, 310);
+const syncTimerState = setupBoardWidgetDragAndResize('timer', timerContainer, timerHeader, 310, 280);
 
 function toggleGameWidget(wName, container, syncFn, defaultW, defaultH) {
     if (!container) return;
@@ -119,6 +146,14 @@ window.bindSafeButton(document.getElementById('btn-game-chess'), () => {
 
 window.bindSafeButton(document.getElementById('btn-game-memory'), () => {
     toggleGameWidget('memory', memoryContainer, syncMemoryState, 380, 440);
+});
+
+window.bindSafeButton(document.getElementById('btn-game-dice'), () => {
+    toggleGameWidget('dice', diceContainer, syncDiceState, 360, 350);
+});
+
+window.bindSafeButton(document.getElementById('btn-game-timer'), () => {
+    toggleGameWidget('timer', timerContainer, syncTimerState, 350, 310);
 });
 
 window.bindSafeButton(xoMinBtn, () => {
@@ -502,4 +537,220 @@ socket.on('memory_update', (data) => {
     if (data && data.game) {
         renderMemoryGame(data.game, data.notice || '');
     }
+});
+
+const DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+window.bindSafeButton(diceMinBtn, () => {
+    diceContainer.classList.toggle('minimized');
+    if (syncDiceState) syncDiceState();
+});
+window.bindSafeButton(diceCloseBtn, () => {
+    diceContainer.style.display = 'none';
+    if (syncDiceState) syncDiceState();
+});
+
+document.querySelectorAll('.dice-cnt-btn').forEach(btn => {
+    window.bindSafeButton(btn, () => {
+        document.querySelectorAll('.dice-cnt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedDiceCount = parseInt(btn.getAttribute('data-count'), 10) || 2;
+    });
+});
+
+if (btnRollDiceAction) {
+    window.bindSafeButton(btnRollDiceAction, () => {
+        socket.emit('dice_roll', {
+            room_id: ROOM_ID,
+            count: selectedDiceCount,
+            username: window.USERNAME || 'Thành viên'
+        });
+    });
+}
+
+function renderDiceState(diceSt, animate) {
+    if (!diceSt || !diceStage) return;
+    const vals = Array.isArray(diceSt.values) && diceSt.values.length > 0 ? diceSt.values : [6, 6];
+    selectedDiceCount = vals.length;
+    document.querySelectorAll('.dice-cnt-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.getAttribute('data-count'), 10) === selectedDiceCount);
+    });
+
+    if (diceAnimInterval) {
+        clearInterval(diceAnimInterval);
+        diceAnimInterval = null;
+    }
+
+    diceStage.innerHTML = '';
+    const cubes = vals.map(v => {
+        const c = document.createElement('div');
+        c.className = 'dice-cube' + (animate ? ' rolling' : '') + (v === 6 ? ' high-val' : '');
+        c.innerText = DICE_FACES[(v - 1) % 6] || '⚅';
+        diceStage.appendChild(c);
+        return c;
+    });
+
+    if (animate) {
+        if (diceResultText) diceResultText.innerText = `🎲 ${diceSt.roller || 'Thành viên'} đang lắc xúc xắc...`;
+        diceAnimInterval = setInterval(() => {
+            cubes.forEach(c => {
+                const randFace = DICE_FACES[Math.floor(Math.random() * 6)];
+                c.innerText = randFace;
+            });
+        }, 75);
+        setTimeout(() => {
+            if (diceAnimInterval) {
+                clearInterval(diceAnimInterval);
+                diceAnimInterval = null;
+            }
+            cubes.forEach((c, idx) => {
+                const finalV = vals[idx] || 6;
+                c.classList.remove('rolling');
+                c.classList.toggle('high-val', finalV === 6);
+                c.innerText = DICE_FACES[(finalV - 1) % 6] || '⚅';
+            });
+            if (diceResultText) {
+                diceResultText.innerHTML = `🎉 <b>${diceSt.roller || 'Thành viên'}</b> tung được: <b>${vals.join(' + ')} = ${diceSt.total} nút</b>`;
+            }
+            if (diceHistoryList && Array.isArray(diceSt.history) && diceSt.history.length > 0) {
+                diceHistoryList.innerText = 'Lịch sử: ' + diceSt.history.slice().reverse().join(' | ');
+            }
+        }, 720);
+    } else {
+        if (diceResultText) {
+            diceResultText.innerHTML = `Kết quả gần nhất (${diceSt.roller || 'Hệ thống'}): <b>${vals.join(' + ')} = ${diceSt.total} nút</b>`;
+        }
+        if (diceHistoryList && Array.isArray(diceSt.history) && diceSt.history.length > 0) {
+            diceHistoryList.innerText = 'Lịch sử: ' + diceSt.history.slice().reverse().join(' | ');
+        }
+    }
+}
+
+window.loadDiceState = function(diceSt) {
+    renderDiceState(diceSt, false);
+};
+
+socket.on('dice_rolled', (data) => {
+    if (!data || !data.dice_state) return;
+    if (diceContainer && diceContainer.style.display === 'none') {
+        diceContainer.style.display = 'flex';
+        diceContainer.classList.remove('minimized');
+    }
+    renderDiceState(data.dice_state, true);
+});
+
+window.bindSafeButton(timerMinBtn, () => {
+    timerContainer.classList.toggle('minimized');
+    if (syncTimerState) syncTimerState();
+});
+window.bindSafeButton(timerCloseBtn, () => {
+    timerContainer.style.display = 'none';
+    if (syncTimerState) syncTimerState();
+});
+
+function formatTimerClock(sec) {
+    const s = Math.max(0, Math.floor(sec));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(rem).padStart(2, '0');
+}
+
+function updateTimerDisplayUI() {
+    if (timerBigClock) {
+        timerBigClock.innerText = formatTimerClock(boardTimerRemaining);
+        timerBigClock.classList.toggle('urgent', boardTimerRemaining > 0 && boardTimerRemaining <= 15);
+    }
+    if (timerProgressBar) {
+        const pct = boardTimerDuration > 0 ? Math.max(0, Math.min(100, (boardTimerRemaining / boardTimerDuration) * 100)) : 0;
+        timerProgressBar.style.width = pct + '%';
+    }
+}
+
+function applyTimerStateObject(tSt) {
+    if (!tSt) return;
+    if (boardTimerInterval) {
+        clearInterval(boardTimerInterval);
+        boardTimerInterval = null;
+    }
+    boardTimerDuration = parseInt(tSt.duration, 10) || 300;
+    boardTimerRemaining = parseInt(tSt.live_remaining !== undefined ? tSt.live_remaining : tSt.remaining, 10) || 0;
+
+    document.querySelectorAll('.timer-preset-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.getAttribute('data-sec'), 10) === boardTimerDuration);
+    });
+
+    updateTimerDisplayUI();
+
+    if (tSt.running && boardTimerRemaining > 0) {
+        if (timerStatusSub) timerStatusSub.innerText = `⏱️ Đang đếm ngược (Bật bởi ${tSt.starter || 'Thành viên'})`;
+        boardTimerInterval = setInterval(() => {
+            boardTimerRemaining = Math.max(0, boardTimerRemaining - 1);
+            updateTimerDisplayUI();
+            if (boardTimerRemaining <= 0) {
+                clearInterval(boardTimerInterval);
+                boardTimerInterval = null;
+                if (timerStatusSub) timerStatusSub.innerText = '⏰ ĐÃ HẾT GIỜ!';
+                if (window.showToast) window.showToast('⏰ Đồng hồ đếm ngược trên bảng đã hết giờ!');
+            }
+        }, 1000);
+    } else {
+        if (timerStatusSub) {
+            timerStatusSub.innerText = boardTimerRemaining <= 0 ? '⏰ Đã hết giờ!' : '⏸️ Đang tạm dừng / Sẵn sàng';
+        }
+    }
+}
+
+document.querySelectorAll('.timer-preset-btn').forEach(btn => {
+    window.bindSafeButton(btn, () => {
+        const sec = parseInt(btn.getAttribute('data-sec'), 10) || 300;
+        socket.emit('timer_control', {
+            room_id: ROOM_ID,
+            action: 'set',
+            seconds: sec,
+            username: window.USERNAME || 'Thành viên'
+        });
+    });
+});
+
+if (btnTimerStart) {
+    window.bindSafeButton(btnTimerStart, () => {
+        socket.emit('timer_control', {
+            room_id: ROOM_ID,
+            action: 'start',
+            username: window.USERNAME || 'Thành viên'
+        });
+    });
+}
+
+if (btnTimerPause) {
+    window.bindSafeButton(btnTimerPause, () => {
+        socket.emit('timer_control', {
+            room_id: ROOM_ID,
+            action: 'pause',
+            username: window.USERNAME || 'Thành viên'
+        });
+    });
+}
+
+if (btnTimerReset) {
+    window.bindSafeButton(btnTimerReset, () => {
+        socket.emit('timer_control', {
+            room_id: ROOM_ID,
+            action: 'reset',
+            username: window.USERNAME || 'Thành viên'
+        });
+    });
+}
+
+window.loadTimerState = function(tSt) {
+    applyTimerStateObject(tSt);
+};
+
+socket.on('timer_updated', (data) => {
+    if (!data || !data.timer_state) return;
+    if (data.action === 'start' && timerContainer && timerContainer.style.display === 'none') {
+        timerContainer.style.display = 'flex';
+        timerContainer.classList.remove('minimized');
+    }
+    applyTimerStateObject(data.timer_state);
 });

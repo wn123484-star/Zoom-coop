@@ -1,6 +1,8 @@
 import os
+import io
 import re
 import json
+import zipfile
 import sqlite3
 import time
 import shutil
@@ -11,12 +13,9 @@ import mimetypes
 import urllib.request
 import urllib.parse
 import ssl
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory, Response
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory, send_file, Response
 from flask_socketio import SocketIO, join_room, emit
 from dotenv import load_dotenv
-import io
-import zipfile
-from flask import send_file
 
 try:
     import psutil
@@ -206,6 +205,39 @@ def init_memory_game():
         'turn_user': None
     }
 
+def init_dice_state():
+    return {
+        'count': 2,
+        'values': [6, 6],
+        'total': 12,
+        'roller': 'Hệ thống',
+        'history': []
+    }
+
+def init_timer_state():
+    return {
+        'duration': 300,
+        'remaining': 300,
+        'running': False,
+        'updated_at': time.time(),
+        'starter': ''
+    }
+
+def compute_live_timer(timer_obj):
+    if not timer_obj or not isinstance(timer_obj, dict):
+        return init_timer_state()
+    copy_t = dict(timer_obj)
+    if copy_t.get('running'):
+        elapsed = max(0, int(time.time() - float(copy_t.get('updated_at', time.time()))))
+        rem = max(0, int(copy_t.get('remaining', 300)) - elapsed)
+        copy_t['live_remaining'] = rem
+        if rem == 0:
+            copy_t['running'] = False
+            copy_t['remaining'] = 0
+    else:
+        copy_t['live_remaining'] = int(copy_t.get('remaining', 300))
+    return copy_t
+
 def default_room_state():
     return {
         'draw_history': [],
@@ -218,11 +250,15 @@ def default_room_state():
         'settings': {'bg': 'bg-light-dots'},
         'chess_game': init_chess_game(),
         'memory_game': init_memory_game(),
+        'dice_state': init_dice_state(),
+        'timer_state': init_timer_state(),
         'widgets': {
             'xo': {'x': 2520, 'y': 2220, 'w': 500, 'h': 560, 'open': False, 'minimized': False},
             'chess': {'x': 2380, 'y': 2180, 'w': 480, 'h': 580, 'open': False, 'minimized': False},
             'memory': {'x': 2450, 'y': 2250, 'w': 380, 'h': 440, 'open': False, 'minimized': False},
-            'media': {'x': 1920, 'y': 2220, 'w': 580, 'h': 440, 'open': False, 'minimized': False}
+            'dice': {'x': 2320, 'y': 2260, 'w': 350, 'h': 340, 'open': False, 'minimized': False},
+            'timer': {'x': 2680, 'y': 2260, 'w': 340, 'h': 300, 'open': False, 'minimized': False},
+            'media': {'x': 1920, 'y': 2220, 'w': 600, 'h': 460, 'open': False, 'minimized': False}
         }
     }
 
@@ -264,56 +300,6 @@ def mark_room_dirty(room_id):
     if room_id:
         dirty_rooms.add(room_id)
 
-def flush_dirty_rooms():
-    last_gc_time = time.time()
-    while True:
-        time.sleep(2.5)
-        now = time.time()
-        if dirty_rooms:
-            to_save = list(dirty_rooms)
-            dirty_rooms.clear()
-            for room_id in to_save:
-                if room_id not in room_states:
-                    continue
-                try:
-                    state_data = room_states[room_id]
-                    if room_id in chess_games:
-                        state_data['chess_game'] = chess_games[room_id]
-                    if room_id in memory_games:
-                        state_data['memory_game'] = memory_games[room_id]
-                    xo_data = xo_games.get(room_id, init_xo_game())
-                    state_str = json.dumps(state_data)
-                    xo_str = json.dumps(xo_data)
-                    with db_lock:
-                        conn = get_db()
-                        conn.execute(
-                            'INSERT OR REPLACE INTO room_data (room_id, state_json, xo_json, updated_at) VALUES (?, ?, ?, ?)',
-                            (room_id, state_str, xo_str, now)
-                        )
-                        conn.commit()
-                        conn.close()
-                except Exception:
-                    pass
-
-        if now - last_gc_time > 60.0:
-            last_gc_time = now
-            try:
-                active_room_ids_with_users = {u.get('room') for u in list(connected_users.values()) if u.get('room')}
-                for r_id in list(room_states.keys()):
-                    if r_id not in active_room_ids_with_users and r_id not in dirty_rooms:
-                        info = active_rooms.get(r_id, {})
-                        last_active = info.get('last_active', info.get('created_at', 0))
-                        if now - last_active > 600.0:
-                            save_room_immediately(r_id)
-                            room_states.pop(r_id, None)
-                            xo_games.pop(r_id, None)
-                            chess_games.pop(r_id, None)
-                            memory_games.pop(r_id, None)
-                            screen_shares.pop(r_id, None)
-                            active_rooms.pop(r_id, None)
-            except Exception:
-                pass
-
 def save_room_immediately(room_id):
     if room_id not in room_states:
         return
@@ -336,6 +322,37 @@ def save_room_immediately(room_id):
             conn.close()
     except Exception:
         pass
+
+def flush_dirty_rooms():
+    last_gc_time = time.time()
+    while True:
+        time.sleep(2.5)
+        now = time.time()
+        if dirty_rooms:
+            to_save = list(dirty_rooms)
+            dirty_rooms.clear()
+            for room_id in to_save:
+                if room_id in room_states:
+                    save_room_immediately(room_id)
+
+        if now - last_gc_time > 60.0:
+            last_gc_time = now
+            try:
+                active_room_ids_with_users = {u.get('room') for u in list(connected_users.values()) if u.get('room')}
+                for r_id in list(room_states.keys()):
+                    if r_id not in active_room_ids_with_users and r_id not in dirty_rooms:
+                        info = active_rooms.get(r_id, {})
+                        last_active = info.get('last_active', info.get('created_at', 0))
+                        if now - last_active > 600.0:
+                            save_room_immediately(r_id)
+                            room_states.pop(r_id, None)
+                            xo_games.pop(r_id, None)
+                            chess_games.pop(r_id, None)
+                            memory_games.pop(r_id, None)
+                            screen_shares.pop(r_id, None)
+                            active_rooms.pop(r_id, None)
+            except Exception:
+                pass
 
 def get_room_state(room_id):
     if room_id not in room_states:
@@ -453,7 +470,7 @@ def add_header(response):
 
 @app.before_request
 def check_bans():
-    if request.path.startswith('/static/') or request.path.startswith('/uploads/') or request.path.startswith('/secret-admin') or request.path.startswith('/admin-dashboard') or request.path.startswith('/api/admin'):
+    if request.path.startswith('/static/') or request.path.startswith('/uploads/') or request.path.startswith('/favicon.ico') or request.path.startswith('/secret-admin') or request.path.startswith('/admin-dashboard') or request.path.startswith('/api/admin'):
         return
     client_ip = get_client_ip()
     conn = get_db()
@@ -465,6 +482,11 @@ def check_bans():
         pass
     finally:
         conn.close()
+
+@app.route('/favicon.ico')
+def favicon():
+    svg_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0984e3"/><circle cx="32" cy="32" r="18" fill="#00d2ff"/></svg>'
+    return Response(svg_icon, mimetype='image/svg+xml')
 
 @app.route('/')
 def index():
@@ -734,7 +756,7 @@ def admin_backup_room(room_id):
         return jsonify({'error': 'Unauthorized'}), 403
     state = get_room_state(room_id)
     payload = {
-        'backup_version': 21,
+        'backup_version': 22,
         'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'room_id': room_id,
         'state': state,
@@ -772,7 +794,7 @@ def admin_backup_all_zip():
                     except Exception:
                         xo_obj = init_xo_game()
                     room_dump = {
-                        'backup_version': 21,
+                        'backup_version': 22,
                         'room_id': rid,
                         'updated_at': row['updated_at'],
                         'state': st_obj,
@@ -830,6 +852,8 @@ def restore_single_room_dict(room_id, data_obj):
         'xo_game': xo_games[room_id],
         'chess_game': chess_games[room_id],
         'memory_game': memory_games[room_id],
+        'dice_state': st.get('dice_state', init_dice_state()),
+        'timer_state': compute_live_timer(st.get('timer_state')),
         'screen_share': screen_shares.get(room_id),
         'chat': st['chat'][-50:],
         'settings': st['settings'],
@@ -906,7 +930,7 @@ def admin_broadcast():
 def room_export_json(room_id):
     state = get_room_state(room_id)
     payload = {
-        'backup_version': 21,
+        'backup_version': 22,
         'exported_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'room_id': room_id,
         'state': state,
@@ -931,32 +955,6 @@ def room_import_json(room_id):
         return jsonify({'error': 'Định dạng JSON không hợp lệ'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
-@socketio.on('room_timer_action')
-def handle_room_timer_action(data):
-    room_id = data.get('room_id')
-    if not room_id:
-        return
-    emit('room_timer_sync', {
-        'action': data.get('action', 'start'),
-        'seconds': int(data.get('seconds', 300)),
-        'sender': data.get('sender', 'Thành viên')
-    }, to=room_id)
-
-@socketio.on('roll_dice')
-def handle_roll_dice(data):
-    room_id = data.get('room_id')
-    if not room_id:
-        return
-    sender = data.get('sender', 'Thành viên')
-    d1 = random.randint(1, 6)
-    d2 = random.randint(1, 6)
-    emit('dice_rolled', {
-        'sender': sender,
-        'd1': d1,
-        'd2': d2,
-        'total': d1 + d2
-    }, to=room_id)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -1013,7 +1011,9 @@ def handle_join(data):
             emit('room_error', {'msg': 'Máy chủ đã đạt giới hạn phòng hoạt động cùng lúc. Vui lòng thử lại sau.'})
             return
         if room_id not in active_rooms:
-            active_rooms[room_id] = {'created_at': time.time()}
+            active_rooms[room_id] = {'created_at': time.time(), 'last_active': time.time()}
+        else:
+            active_rooms[room_id]['last_active'] = time.time()
         join_room(room_id)
         connected_users[request.sid] = {
             'sid': request.sid,
@@ -1036,6 +1036,8 @@ def handle_join(data):
             'xo_game': xo_games[room_id],
             'chess_game': chess_games[room_id],
             'memory_game': memory_games[room_id],
+            'dice_state': state.get('dice_state', init_dice_state()),
+            'timer_state': compute_live_timer(state.get('timer_state')),
             'screen_share': screen_shares.get(room_id),
             'chat': state['chat'][-50:],
             'settings': state['settings'],
@@ -1393,7 +1395,7 @@ def handle_delete_text_box(data):
 def handle_widget_state(data):
     room_id = data.get('room_id')
     w_name = data.get('widget')
-    if not room_id or w_name not in ('xo', 'chess', 'memory', 'media'):
+    if not room_id or w_name not in ('xo', 'chess', 'memory', 'dice', 'timer', 'media'):
         return
     state = get_room_state(room_id)
     w_info = state['widgets'].get(w_name, {})
@@ -1407,6 +1409,77 @@ def handle_widget_state(data):
     state['widgets'][w_name] = w_info
     mark_room_dirty(room_id)
     emit('widget_updated', {'widget': w_name, 'state': w_info}, to=room_id, include_self=False)
+
+@socketio.on('dice_roll')
+def handle_dice_roll(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    state = get_room_state(room_id)
+    count = max(1, min(3, int(data.get('count', 2))))
+    roller = data.get('username', 'Thành viên')
+    values = [random.randint(1, 6) for _ in range(count)]
+    total = sum(values)
+    dice_st = state.get('dice_state') or init_dice_state()
+    dice_st['count'] = count
+    dice_st['values'] = values
+    dice_st['total'] = total
+    dice_st['roller'] = roller
+    entry = f"{roller}: {' + '.join(str(v) for v in values)} = {total}"
+    hist = dice_st.get('history', [])
+    hist.append(entry)
+    dice_st['history'] = hist[-10:]
+    state['dice_state'] = dice_st
+    state['widgets']['dice']['open'] = True
+    mark_room_dirty(room_id)
+    emit('dice_rolled', {'dice_state': dice_st, 'widget_state': state['widgets']['dice']}, to=room_id)
+
+@socketio.on('timer_control')
+def handle_timer_control(data):
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    state = get_room_state(room_id)
+    t_st = state.get('timer_state') or init_timer_state()
+    action = data.get('action', 'start')
+    sender = data.get('username', 'Thành viên')
+    now = time.time()
+
+    if action == 'set':
+        sec = max(10, min(7200, int(data.get('seconds', 300))))
+        t_st['duration'] = sec
+        t_st['remaining'] = sec
+        t_st['running'] = False
+        t_st['updated_at'] = now
+        t_st['starter'] = sender
+    elif action == 'start':
+        if 'seconds' in data:
+            sec = max(10, min(7200, int(data.get('seconds', 300))))
+            t_st['duration'] = sec
+            t_st['remaining'] = sec
+        elif t_st.get('remaining', 0) <= 0:
+            t_st['remaining'] = t_st.get('duration', 300)
+        t_st['running'] = True
+        t_st['updated_at'] = now
+        t_st['starter'] = sender
+        state['widgets']['timer']['open'] = True
+    elif action == 'pause':
+        live_t = compute_live_timer(t_st)
+        t_st['remaining'] = live_t.get('live_remaining', 0)
+        t_st['running'] = False
+        t_st['updated_at'] = now
+    elif action == 'reset':
+        t_st['remaining'] = t_st.get('duration', 300)
+        t_st['running'] = False
+        t_st['updated_at'] = now
+
+    state['timer_state'] = t_st
+    mark_room_dirty(room_id)
+    emit('timer_updated', {
+        'timer_state': compute_live_timer(t_st),
+        'action': action,
+        'sender': sender
+    }, to=room_id)
 
 @socketio.on('new_sticky')
 def handle_new_sticky(data):

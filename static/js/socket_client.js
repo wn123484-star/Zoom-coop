@@ -149,14 +149,10 @@ function applyFullRoomState(state) {
     if (window.loadTextsHistory) window.loadTextsHistory(state.texts || []);
     if (window.loadStickiesHistory) window.loadStickiesHistory(state.stickies || []);
     if (window.loadBoardMediaHistory) window.loadBoardMediaHistory(state.board_media || []);
+    if (window.loadMultiWidgets && state.multi_widgets) window.loadMultiWidgets(state.multi_widgets || []);
     if (window.loadWidgetsState && state.widgets) window.loadWidgetsState(state.widgets);
     if (window.loadMediaState) window.loadMediaState(state.media, state.media_list || []);
     if (window.loadScreenShareState && state.screen_share) window.loadScreenShareState(state.screen_share);
-    if (window.loadXoState && state.xo_game) window.loadXoState(state.xo_game);
-    if (window.loadChessState && state.chess_game) window.loadChessState(state.chess_game);
-    if (window.loadMemoryState && state.memory_game) window.loadMemoryState(state.memory_game);
-    if (window.loadDiceState && state.dice_state) window.loadDiceState(state.dice_state);
-    if (window.loadTimerState && state.timer_state) window.loadTimerState(state.timer_state);
     if (window.loadChatHistory && state.chat) window.loadChatHistory(state.chat);
     if (state.users) {
         updateOnlineUsersBadge(state.users);

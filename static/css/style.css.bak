@@ -1,21 +1,27 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body, html { margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow: hidden; width: 100vw; height: 100vh; background-color: #f4f5f9; color: #e2e2e2; user-select: none; -webkit-user-select: none; touch-action: none; }
-#dynamic-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; transition: background 0.4s ease; pointer-events: none; }
+#dynamic-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; transition: background 0.35s ease; pointer-events: none; }
 
 .bg-solid { background-color: #0f0f13; }
 .bg-dots { background-color: #0f0f13; background-image: radial-gradient(rgba(255,255,255,0.16) 1.5px, transparent 1.5px); background-size: 24px 24px; }
 .bg-grid { background-color: #0f0f13; background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 30px 30px; }
 .bg-magical { background: linear-gradient(-45deg, #0f0f13, #17172b, #142038, #0f3460, #0f0f13); background-size: 400% 400%; animation: gradientAurora 18s ease infinite; }
+
 .bg-light-dots { background-color: #f5f7fb; background-image: radial-gradient(rgba(15, 23, 42, 0.16) 1.5px, transparent 1.5px); background-size: 24px 24px; }
 .bg-light-grid { background-color: #f5f7fb; background-image: linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px); background-size: 30px 30px; }
-.bg-light-paper { background-color: #fdf6e3; background-image: linear-gradient(rgba(181, 137, 0, 0.08) 1px, transparent 1px); background-size: 100% 28px; }
-.bg-light-pastel { background: linear-gradient(120deg, #fdfbfb 0%, #ebedee 50%, #e0c3fc 100%); }
-.bg-light-sakura { background: linear-gradient(135deg, #fff0f5 0%, #ffe4e1 50%, #f8edeb 100%); background-image: radial-gradient(rgba(255, 105, 180, 0.15) 1.5px, transparent 1.5px); background-size: 26px 26px; }
-.bg-light-mint { background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%); background-image: radial-gradient(rgba(16, 185, 129, 0.15) 1.5px, transparent 1.5px); background-size: 26px 26px; }
+.bg-light-paper { background-color: #fdf6e3; background-image: linear-gradient(rgba(181, 137, 0, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(211, 54, 130, 0.15) 1px, transparent 1px); background-size: 100% 28px, 60px 100%; }
+.bg-light-pastel { background-color: #f3e7e9; background-image: radial-gradient(rgba(100, 80, 160, 0.12) 1.5px, transparent 1.5px), linear-gradient(120deg, #fdfbfb 0%, #f3e7e9 45%, #e3eeff 100%); background-size: 24px 24px, 100% 100%; }
+.bg-light-sakura { background-color: #ffe4ec; background-image: radial-gradient(rgba(232, 67, 147, 0.24) 2px, transparent 2px), radial-gradient(rgba(253, 121, 168, 0.18) 1.5px, transparent 1.5px), linear-gradient(135deg, #fff0f6 0%, #ffdde1 55%, #ffc2d1 100%); background-size: 32px 32px, 16px 16px, 100% 100%; background-position: 0 0, 8px 8px, 0 0; }
+.bg-light-mint { background-color: #e0f8ec; background-image: radial-gradient(rgba(0, 184, 148, 0.24) 2px, transparent 2px), linear-gradient(135deg, #f0fff4 0%, #c6f6d5 50%, #9ae6b4 100%); background-size: 26px 26px, 100% 100%; }
+.bg-light-sunset { background-color: #ffecd2; background-image: radial-gradient(rgba(225, 112, 85, 0.2) 1.5px, transparent 1.5px), linear-gradient(135deg, #fff5eb 0%, #ffecd2 45%, #fcb69f 100%); background-size: 26px 26px, 100% 100%; }
+.bg-light-ocean { background-color: #dff9fb; background-image: radial-gradient(rgba(9, 132, 227, 0.2) 1.5px, transparent 1.5px), linear-gradient(135deg, #f0fbff 0%, #c7ecee 50%, #89f7fe 100%); background-size: 26px 26px, 100% 100%; }
+
+.bg-galaxy { background-color: #090514; background-image: radial-gradient(rgba(255,255,255,0.28) 1.5px, transparent 2.5px), radial-gradient(rgba(0,210,255,0.22) 1px, transparent 2px), linear-gradient(135deg, #090514 0%, #1e1035 45%, #3b1254 80%, #102542 100%); background-size: 180px 180px, 90px 90px, 100% 100%; }
+.bg-forest { background-color: #071a12; background-image: radial-gradient(rgba(85, 239, 196, 0.16) 1.5px, transparent 1.5px), linear-gradient(135deg, #05140e 0%, #0b291e 55%, #133b2b 100%); background-size: 28px 28px, 100% 100%; }
 .bg-blueprint { background-color: #0a2540; background-image: linear-gradient(rgba(0, 210, 255, 0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 210, 255, 0.14) 1px, transparent 1px); background-size: 28px 28px; }
-.bg-cyberpunk { background-color: #060612; background-image: linear-gradient(rgba(0, 210, 255, 0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 71, 87, 0.09) 1px, transparent 1px); background-size: 36px 36px; box-shadow: inset 0 0 120px rgba(255, 0, 128, 0.15); }
-.bg-matrix { background-color: #040d08; background-image: linear-gradient(rgba(0, 255, 128, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 128, 0.08) 1px, transparent 1px); background-size: 30px 30px; }
-.bg-stars { background-color: #030308; background-image: radial-gradient(white, rgba(255,255,255,.2) 1.5px, transparent 3px), radial-gradient(white, rgba(255,255,255,.12) 1px, transparent 2px); background-size: 450px 450px, 250px 250px; background-position: 0 0, 40px 60px; }
+.bg-cyberpunk { background-color: #060612; background-image: linear-gradient(rgba(0, 210, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 71, 87, 0.1) 1px, transparent 1px), radial-gradient(circle at center, rgba(165, 94, 234, 0.2), #060612 80%); background-size: 36px 36px, 36px 36px, 100% 100%; }
+.bg-matrix { background-color: #040d08; background-image: linear-gradient(rgba(0, 255, 128, 0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 128, 0.09) 1px, transparent 1px); background-size: 30px 30px; }
+.bg-stars { background-color: #030308; background-image: radial-gradient(white, rgba(255,255,255,.22) 1.5px, transparent 3px), radial-gradient(white, rgba(255,255,255,.14) 1px, transparent 2px); background-size: 350px 350px, 180px 180px; background-position: 0 0, 40px 60px; }
 
 @keyframes gradientAurora { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 .fade-in { animation: fadeIn 0.35s ease-out; }
@@ -92,7 +98,7 @@ body.light-theme .toolbar button, body.light-theme .group-trigger-btn { backgrou
 
 .color-preview-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; display: inline-block; flex-shrink: 0; box-shadow: 0 0 4px rgba(0,0,0,0.4); }
 
-.tool-popover { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); width: 295px; max-width: calc(100vw - 20px); border-radius: 16px; padding: 12px; display: none !important; flex-direction: column; gap: 10px; z-index: 95; pointer-events: none; }
+.tool-popover { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); width: 300px; max-width: calc(100vw - 20px); border-radius: 16px; padding: 12px; display: none !important; flex-direction: column; gap: 10px; z-index: 95; pointer-events: none; }
 .tool-popover.open { display: flex !important; pointer-events: auto !important; animation: fadeIn 0.15s ease-out; }
 .popover-title { font-size: 11px; font-weight: 800; color: #00d2ff; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); }
 body.light-theme .popover-title { color: #0984e3; border-color: rgba(0,0,0,0.1); }
@@ -185,7 +191,46 @@ body.light-theme .board-text-box.editing { border: 1.5px dashed #0984e3 !importa
 #screen-video, #screen-fallback-img { width: 100%; height: 100%; object-fit: contain; background: #000; }
 .live-stream-badge { background: #ff4757; color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 12px; letter-spacing: 0.5px; animation: pulseBanner 1s infinite alternate; }
 
-.settings-overlay { position: fixed; top: 56px; right: 12px; width: 310px; max-width: calc(100vw - 24px); border-radius: 14px; display: none !important; flex-direction: column; z-index: 85; pointer-events: none; }
+.dice-body { padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 10px; }
+.dice-count-bar { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; width: 100%; justify-content: center; }
+.dice-cnt-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: inherit; padding: 5px 12px; border-radius: 14px; font-size: 11px; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+body.light-theme .dice-cnt-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.15); }
+.dice-cnt-btn.active { background: #00d2ff; color: #000; border-color: #00d2ff; }
+.dice-stage { display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 92px; padding: 8px; perspective: 600px; }
+.dice-cube { width: 74px; height: 74px; border-radius: 16px; background: linear-gradient(145deg, #ffffff, #dfe4ea); color: #1e272e; font-size: 54px; line-height: 1; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 24px rgba(0,0,0,0.35), inset 0 -4px 6px rgba(0,0,0,0.15); border: 2px solid #00d2ff; user-select: none; transition: transform 0.2s; }
+.dice-cube.high-val { color: #ff4757; border-color: #ff4757; }
+.dice-cube.rolling { animation: diceRoll3D 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite; }
+@keyframes diceRoll3D {
+    0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateY(0) scale(1); }
+    25% { transform: rotateX(180deg) rotateY(90deg) rotateZ(-45deg) translateY(-16px) scale(1.12); }
+    50% { transform: rotateX(360deg) rotateY(270deg) rotateZ(45deg) translateY(4px) scale(0.95); }
+    75% { transform: rotateX(180deg) rotateY(180deg) rotateZ(-30deg) translateY(-10px) scale(1.08); }
+    100% { transform: rotateX(360deg) rotateY(360deg) rotateZ(0deg) translateY(0) scale(1); }
+}
+.dice-result-text { font-size: 13px; font-weight: 800; color: #00d2ff; text-align: center; }
+body.light-theme .dice-result-text { color: #0984e3; }
+.dice-roll-main-btn { width: 100%; padding: 10px; border-radius: 12px; border: none; background: linear-gradient(90deg, #00d2ff, #0984e3); color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 0 6px 16px rgba(0, 210, 255, 0.35); touch-action: manipulation; transition: transform 0.15s; }
+.dice-roll-main-btn:active { transform: scale(0.96); }
+.dice-history-list { width: 100%; font-size: 11px; color: #94a3b8; text-align: center; white-space: nowrap; overflow-x: auto; padding-top: 4px; border-top: 1px solid rgba(128,128,128,0.2); }
+
+.timer-body { padding: 12px 16px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 10px; }
+.timer-presets-row { display: flex; gap: 6px; width: 100%; justify-content: center; }
+.timer-preset-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: inherit; padding: 5px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+body.light-theme .timer-preset-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.15); }
+.timer-preset-btn.active { background: #00d2ff; color: #000; border-color: #00d2ff; }
+.timer-big-clock { font-size: 52px; font-weight: 900; font-family: monospace; letter-spacing: 2px; color: #00d2ff; text-shadow: 0 0 16px rgba(0, 210, 255, 0.35); line-height: 1.1; }
+body.light-theme .timer-big-clock { color: #0984e3; text-shadow: none; }
+.timer-big-clock.urgent { color: #ff4757 !important; animation: pulseBanner 0.6s infinite alternate; }
+.timer-progress-wrap { width: 100%; height: 8px; background: rgba(128,128,128,0.25); border-radius: 6px; overflow: hidden; }
+.timer-progress-bar { height: 100%; background: linear-gradient(90deg, #2ed573, #00d2ff); transition: width 0.5s linear; }
+.timer-status-sub { font-size: 11px; color: #94a3b8; font-weight: 600; }
+.timer-action-row { display: flex; gap: 8px; width: 100%; justify-content: center; }
+.timer-act-btn { flex: 1; padding: 8px 10px; border-radius: 10px; border: none; font-size: 12px; font-weight: 800; cursor: pointer; touch-action: manipulation; }
+.timer-act-btn.start { background: #2ed573; color: #000; }
+.timer-act-btn.pause { background: #ffa502; color: #000; }
+.timer-act-btn.reset { background: rgba(255,71,87,0.2); color: #ff4757; border: 1px solid #ff4757; }
+
+.settings-overlay { position: fixed; top: 56px; right: 12px; width: 320px; max-width: calc(100vw - 24px); border-radius: 14px; display: none !important; flex-direction: column; z-index: 85; pointer-events: none; }
 .settings-overlay.active { display: flex !important; pointer-events: auto !important; animation: fadeIn 0.18s ease-out; }
 .settings-header { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: #00d2ff; font-size: 13px; }
 .settings-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; max-height: 78vh; overflow-y: auto; touch-action: pan-y; }
@@ -231,7 +276,7 @@ body.light-theme .bg-opt-btn.active, body.light-theme .eraser-opt-btn.active { c
 .board-media-body audio { width: 95%; margin: 12px 0; }
 .board-media-body iframe, .board-media-body embed { width: 100%; height: 100%; border: none; border-radius: 8px; background: #fff; }
 
-.board-widget { position: absolute; border-radius: 14px; display: flex; flex-direction: column; z-index: 15; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.65); pointer-events: auto; touch-action: none; min-width: 300px; min-height: 240px; }
+.board-widget { position: absolute; border-radius: 14px; display: flex; flex-direction: column; z-index: 15; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.65); pointer-events: auto; touch-action: none; min-width: 280px; min-height: 220px; }
 .floating-widget { position: fixed; border-radius: 14px; display: flex; flex-direction: column; z-index: 65; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.65); pointer-events: auto; touch-action: none; }
 .chat-widget { bottom: 62px; right: 14px; width: 340px; height: 400px; min-width: 260px; min-height: 220px; max-width: calc(100vw - 24px); max-height: calc(100vh - 130px); }
 .board-widget.minimized .widget-body, .floating-widget.minimized .widget-body, .board-widget.minimized .widget-resizer, .floating-widget.minimized .widget-resizer { display: none !important; }
