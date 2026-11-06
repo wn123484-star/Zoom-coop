@@ -9,6 +9,23 @@ const workspace = document.getElementById('workspace');
 const zoomIndicator = document.getElementById('zoom-indicator');
 const dynamicBgEl = document.getElementById('dynamic-bg');
 
+[canvas, draftCanvas, laserCanvas].forEach((cEl, idx) => {
+    if (!cEl) return;
+    if (cEl.parentElement !== document.body) {
+        document.body.insertBefore(cEl, workspace);
+    }
+    cEl.style.position = 'fixed';
+    cEl.style.top = '0px';
+    cEl.style.left = '0px';
+    cEl.style.width = '100vw';
+    cEl.style.height = '100vh';
+    cEl.style.zIndex = String(idx + 1);
+});
+
+if (dynamicBgEl) {
+    dynamicBgEl.style.backgroundPosition = '';
+}
+
 window.workspaceScale = 1;
 window.eraserMode = localStorage.getItem('syncspace_eraser_mode') || 'point';
 window.currentStamp = '❤️';
@@ -110,9 +127,6 @@ function cullDOMWorkspaceElements() {
 
 function applyTransformImmediate() {
     workspace.style.transform = `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${window.workspaceScale.toFixed(4)})`;
-    if (dynamicBgEl) {
-        dynamicBgEl.style.backgroundPosition = `${Math.round(panX)}px ${Math.round(panY)}px`;
-    }
     if (zoomIndicator) {
         zoomIndicator.innerText = Math.round(window.workspaceScale * 100) + '%';
     }

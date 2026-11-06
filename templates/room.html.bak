@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SyncSpace - Phòng {{ room_id }}</title>
+<title>Bảng Chung Online - Phòng {{ room_id }}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230984e3'/><circle cx='32' cy='32' r='18' fill='%2300d2ff'/></svg>">
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="fade-in light-theme">
 <div id="dynamic-bg" class="bg-light-dots"></div>
 
+<canvas id="board" class="pan-mode"></canvas>
+<canvas id="draft-board"></canvas>
+<canvas id="laser-board"></canvas>
+
 <div id="workspace">
-<canvas id="board" class="pan-mode" width="5000" height="5000"></canvas>
-<canvas id="draft-board" width="5000" height="5000"></canvas>
-<canvas id="laser-board" width="5000" height="5000"></canvas>
 <div id="text-layer"></div>
 <div id="board-media-container"></div>
 <div id="sticky-container"></div>
@@ -38,10 +39,11 @@
 <div class="widget-resizer" title="Kéo để chỉnh kích thước màn hình"></div>
 </div>
 
-<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1920px; top: 2220px; width: 600px; height: 460px;">
+<div id="media-container" class="board-widget media-widget glass-effect" style="display: none; left: 1920px; top: 2220px; width: 620px; height: 470px;">
 <div id="media-header" class="widget-header">
-<span class="widget-title">🎬 Trạm Media, Trang Web URL & Tài Liệu Chung</span>
+<span class="widget-title">🎬 Trạm Media, Trang Web URL & HTML Tương Tác</span>
 <div class="widget-controls">
+<button type="button" id="btn-spawn-independent-media" class="widget-btn" style="background:#2ed573; color:#000;" title="Tạo một khung Web/Media độc lập mới trên mặt bảng để mỗi người xem một tab riêng">➕ Tách Khung Riêng</button>
 <button type="button" id="btn-sync-now" class="widget-btn" title="Đồng bộ thời gian phát với phòng">🔄 Đồng bộ</button>
 <button type="button" id="btn-toggle-media-controls" class="widget-btn" title="Ẩn hoặc Hiện khung nhập link/tải tệp">🔽 Nhập</button>
 <button type="button" id="btn-pin-current-media" class="widget-btn" title="Ghim Trang Web/Media đang mở thành thẻ trên bảng">📌 Ghim lên bảng</button>
@@ -54,19 +56,20 @@
 <div id="media-controls-box" class="media-controls">
 <div class="media-input-row">
 <input type="text" id="youtube-link" placeholder="Dán link YouTube hoặc URL Trang Web bất kỳ (VD: https://wikipedia.org)...">
-<button type="button" id="btn-play-yt" title="Mở xem chung video YouTube hoặc trang Web">🌐 Mở Web / YT</button>
-<button type="button" id="btn-stream-web-tab" class="pin-btn" title="Mở trang web ở tab mới và chiếu trực tiếp phiên đã đăng nhập của bạn cho cả phòng cùng xem">📡 Chiếu Tab Đăng Nhập</button>
+<button type="button" id="btn-play-yt" title="Mở trong Trạm Media chung">🌐 Mở Chung</button>
+<button type="button" id="btn-open-url-card" class="pin-btn" title="Mở URL hoặc YouTube này thành một khung riêng biệt trên bảng để không đè lên tab của người khác">➕ Mở Khung Riêng</button>
+<button type="button" id="btn-stream-web-tab" class="widget-btn" title="Mở trang web ở tab mới và chiếu trực tiếp phiên đã đăng nhập của bạn">📡 Chiếu Tab</button>
 </div>
 <div class="media-input-row upload-row">
 <input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.html,.htm,.txt,.md,.json,.py,.js,.css">
-<button type="button" id="btn-upload">📤 Mở Xem Chung</button>
-<button type="button" id="btn-upload-board" class="pin-btn" title="Tải tệp lên và đặt trực tiếp thành thẻ trên mặt bảng">📌 Đặt lên Bảng</button>
+<button type="button" id="btn-upload">📤 Mở Chung</button>
+<button type="button" id="btn-upload-board" class="pin-btn" title="Tải tệp (HTML Game, PDF, Ảnh, Video...) thành khung riêng trên mặt bảng">📌 Đặt Khung Riêng</button>
 </div>
 <div id="media-history-bar" class="media-history-bar"></div>
 </div>
 <div id="media-content" class="media-content">
 <div class="empty-media-box">
-<p class="empty-media-text">🌐 Dán <b>URL Trang Web bất kỳ</b>, link <b>YouTube</b>, nhấn <b>Ctrl+V để dán ảnh chụp màn hình</b> hoặc tải lên <b>Ảnh, Video, MP3, PDF, Excel, Word, HTML</b>!<br><small style="color:#00d2ff;">(Nếu trang web cần đăng nhập tài khoản, hãy bấm <b>📡 Chiếu Tab Đăng Nhập</b> để mọi người nhìn thấy giống hệt màn hình của bạn)</small></p>
+<p class="empty-media-text">🌐 Dán <b>URL Trang Web</b>, <b>YouTube</b> hoặc tải lên <b>Tệp HTML có Script/Game (Tự động đồng bộ thao tác cho cả phòng)</b>, <b>Ảnh, Video, PDF, Excel, Word</b>!<br><small style="color:#00d2ff;">💡 Bấm <b>"➕ Mở Khung Riêng"</b> hoặc <b>"📌 Đặt Khung Riêng"</b> để mỗi người dùng một tab độc lập trên bảng!</small></p>
 </div>
 </div>
 <button type="button" id="btn-unlock-audio" class="unlock-audio-banner" style="display: none;">🔊 Chạm vào đây để Bật tiếng & Đồng bộ Video với phòng</button>
@@ -84,11 +87,12 @@
 <div class="scroll-strip toolbar" id="top-strip">
 <span class="info-pill room-badge" title="Mã phòng hiện tại">🏠 <b>{{ room_id }}</b></span>
 <button type="button" id="btn-edit-name" class="info-pill user-pill" title="Nhấn để đổi tên hiển thị">👤 <b id="current-user-display">{{ username if username else 'Nhập tên...' }}</b> ✏️</button>
+<button type="button" id="btn-voice-toggle" class="info-pill voice-pill" title="Bật/Tắt Mic đàm thoại trực tiếp với mọi người trong phòng">🎤 <span id="voice-status-text">Bật Mic</span></button>
 <button type="button" id="btn-copy-link" class="info-pill mini-btn" title="Sao chép link mời bạn bè">🔗 Mời</button>
 <span id="online-badge" class="info-pill online-badge" title="Số người đang trực tuyến thực tế">👥 <b id="online-count">1</b></span>
 <span id="ping-badge" class="info-pill ping-badge" title="Độ trễ phản hồi máy chủ (Ping)"><i id="ping-dot" class="ping-dot good"></i> <b id="ping-val">-- ms</b></span>
 
-<button type="button" id="tool-pan" class="tool-btn active" title="Kéo di chuyển mặt bảng (Mặc định)">✋<span>Kéo bảng</span></button>
+<button type="button" id="tool-pan" class="tool-btn active" title="Kéo di chuyển mặt bảng vô cực (Mặc định)">✋<span>Kéo bảng</span></button>
 
 <button type="button" id="group-pen-btn" class="group-trigger-btn" data-popover="popover-pen" title="Chọn loại bút vẽ">
 <em id="active-pen-icon">✏️</em><span id="active-pen-label">Bút bi</span><small>▾</small>
@@ -219,11 +223,11 @@
 <div class="popover-title">🎮 Tạo Bàn Chơi Mới (Mở Nhiều Bàn Cùng Lúc)</div>
 <div class="popover-grid single-col">
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="noitu">🔤 ➕ Tạo Bàn Nối Từ Tiếng Việt (Nhiều người)</button>
-<button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="ludo">🐎 ➕ Tạo Bàn Cờ Cá Ngựa (1 - 4 Người & Xúc Xắc 3D)</button>
+<button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="ludo">🐎 ➕ Tạo Bàn Cờ Cá Ngựa (Xúc Xắc 3D Rơi + Hẹn Giờ)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="chess">♟️ ➕ Tạo Bàn Cờ Vua Quốc Tế (Chess.com)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="xo">⭕ ➕ Tạo Bàn Cờ Caro XO (Chạm 4 hoặc 5)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="memory">🃏 ➕ Tạo Bàn Lật Thẻ Trí Nhớ</button>
-<button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="dice">🎲 ➕ Tạo Bàn Xúc Xắc 3D (1 - 3 Viên)</button>
+<button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="dice">🎲 ➕ Tạo Bàn Xúc Xắc 3D (Rơi Lăn Trên Bàn)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="timer">⏱️ ➕ Tạo Đồng Hồ Đếm Ngược / Pomodoro</button>
 </div>
 </div>
@@ -243,9 +247,10 @@
 <button type="button" class="scroll-arrow-btn left" data-target="bottom-strip" style="display:none;" title="Cuộn sang trái">◀</button>
 <div id="bottom-strip" class="scroll-strip bottom-dock">
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
-<button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn Ảnh, Video, PDF, Excel, Word, HTML từ máy để hiển thị ngay">📤<span>Đăng Ảnh / Tài Liệu</span></button>
+<button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn HTML Game, Ảnh, Video, PDF, Excel, Word từ máy để hiển thị ngay">📤<span>Đăng HTML / Tài Liệu</span></button>
+<button type="button" id="tool-new-web-card" class="dock-btn highlight-dock" title="Tạo một khung Web URL / Media riêng biệt trên bảng cho riêng bạn">➕<span>Tạo Tab Web Riêng</span></button>
 <button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
-<button type="button" id="tool-media" class="dock-btn" title="Mở Trạm Media, Xem Web URL & YouTube chung">🌐<span>Web URL / Media</span></button>
+<button type="button" id="tool-media" class="dock-btn" title="Mở Trạm Media, Xem Web URL & YouTube chung">🌐<span>Trạm Web / Media</span></button>
 <button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Tạo nhiều bàn Nối Từ, Cờ Cá Ngựa, Cờ Vua, Caro, Xúc Xắc 3D trên mặt bảng">🎮<span>Tạo Bàn Chơi ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
@@ -337,10 +342,12 @@
 </div>
 </div>
 
+<div id="voice-audio-Peers" style="display:none;"></div>
+
 <div id="name-modal" class="name-modal-backdrop" style="display: none;">
 <div class="name-modal-box glass-effect">
 <h3>👋 Chào mừng vào phòng <span style="color:#00d2ff;">{{ room_id }}</span></h3>
-<p>Vui lòng nhập tên hiển thị của bạn để mọi người cùng nhận diện khi vẽ, chơi cờ và trò chuyện:</p>
+<p>Vui lòng nhập tên hiển thị của bạn để mọi người cùng nhận diện khi vẽ, bật mic, chơi cờ và trò chuyện:</p>
 <form id="name-modal-form">
 <input type="text" id="name-modal-input" placeholder="Nhập tên của bạn (VD: William, Minh...)" required maxlength="35" autocomplete="off">
 <button type="submit">Xác nhận & Vào phòng</button>

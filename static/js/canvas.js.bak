@@ -7,38 +7,17 @@ const laserCtx = laserCanvas.getContext('2d');
 const textLayer = document.getElementById('text-layer');
 const workspace = document.getElementById('workspace');
 const zoomIndicator = document.getElementById('zoom-indicator');
+const dynamicBgEl = document.getElementById('dynamic-bg');
 
 window.workspaceScale = 1;
 window.eraserMode = localStorage.getItem('syncspace_eraser_mode') || 'point';
 window.currentStamp = '❤️';
-let panX = -(5000 - window.innerWidth) / 2;
-let panY = -(5000 - window.innerHeight) / 2;
+let panX = -(2500 - window.innerWidth / 2);
+let panY = -(2500 - window.innerHeight / 2);
 let targetScale = 1;
 let targetPanX = panX;
 let targetPanY = panY;
-
-function applyTransformImmediate() {
-    workspace.style.transform = `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${window.workspaceScale.toFixed(4)})`;
-    if (zoomIndicator) {
-        zoomIndicator.innerText = Math.round(window.workspaceScale * 100) + '%';
-    }
-}
-applyTransformImmediate();
-
-window.centerWorkspace = function() {
-    targetScale = 1;
-    targetPanX = -(5000 - window.innerWidth) / 2;
-    targetPanY = -(5000 - window.innerHeight) / 2;
-};
-
-window.zoomByStep = function(factor) {
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight / 2;
-    const nextScale = Math.min(Math.max(0.25, targetScale * factor), 3.5);
-    targetPanX = cx - (cx - targetPanX) * (nextScale / targetScale);
-    targetPanY = cy - (cy - targetPanY) * (nextScale / targetScale);
-    targetScale = nextScale;
-};
+let lastCullTime = 0;
 
 let drawing = false;
 let isPanning = false;
@@ -58,8 +37,8 @@ let activeTextBoxId = null;
 let lastEmitTime = 0;
 let laserTrails = [];
 
-let needsRedrawAll = false;
-let needsRedrawDraft = false;
+let needsRedrawAll = true;
+let needsRedrawDraft = true;
 let pendingDeletedStrokeIds = new Set();
 let flushDeleteTimer = null;
 let pendingEraserPoints = [];
@@ -72,6 +51,93 @@ function scheduleRedrawAll() {
 function scheduleRedrawDraft() {
     needsRedrawDraft = true;
 }
+
+function resizeViewportCanvases() {
+    const w = window.innerWidth || 1280;
+    const h = window.innerHeight || 720;
+    if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        draftCanvas.width = w;
+        draftCanvas.height = h;
+        laserCanvas.width = w;
+        laserCanvas.height = h;
+        scheduleRedrawAll();
+        scheduleRedrawDraft();
+    }
+}
+window.addEventListener('resize', resizeViewportCanvases);
+
+window.getWorkspaceCoords = function(clientX, clientY) {
+    const scale = window.workspaceScale || 1;
+    return {
+        x: Math.round(((clientX - panX) / scale) * 10) / 10,
+        y: Math.round(((clientY - panY) / scale) * 10) / 10
+    };
+};
+
+function getVisibleWorldBounds(padPx) {
+    const scale = window.workspaceScale || 1;
+    const pad = (padPx || 220) / scale;
+    const minX = (-panX) / scale - pad;
+    const minY = (-panY) / scale - pad;
+    const maxX = (window.innerWidth - panX) / scale + pad;
+    const maxY = (window.innerHeight - panY) / scale + pad;
+    return { minX, minY, maxX, maxY };
+}
+
+function cullDOMWorkspaceElements() {
+    const now = Date.now();
+    if (now - lastCullTime < 110) return;
+    lastCullTime = now;
+    const bounds = getVisibleWorldBounds(480);
+    const items = workspace.querySelectorAll('.board-widget, .board-media-card, .sticky-note, .board-text-box');
+    for (let i = 0; i < items.length; i++) {
+        const el = items[i];
+        if (el.style.display === 'none') continue;
+        if (document.activeElement && el.contains(document.activeElement)) {
+            el.classList.remove('culled-offscreen');
+            continue;
+        }
+        const x = parseFloat(el.style.left) || 0;
+        const y = parseFloat(el.style.top) || 0;
+        const w = parseFloat(el.style.width) || el.offsetWidth || 380;
+        const h = parseFloat(el.style.height) || el.offsetHeight || 320;
+        const inView = !(x + w < bounds.minX || x > bounds.maxX || y + h < bounds.minY || y > bounds.maxY);
+        el.classList.toggle('culled-offscreen', !inView);
+    }
+}
+
+function applyTransformImmediate() {
+    workspace.style.transform = `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${window.workspaceScale.toFixed(4)})`;
+    if (dynamicBgEl) {
+        dynamicBgEl.style.backgroundPosition = `${Math.round(panX)}px ${Math.round(panY)}px`;
+    }
+    if (zoomIndicator) {
+        zoomIndicator.innerText = Math.round(window.workspaceScale * 100) + '%';
+    }
+    scheduleRedrawAll();
+    scheduleRedrawDraft();
+    cullDOMWorkspaceElements();
+}
+
+window.centerWorkspace = function() {
+    targetScale = 1;
+    targetPanX = -(2500 - window.innerWidth / 2);
+    targetPanY = -(2500 - window.innerHeight / 2);
+};
+
+window.zoomByStep = function(factor) {
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const nextScale = Math.min(Math.max(0.15, targetScale * factor), 4.0);
+    targetPanX = cx - (cx - targetPanX) * (nextScale / targetScale);
+    targetPanY = cy - (cy - targetPanY) * (nextScale / targetScale);
+    targetScale = nextScale;
+};
+
+resizeViewportCanvases();
+applyTransformImmediate();
 
 function queueStrokeDeletion(strokeId) {
     if (!strokeId) return;
@@ -165,7 +231,9 @@ window.addEventListener('keyup', (e) => {
 function renderLaserLoop() {
     if (laserTrails.length > 0) {
         const now = Date.now();
+        laserCtx.setTransform(1, 0, 0, 1, 0, 0);
         laserCtx.clearRect(0, 0, laserCanvas.width, laserCanvas.height);
+        laserCtx.setTransform(window.workspaceScale, 0, 0, window.workspaceScale, panX, panY);
         laserTrails = laserTrails.filter(p => now - p.t < 1100);
         for (let i = 0; i < laserTrails.length; i++) {
             const pt = laserTrails[i];
@@ -186,7 +254,7 @@ function renderLaserLoop() {
 }
 
 function mainAnimationLoop() {
-    const speed = 15;
+    const speed = 16;
     if (keys.w || keys.arrowup) targetPanY += speed;
     if (keys.s || keys.arrowdown) targetPanY -= speed;
     if (keys.a || keys.arrowleft) targetPanX += speed;
@@ -195,10 +263,10 @@ function mainAnimationLoop() {
     const ds = targetScale - window.workspaceScale;
     const dx = targetPanX - panX;
     const dy = targetPanY - panY;
-    if (Math.abs(ds) > 0.0005 || Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) {
-        window.workspaceScale += ds * 0.26;
-        panX += dx * 0.26;
-        panY += dy * 0.26;
+    if (Math.abs(ds) > 0.0004 || Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) {
+        window.workspaceScale += ds * 0.28;
+        panX += dx * 0.28;
+        panY += dy * 0.28;
         applyTransformImmediate();
     }
     if (needsRedrawAll) {
@@ -215,12 +283,12 @@ function mainAnimationLoop() {
 mainAnimationLoop();
 
 window.addEventListener('wheel', (e) => {
-    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.scroll-strip') || e.target.closest('.media-content') || e.target.closest('.board-media-body') || e.target.closest('.tool-popover') || e.target.closest('.text-box-editor') || e.target.closest('.sticky-content')) {
+    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.scroll-strip') || e.target.closest('.media-content') || e.target.closest('.board-media-body') || e.target.closest('.tool-popover') || e.target.closest('.text-box-editor') || e.target.closest('.sticky-content') || e.target.closest('.noitu-history-box')) {
         return;
     }
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    const nextScale = Math.min(Math.max(0.25, targetScale * factor), 3.5);
+    const nextScale = Math.min(Math.max(0.15, targetScale * factor), 4.0);
     const mouseX = e.clientX;
     const mouseY = e.clientY;
     targetPanX = mouseX - (mouseX - targetPanX) * (nextScale / targetScale);
@@ -360,13 +428,9 @@ window.bindSafeButton(document.getElementById('tool-export'), () => {
     const eCtx = exportCanvas.getContext('2d');
     eCtx.fillStyle = document.body.classList.contains('light-theme') ? '#f5f7fb' : '#0f0f13';
     eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-    eCtx.save();
-    eCtx.translate(panX, panY);
-    eCtx.scale(window.workspaceScale, window.workspaceScale);
     eCtx.drawImage(canvas, 0, 0);
-    eCtx.restore();
     const link = document.createElement('a');
-    link.download = `SyncSpace_${ROOM_ID}_${Date.now()}.png`;
+    link.download = `BangChung_${ROOM_ID}_${Date.now()}.png`;
     link.href = exportCanvas.toDataURL('image/png');
     link.click();
     if (window.showToast) window.showToast('Đã tải ảnh chụp bảng về máy!');
@@ -598,39 +662,6 @@ function renderStrokeOnContext(targetCtx, stroke) {
     } catch (err) {}
 }
 
-function performRedrawDraftCanvas() {
-    draftCtx.clearRect(0, 0, draftCanvas.width, draftCanvas.height);
-    if (currentStroke && currentStroke.tool !== 'eraser' && currentStroke.tool !== 'laser') {
-        renderStrokeOnContext(draftCtx, currentStroke);
-    }
-    Object.values(remoteLiveStrokes).forEach(st => {
-        if (st && st.tool !== 'eraser' && st.tool !== 'laser') {
-            renderStrokeOnContext(draftCtx, st);
-        }
-    });
-    if (textDragBox) {
-        draftCtx.save();
-        draftCtx.strokeStyle = '#00d2ff';
-        draftCtx.fillStyle = 'rgba(0, 210, 255, 0.08)';
-        draftCtx.lineWidth = 2;
-        draftCtx.setLineDash([6, 4]);
-        const rx = Math.min(textDragBox.x0, textDragBox.x1);
-        const ry = Math.min(textDragBox.y0, textDragBox.y1);
-        const rw = Math.abs(textDragBox.x1 - textDragBox.x0);
-        const rh = Math.abs(textDragBox.y1 - textDragBox.y0);
-        draftCtx.fillRect(rx, ry, rw, rh);
-        draftCtx.strokeRect(rx, ry, rw, rh);
-        draftCtx.restore();
-    }
-}
-
-function performRedrawAllHistory() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < strokeHistory.length; i++) {
-        renderStrokeOnContext(ctx, strokeHistory[i]);
-    }
-}
-
 function ensureStrokeBBox(stroke) {
     if (stroke._bbox) return stroke._bbox;
     const pts = stroke.points || [];
@@ -650,7 +681,7 @@ function ensureStrokeBBox(stroke) {
         if (y < minY) minY = y;
         if (y > maxY) maxY = y;
     }
-    const pad = Math.max(18, (parseFloat(stroke.width) || 4) * 3.5);
+    const pad = Math.max(24, (parseFloat(stroke.width) || 4) * 3.8);
     stroke._bbox = {
         minX: minX - pad,
         minY: minY - pad,
@@ -658,6 +689,52 @@ function ensureStrokeBBox(stroke) {
         maxY: maxY + pad
     };
     return stroke._bbox;
+}
+
+function isStrokeInViewport(stroke, bounds) {
+    const bb = ensureStrokeBBox(stroke);
+    return !(bb.maxX < bounds.minX || bb.minX > bounds.maxX || bb.maxY < bounds.minY || bb.minY > bounds.maxY);
+}
+
+function performRedrawDraftCanvas() {
+    draftCtx.setTransform(1, 0, 0, 1, 0, 0);
+    draftCtx.clearRect(0, 0, draftCanvas.width, draftCanvas.height);
+    draftCtx.setTransform(window.workspaceScale, 0, 0, window.workspaceScale, panX, panY);
+    if (currentStroke && currentStroke.tool !== 'eraser' && currentStroke.tool !== 'laser') {
+        renderStrokeOnContext(draftCtx, currentStroke);
+    }
+    Object.values(remoteLiveStrokes).forEach(st => {
+        if (st && st.tool !== 'eraser' && st.tool !== 'laser') {
+            renderStrokeOnContext(draftCtx, st);
+        }
+    });
+    if (textDragBox) {
+        draftCtx.save();
+        draftCtx.strokeStyle = '#00d2ff';
+        draftCtx.fillStyle = 'rgba(0, 210, 255, 0.08)';
+        draftCtx.lineWidth = 2 / (window.workspaceScale || 1);
+        draftCtx.setLineDash([6, 4]);
+        const rx = Math.min(textDragBox.x0, textDragBox.x1);
+        const ry = Math.min(textDragBox.y0, textDragBox.y1);
+        const rw = Math.abs(textDragBox.x1 - textDragBox.x0);
+        const rh = Math.abs(textDragBox.y1 - textDragBox.y0);
+        draftCtx.fillRect(rx, ry, rw, rh);
+        draftCtx.strokeRect(rx, ry, rw, rh);
+        draftCtx.restore();
+    }
+}
+
+function performRedrawAllHistory() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(window.workspaceScale, 0, 0, window.workspaceScale, panX, panY);
+    const bounds = getVisibleWorldBounds(180);
+    for (let i = 0; i < strokeHistory.length; i++) {
+        const st = strokeHistory[i];
+        if (isStrokeInViewport(st, bounds)) {
+            renderStrokeOnContext(ctx, st);
+        }
+    }
 }
 
 function distToSegmentSquared(px, py, x1, y1, x2, y2) {
@@ -1012,6 +1089,7 @@ function startPointerAction(clientX, clientY, button) {
         laserTrails.push({ x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y, t: Date.now() });
         socket.emit('laser_point', { room_id: ROOM_ID, x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y });
     } else if (currentTool === 'eraser') {
+        ctx.setTransform(window.workspaceScale, 0, 0, window.workspaceScale, panX, panY);
         renderStrokeOnContext(ctx, currentStroke);
         pendingEraserPoints = [pos];
         queueEraserPointSegment(pos, currentWidth);
@@ -1060,7 +1138,7 @@ function movePointerAction(clientX, clientY) {
     }
 
     const distSq = (pos.x - prev.x) * (pos.x - prev.x) + (pos.y - prev.y) * (pos.y - prev.y);
-    if (distSq < 2.5) return;
+    if (distSq < 2.2) return;
 
     pts.push(pos);
 
@@ -1076,6 +1154,7 @@ function movePointerAction(clientX, clientY) {
 
     if (currentTool === 'eraser') {
         ctx.save();
+        ctx.setTransform(window.workspaceScale, 0, 0, window.workspaceScale, panX, panY);
         setupStrokeContext(ctx, 'eraser', '#000', currentWidth, 1);
         ctx.beginPath();
         ctx.moveTo(prev.x, prev.y);
@@ -1130,10 +1209,8 @@ function endPointerAction() {
 
     if (currentStroke && currentStroke.tool !== 'laser') {
         ensureStrokeBBox(currentStroke);
-        if (currentStroke.tool !== 'eraser') {
-            renderStrokeOnContext(ctx, currentStroke);
-        }
         strokeHistory.push(currentStroke);
+        scheduleRedrawAll();
         socket.emit('draw_stroke', { room_id: ROOM_ID, stroke: currentStroke });
     }
     pendingEraserPoints = [];
@@ -1193,7 +1270,7 @@ canvas.addEventListener('touchmove', (e) => {
         const cx = (t1.clientX + t2.clientX) / 2;
         const cy = (t1.clientY + t2.clientY) / 2;
         if (pinchStartDist > 10) {
-            const nextScale = Math.min(Math.max(0.25, pinchStartScale * (dist / pinchStartDist)), 3.5);
+            const nextScale = Math.min(Math.max(0.15, pinchStartScale * (dist / pinchStartDist)), 4.0);
             targetPanX = cx - (pinchCenter.x - targetPanX) * (nextScale / targetScale) + (cx - pinchCenter.x);
             targetPanY = cy - (pinchCenter.y - targetPanY) * (nextScale / targetScale) + (cy - pinchCenter.y);
             targetScale = nextScale;
@@ -1232,6 +1309,7 @@ socket.on('draw_live', (data) => {
 socket.on('draw_segment', (d) => {
     if (!d || d.tool !== 'eraser') return;
     ctx.save();
+    ctx.setTransform(window.workspaceScale, 0, 0, window.workspaceScale, panX, panY);
     setupStrokeContext(ctx, 'eraser', '#000', d.width || 4, 1);
     ctx.beginPath();
     if (Array.isArray(d.points) && d.points.length > 0) {
@@ -1257,7 +1335,7 @@ socket.on('draw_stroke', (stroke) => {
     scheduleRedrawDraft();
     ensureStrokeBBox(stroke);
     strokeHistory.push(stroke);
-    renderStrokeOnContext(ctx, stroke);
+    scheduleRedrawAll();
 });
 
 socket.on('stroke_deleted', (data) => {
@@ -1280,8 +1358,8 @@ socket.on('board_sync', (data) => {
 socket.on('board_cleared', () => {
     strokeHistory = [];
     remoteLiveStrokes = {};
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    draftCtx.clearRect(0, 0, draftCanvas.width, draftCanvas.height);
+    scheduleRedrawAll();
+    scheduleRedrawDraft();
     textLayer.innerHTML = '';
 });
 

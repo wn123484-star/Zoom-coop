@@ -1906,6 +1906,54 @@ def handle_change_bg(data):
     mark_room_dirty(room_id)
     emit('bg_updated', {'bg': bg}, to=room_id, include_self=False)
 
+@socketio.on('html_coop_event')
+def handle_html_coop_event(data):
+    try:
+        room_id = data.get('room_id')
+        if not room_id:
+            return
+        emit('html_coop_event', data, to=room_id, include_self=False)
+    except Exception:
+        pass
+
+@socketio.on('voice_status')
+def handle_voice_status(data):
+    try:
+        room_id = data.get('room_id')
+        if not room_id:
+            return
+        active = bool(data.get('active', False))
+        if request.sid in connected_users:
+            connected_users[request.sid]['voice'] = active
+        emit('voice_status_updated', {
+            'sid': request.sid,
+            'username': data.get('username', 'Thành viên'),
+            'active': active,
+            'speaking': bool(data.get('speaking', False))
+        }, to=room_id, include_self=False)
+        if active:
+            for sid, u in list(connected_users.items()):
+                if u.get('room') == room_id and sid != request.sid:
+                    emit('voice_peer_ready', {'peer_sid': sid, 'username': u.get('username', '')}, to=request.sid)
+    except Exception:
+        pass
+
+@socketio.on('voice_webrtc_signal')
+def handle_voice_webrtc_signal(data):
+    try:
+        target_sid = data.get('target_sid')
+        if not target_sid:
+            return
+        emit('voice_webrtc_signal', {
+            'from_sid': request.sid,
+            'username': data.get('username', 'Thành viên'),
+            'type': data.get('type'),
+            'sdp': data.get('sdp'),
+            'candidate': data.get('candidate')
+        }, to=target_sid)
+    except Exception:
+        pass
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 8000))
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
