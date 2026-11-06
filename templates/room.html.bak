@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Bảng Chung Online - Phòng {{ room_id }}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230984e3'/><circle cx='32' cy='32' r='18' fill='%2300d2ff'/></svg>">
-<link rel="stylesheet" href="/static/css/style.css?v=24">
+<link rel="stylesheet" href="/static/css/style.css?v=26">
 </head>
 <body class="fade-in light-theme">
 <div id="dynamic-bg" class="bg-light-dots"></div>
+
+<input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.html,.htm,.txt,.md,.json,.py,.js,.css" style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0;">
 
 <canvas id="board" class="pan-mode"></canvas>
 <canvas id="draft-board"></canvas>
@@ -55,21 +57,20 @@
 <div id="media-body" class="widget-body">
 <div id="media-controls-box" class="media-controls">
 <div class="media-input-row">
-<input type="text" id="youtube-link" placeholder="Dán link YouTube hoặc URL Trang Web bất kỳ (VD: https://wikipedia.org)...">
+<input type="text" id="youtube-link" placeholder="Dán link YouTube hoặc URL Trang Web bất kỳ (VD: https://vi.wikipedia.org)...">
 <button type="button" id="btn-play-yt" title="Mở trong Trạm Media chung">🌐 Mở Chung</button>
-<button type="button" id="btn-open-url-card" class="pin-btn" title="Mở URL hoặc YouTube này thành một khung riêng biệt trên bảng để không đè lên tab của người khác">➕ Mở Khung Riêng</button>
+<button type="button" id="btn-open-url-card" class="pin-btn" title="Mở URL hoặc YouTube này thành một khung riêng biệt trên bảng">➕ Mở Khung Riêng</button>
 <button type="button" id="btn-stream-web-tab" class="widget-btn" title="Mở trang web ở tab mới và chiếu trực tiếp phiên đã đăng nhập của bạn">📡 Chiếu Tab</button>
 </div>
 <div class="media-input-row upload-row">
-<input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.html,.htm,.txt,.md,.json,.py,.js,.css">
-<button type="button" id="btn-upload">📤 Mở Chung</button>
-<button type="button" id="btn-upload-board" class="pin-btn" title="Tải tệp (HTML Game, PDF, Ảnh, Video...) thành khung riêng trên mặt bảng">📌 Đặt Khung Riêng</button>
+<button type="button" id="btn-upload" style="flex:1;">📤 Chọn Tệp Mở Chung (HTML / Ảnh / Video / PDF)</button>
+<button type="button" id="btn-upload-board" class="pin-btn" style="flex:1;" title="Tải tệp (HTML Game, PDF, Ảnh, Video...) thành khung riêng trên mặt bảng">📌 Chọn Tệp Đặt Khung Riêng</button>
 </div>
 <div id="media-history-bar" class="media-history-bar"></div>
 </div>
 <div id="media-content" class="media-content">
 <div class="empty-media-box">
-<p class="empty-media-text">🌐 Dán <b>URL Trang Web</b>, <b>YouTube</b> hoặc tải lên <b>Tệp HTML có Script/Game (Tự động đồng bộ thao tác cho cả phòng)</b>, <b>Ảnh, Video, PDF, Excel, Word</b>!<br><small style="color:#00d2ff;">💡 Bấm <b>"➕ Mở Khung Riêng"</b> hoặc <b>"📌 Đặt Khung Riêng"</b> để mỗi người dùng một tab độc lập trên bảng!</small></p>
+<p class="empty-media-text">🌐 Dán <b>URL Trang Web</b>, <b>YouTube</b> hoặc tải lên <b>Tệp HTML có Script/Game (Tự động đồng bộ thao tác cho cả phòng)</b>, <b>Ảnh, Video, PDF, Excel, Word</b>!<br><small style="color:#00d2ff;">💡 Bấm <b>"➕ Mở Khung Riêng"</b> hoặc <b>"📌 Chọn Tệp Đặt Khung Riêng"</b> để mỗi người dùng một tab độc lập trên bảng!</small></p>
 </div>
 </div>
 <button type="button" id="btn-unlock-audio" class="unlock-audio-banner" style="display: none;">🔊 Chạm vào đây để Bật tiếng & Đồng bộ Video với phòng</button>
@@ -209,6 +210,20 @@
 </div>
 </div>
 
+<div id="popover-webmedia" class="tool-popover glass-effect" style="width: 340px;">
+<div class="popover-title">🌐 Mở Tab Web, Tệp HTML Game & Tài Liệu</div>
+<div style="display:flex; gap:6px; width:100%;">
+<input type="text" id="quick-web-url-input" placeholder="Nhập link Web / YouTube / Maps..." style="flex:1; padding:8px 10px; border-radius:8px; border:1px solid rgba(0,210,255,0.45); background:rgba(0,0,0,0.35); color:#fff; font-size:12px; user-select:text;">
+</div>
+<div class="popover-grid single-col">
+<button type="button" id="btn-pop-open-separate-tab" class="game-menu-btn">➕ Mở Link Này Ở Khung Tab Riêng Trên Bảng</button>
+<button type="button" id="btn-pop-open-hub" class="game-menu-btn">🌐 Mở Link Này Trong Trạm Media Chung</button>
+<button type="button" id="btn-pop-upload-board" class="game-menu-btn" style="border-color:rgba(0,210,255,0.45); color:#00d2ff;">🎮 Chọn Tệp HTML Game / PDF / Ảnh Đặt Lên Bảng</button>
+<button type="button" id="btn-pop-upload-hub" class="game-menu-btn">📤 Chọn Tệp Mở Trong Trạm Media Chung</button>
+<button type="button" id="btn-pop-toggle-hub" class="game-menu-btn">🎬 Hiện / Ẩn Cửa Sổ Trạm Media Chung</button>
+</div>
+</div>
+
 <div id="popover-screen" class="tool-popover glass-effect">
 <div class="popover-title">🖥️ Chế Độ Chia Sẻ Màn Hình (Google Meet)</div>
 <div class="popover-grid single-col">
@@ -247,10 +262,8 @@
 <button type="button" class="scroll-arrow-btn left" data-target="bottom-strip" style="display:none;" title="Cuộn sang trái">◀</button>
 <div id="bottom-strip" class="scroll-strip bottom-dock">
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
-<button type="button" id="tool-upload-quick" class="dock-btn highlight-dock" title="Chọn HTML Game, Ảnh, Video, PDF, Excel, Word từ máy để hiển thị ngay">📤<span>Đăng HTML / Tài Liệu</span></button>
-<button type="button" id="tool-new-web-card" class="dock-btn highlight-dock" title="Tạo một khung Web URL / Media riêng biệt trên bảng cho riêng bạn">➕<span>Tạo Tab Web Riêng</span></button>
+<button type="button" id="group-webmedia-btn" class="dock-btn highlight-dock group-trigger-btn" data-popover="popover-webmedia" title="Mở Tab Web riêng, Đăng tệp HTML Game, Ảnh, Video, PDF, Word, Excel">🌐<span>Web / HTML / Tài Liệu ▾</span></button>
 <button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
-<button type="button" id="tool-media" class="dock-btn" title="Mở Trạm Media, Xem Web URL & YouTube chung">🌐<span>Trạm Web / Media</span></button>
 <button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Tạo nhiều bàn Nối Từ, Cờ Cá Ngựa, Cờ Vua, Caro, Xúc Xắc 3D trên mặt bảng">🎮<span>Tạo Bàn Chơi ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
@@ -367,12 +380,12 @@
 const ROOM_ID = "{{ room_id }}";
 window.USERNAME = "{{ username }}";
 </script>
-<script src="/static/js/socket_client.js?v=24"></script>
-<script src="/static/js/pointer.js?v=24"></script>
-<script src="/static/js/canvas.js?v=24"></script>
-<script src="/static/js/sticky.js?v=24"></script>
-<script src="/static/js/xo.js?v=24"></script>
-<script src="/static/js/media.js?v=24"></script>
-<script src="/static/js/ui.js?v=24"></script>
+<script src="/static/js/socket_client.js?v=26"></script>
+<script src="/static/js/pointer.js?v=26"></script>
+<script src="/static/js/canvas.js?v=26"></script>
+<script src="/static/js/sticky.js?v=26"></script>
+<script src="/static/js/xo.js?v=26"></script>
+<script src="/static/js/media.js?v=26"></script>
+<script src="/static/js/ui.js?v=26"></script>
 </body>
 </html>

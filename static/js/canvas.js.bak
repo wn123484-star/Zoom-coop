@@ -95,7 +95,7 @@ window.getWorkspaceCoords = function(clientX, clientY) {
 
 function getVisibleWorldBounds(padPx) {
     const scale = window.workspaceScale || 1;
-    const pad = (padPx || 220) / scale;
+    const pad = (padPx || 300) / scale;
     const minX = (-panX) / scale - pad;
     const minY = (-panY) / scale - pad;
     const maxX = (window.innerWidth - panX) / scale + pad;
@@ -103,27 +103,33 @@ function getVisibleWorldBounds(padPx) {
     return { minX, minY, maxX, maxY };
 }
 
-function cullDOMWorkspaceElements() {
+function cullDOMWorkspaceElements(forceNow) {
     const now = Date.now();
-    if (now - lastCullTime < 110) return;
+    if (!forceNow && now - lastCullTime < 110) return;
     lastCullTime = now;
-    const bounds = getVisibleWorldBounds(480);
+    const bounds = getVisibleWorldBounds(600);
     const items = workspace.querySelectorAll('.board-widget, .board-media-card, .sticky-note, .board-text-box');
     for (let i = 0; i < items.length; i++) {
         const el = items[i];
-        if (el.style.display === 'none') continue;
+        if (el.style.display === 'none') {
+            el.classList.remove('culled-offscreen');
+            continue;
+        }
         if (document.activeElement && el.contains(document.activeElement)) {
             el.classList.remove('culled-offscreen');
             continue;
         }
         const x = parseFloat(el.style.left) || 0;
         const y = parseFloat(el.style.top) || 0;
-        const w = parseFloat(el.style.width) || el.offsetWidth || 380;
-        const h = parseFloat(el.style.height) || el.offsetHeight || 320;
+        const w = parseFloat(el.style.width) || el.offsetWidth || 450;
+        const h = parseFloat(el.style.height) || el.offsetHeight || 380;
         const inView = !(x + w < bounds.minX || x > bounds.maxX || y + h < bounds.minY || y > bounds.maxY);
         el.classList.toggle('culled-offscreen', !inView);
     }
 }
+window.refreshViewportCulling = function() {
+    cullDOMWorkspaceElements(true);
+};
 
 function applyTransformImmediate() {
     workspace.style.transform = `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${window.workspaceScale.toFixed(4)})`;
@@ -132,7 +138,7 @@ function applyTransformImmediate() {
     }
     scheduleRedrawAll();
     scheduleRedrawDraft();
-    cullDOMWorkspaceElements();
+    cullDOMWorkspaceElements(false);
 }
 
 window.centerWorkspace = function() {
@@ -1010,6 +1016,7 @@ window.createOrUpdateTextBox = function(data, autoFocus) {
     if (typeof data.y === 'number') box.style.top = data.y + 'px';
     if (typeof data.w === 'number') box.style.width = data.w + 'px';
     if (typeof data.h === 'number') box.style.height = data.h + 'px';
+    box.classList.remove('culled-offscreen');
 
     const editor = box.querySelector('.text-box-editor');
     const cInput = box.querySelector('.tbox-color-input');

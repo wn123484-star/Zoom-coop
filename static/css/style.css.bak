@@ -1,27 +1,27 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body, html { margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow: hidden; width: 100vw; height: 100vh; background-color: #f4f5f9; color: #e2e2e2; user-select: none; -webkit-user-select: none; touch-action: none; }
-#dynamic-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; transition: background 0.35s ease; pointer-events: none; }
+#dynamic-bg { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; transform: translateZ(0); backface-visibility: hidden; }
 
 .bg-solid { background-color: #0f0f13; }
-.bg-dots { background-color: #0f0f13; background-image: radial-gradient(rgba(255,255,255,0.16) 1.5px, transparent 1.5px); background-size: 24px 24px; }
-.bg-grid { background-color: #0f0f13; background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 30px 30px; }
+.bg-dots { background-color: #0f0f13; background-image: radial-gradient(rgba(255,255,255,0.18) 1.2px, transparent 2.2px); background-size: 26px 26px; }
+.bg-grid { background-color: #0f0f13; background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 32px 32px; }
 .bg-magical { background: linear-gradient(-45deg, #0f0f13, #17172b, #142038, #0f3460, #0f0f13); background-size: 400% 400%; animation: gradientAurora 18s ease infinite; }
 
-.bg-light-dots { background-color: #f5f7fb; background-image: radial-gradient(rgba(15, 23, 42, 0.16) 1.5px, transparent 1.5px); background-size: 24px 24px; }
-.bg-light-grid { background-color: #f5f7fb; background-image: linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px); background-size: 30px 30px; }
-.bg-light-paper { background-color: #fdf6e3; background-image: linear-gradient(rgba(181, 137, 0, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(211, 54, 130, 0.15) 1px, transparent 1px); background-size: 100% 28px, 60px 100%; }
-.bg-light-pastel { background-color: #f3e7e9; background-image: radial-gradient(rgba(100, 80, 160, 0.12) 1.5px, transparent 1.5px), linear-gradient(120deg, #fdfbfb 0%, #f3e7e9 45%, #e3eeff 100%); background-size: 24px 24px, 100% 100%; }
-.bg-light-sakura { background-color: #ffe4ec; background-image: radial-gradient(rgba(232, 67, 147, 0.24) 2px, transparent 2px), radial-gradient(rgba(253, 121, 168, 0.18) 1.5px, transparent 1.5px), linear-gradient(135deg, #fff0f6 0%, #ffdde1 55%, #ffc2d1 100%); background-size: 32px 32px, 16px 16px, 100% 100%; background-position: 0 0, 8px 8px, 0 0; }
-.bg-light-mint { background-color: #e0f8ec; background-image: radial-gradient(rgba(0, 184, 148, 0.24) 2px, transparent 2px), linear-gradient(135deg, #f0fff4 0%, #c6f6d5 50%, #9ae6b4 100%); background-size: 26px 26px, 100% 100%; }
-.bg-light-sunset { background-color: #ffecd2; background-image: radial-gradient(rgba(225, 112, 85, 0.2) 1.5px, transparent 1.5px), linear-gradient(135deg, #fff5eb 0%, #ffecd2 45%, #fcb69f 100%); background-size: 26px 26px, 100% 100%; }
-.bg-light-ocean { background-color: #dff9fb; background-image: radial-gradient(rgba(9, 132, 227, 0.2) 1.5px, transparent 1.5px), linear-gradient(135deg, #f0fbff 0%, #c7ecee 50%, #89f7fe 100%); background-size: 26px 26px, 100% 100%; }
+.bg-light-dots { background-color: #f5f7fb; background-image: radial-gradient(rgba(15, 23, 42, 0.18) 1.2px, transparent 2.2px); background-size: 26px 26px; }
+.bg-light-grid { background-color: #f5f7fb; background-image: linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px); background-size: 32px 32px; }
+.bg-light-paper { background-color: #fdf6e3; background-image: linear-gradient(rgba(181, 137, 0, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(211, 54, 130, 0.12) 1px, transparent 1px); background-size: 100% 28px, 64px 100%; }
+.bg-light-pastel { background-color: #f3e7e9; background-image: radial-gradient(rgba(100, 80, 160, 0.14) 1.2px, transparent 2.2px), linear-gradient(120deg, #fdfbfb 0%, #f3e7e9 45%, #e3eeff 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-light-sakura { background-color: #ffe4ec; background-image: radial-gradient(rgba(232, 67, 147, 0.22) 1.4px, transparent 2.4px), linear-gradient(135deg, #fff0f6 0%, #ffdde1 55%, #ffc2d1 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-light-mint { background-color: #e0f8ec; background-image: radial-gradient(rgba(0, 184, 148, 0.22) 1.4px, transparent 2.4px), linear-gradient(135deg, #f0fff4 0%, #c6f6d5 50%, #9ae6b4 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-light-sunset { background-color: #ffecd2; background-image: radial-gradient(rgba(225, 112, 85, 0.2) 1.3px, transparent 2.3px), linear-gradient(135deg, #fff5eb 0%, #ffecd2 45%, #fcb69f 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-light-ocean { background-color: #dff9fb; background-image: radial-gradient(rgba(9, 132, 227, 0.2) 1.3px, transparent 2.3px), linear-gradient(135deg, #f0fbff 0%, #c7ecee 50%, #89f7fe 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
 
-.bg-galaxy { background-color: #090514; background-image: radial-gradient(rgba(255,255,255,0.28) 1.5px, transparent 2.5px), radial-gradient(rgba(0,210,255,0.22) 1px, transparent 2px), linear-gradient(135deg, #090514 0%, #1e1035 45%, #3b1254 80%, #102542 100%); background-size: 180px 180px, 90px 90px, 100% 100%; }
-.bg-forest { background-color: #071a12; background-image: radial-gradient(rgba(85, 239, 196, 0.16) 1.5px, transparent 1.5px), linear-gradient(135deg, #05140e 0%, #0b291e 55%, #133b2b 100%); background-size: 28px 28px, 100% 100%; }
-.bg-blueprint { background-color: #0a2540; background-image: linear-gradient(rgba(0, 210, 255, 0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 210, 255, 0.14) 1px, transparent 1px); background-size: 28px 28px; }
-.bg-cyberpunk { background-color: #060612; background-image: linear-gradient(rgba(0, 210, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 71, 87, 0.1) 1px, transparent 1px), radial-gradient(circle at center, rgba(165, 94, 234, 0.2), #060612 80%); background-size: 36px 36px, 36px 36px, 100% 100%; }
-.bg-matrix { background-color: #040d08; background-image: linear-gradient(rgba(0, 255, 128, 0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 128, 0.09) 1px, transparent 1px); background-size: 30px 30px; }
-.bg-stars { background-color: #030308; background-image: radial-gradient(white, rgba(255,255,255,.22) 1.5px, transparent 3px), radial-gradient(white, rgba(255,255,255,.14) 1px, transparent 2px); background-size: 350px 350px, 180px 180px; background-position: 0 0, 40px 60px; }
+.bg-galaxy { background-color: #090514; background-image: radial-gradient(rgba(255,255,255,0.26) 1.2px, transparent 2.4px), linear-gradient(135deg, #090514 0%, #1e1035 45%, #3b1254 80%, #102542 100%); background-size: 64px 64px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-forest { background-color: #071a12; background-image: radial-gradient(rgba(85, 239, 196, 0.18) 1.2px, transparent 2.2px), linear-gradient(135deg, #05140e 0%, #0b291e 55%, #133b2b 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-blueprint { background-color: #0a2540; background-image: linear-gradient(rgba(0, 210, 255, 0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 210, 255, 0.14) 1px, transparent 1px); background-size: 32px 32px; }
+.bg-cyberpunk { background-color: #060612; background-image: linear-gradient(rgba(0, 210, 255, 0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 71, 87, 0.09) 1px, transparent 1px), radial-gradient(circle at center, rgba(165, 94, 234, 0.22), #060612 85%); background-size: 36px 36px, 36px 36px, 100% 100%; background-repeat: repeat, repeat, no-repeat; }
+.bg-matrix { background-color: #040d08; background-image: linear-gradient(rgba(0, 255, 128, 0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 128, 0.09) 1px, transparent 1px); background-size: 32px 32px; }
+.bg-stars { background-color: #030308; background-image: radial-gradient(rgba(255,255,255,0.28) 1.2px, transparent 2.5px), radial-gradient(rgba(0,210,255,0.18) 1px, transparent 2.2px); background-size: 96px 96px, 48px 48px; background-position: 0 0, 24px 24px; }
 
 @keyframes gradientAurora { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 .fade-in { animation: fadeIn 0.35s ease-out; }
@@ -36,9 +36,9 @@ body, html { margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-syst
 .lobby-container button { background-color: #00d2ff; color: #000; cursor: pointer; font-weight: 700; }
 .lobby-container button:hover { background-color: #00a8cc; transform: translateY(-2px); }
 
-#board { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; cursor: crosshair; touch-action: none; -webkit-user-drag: none; }
-#draft-board { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; pointer-events: none; }
-#laser-board { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 3; pointer-events: none; }
+#board { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 1; cursor: crosshair; touch-action: none; -webkit-user-drag: none; }
+#draft-board { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 2; pointer-events: none; }
+#laser-board { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 3; pointer-events: none; }
 #board.pan-mode { cursor: grab; }
 #board.pan-mode:active { cursor: grabbing; }
 

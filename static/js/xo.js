@@ -82,6 +82,32 @@ function create3DDiceDOM(initialVal, isSmall) {
     return { el: scene, setFace: setFace };
 }
 
+const UNO_COLORS = ['R', 'B', 'Y', 'G'];
+const UNO_COLOR_NAMES = { R: '🔴 Đỏ', B: '🔵 Xanh Dương', Y: '🟡 Vàng', G: '🟢 Xanh Lá' };
+const UNO_COLOR_BG = { R: '#ff4757', B: '#1e90ff', Y: '#ffa502', G: '#2ed573' };
+
+function createShuffledUnoDeck() {
+    const deck = [];
+    UNO_COLORS.forEach(col => {
+        deck.push({ color: col, val: '0' });
+        ['1', '2', '3', '4', '5', '6', '7', '8', '9', '🚫', '🔄', '+2'].forEach(v => {
+            deck.push({ color: col, val: v });
+            deck.push({ color: col, val: v });
+        });
+    });
+    for (let i = 0; i < 4; i++) {
+        deck.push({ color: 'W', val: '🌈' });
+        deck.push({ color: 'W', val: '+4' });
+    }
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = deck[i];
+        deck[i] = deck[j];
+        deck[j] = tmp;
+    }
+    return deck;
+}
+
 const LUDO_TRACK = [
     [6, 1], [6, 2], [6, 3], [6, 4], [6, 5],
     [5, 6], [4, 6], [3, 6], [2, 6], [1, 6], [0, 6],
@@ -116,6 +142,31 @@ const LUDO_LABELS = { R: '🔴 Đỏ', B: '🔵 Xanh', Y: '🟡 Vàng', G: '🟢
 
 function makeInitialGameData(type, creatorName) {
     const user = creatorName || 'Thành viên';
+    if (type === 'uno') {
+        const deck = createShuffledUnoDeck();
+        const players = [user, '🤖 Bot'];
+        const hands = {};
+        players.forEach(p => {
+            hands[p] = deck.splice(0, 7);
+        });
+        let topCard = deck.pop();
+        while (topCard && topCard.color === 'W' && deck.length > 0) {
+            deck.unshift(topCard);
+            topCard = deck.pop();
+        }
+        if (!topCard) topCard = { color: 'R', val: '5' };
+        return {
+            players: players,
+            hands: hands,
+            deck: deck,
+            top_card: topCard,
+            active_color: topCard.color === 'W' ? 'R' : topCard.color,
+            turn_idx: 0,
+            direction: 1,
+            winner: null,
+            status_text: `Lượt của ${user}: Hãy đánh bài cùng màu/số hoặc bấm Rút bài!`
+        };
+    }
     if (type === 'noitu') {
         return {
             players: [user],
@@ -214,6 +265,7 @@ function makeInitialGameData(type, creatorName) {
 }
 
 function getDefaultWidgetMeta(type, idx) {
+    if (type === 'uno') return { title: `🃏 Bàn Bài UNO #${idx}`, w: 500, h: 520, minW: 380, minH: 420 };
     if (type === 'noitu') return { title: `🔤 Nối Từ Tiếng Việt #${idx}`, w: 460, h: 480, minW: 360, minH: 380 };
     if (type === 'ludo') return { title: `🐎 Cờ Cá Ngựa #${idx}`, w: 500, h: 660, minW: 450, minH: 580 };
     if (type === 'chess') return { title: `♟️ Cờ Vua Quốc Tế #${idx}`, w: 480, h: 580, minW: 440, minH: 520 };
@@ -279,6 +331,364 @@ function emitWidgetUpdate(wid, extraAnim, echoSelf) {
         anim: extraAnim || null,
         echo: !!echoSelf
     });
+}
+
+function canPlayUnoCard(card, topCard, activeColor) {
+    if (!card || !topCard) return false;
+    if (card.color === 'W') return true;
+    if (card.color === activeColor) return true;
+    if (card.val === topCard.val) return true;
+    return false;
+}
+
+function drawUnoCardsForPlayer(gd, player, count) {
+    if (!gd.hands[player]) gd.hands[player] = [];
+    for (let i = 0; i < count; i++) {
+        if (!Array.isArray(gd.deck) || gd.deck.length === 0) {
+            gd.deck = createShuffledUnoDeck();
+        }
+        gd.hands[player].push(gd.deck.pop());
+    }
+}
+
+function buildUnoCardDOM(card, isPlayable) {
+    const el = document.createElement('div');
+    const c = (card && card.color) || 'R';
+    const v = (card && card.val) || '0';
+    el.className = `uno-card color-${c}` + (isPlayable === true ? ' playable' : isPlayable === false ? ' unplayable' : '');
+    el.innerHTML = `
+        <span class="uno-corner-tl">${v}</span>
+        <div class="uno-center-val">${v}</div>
+        <span class="uno-corner-br">${v}</span>
+    `;
+    return el;
+}
+
+function buildUnoInstanceUI(inst, bodyEl) {
+    const wid = inst.data.id;
+    bodyEl.innerHTML = `
+        <div class="uno-top-bar">
+            <div class="uno-players-list"></div>
+            <div style="display:flex; gap:4px;">
+                <button type="button" class="widget-btn uno-join-btn">➕ Vào chơi</button>
+                <button type="button" class="widget-btn uno-bot-btn">🤖 Bot</button>
+            </div>
+        </div>
+        <div class="uno-arena">
+            <div class="uno-active-color-pill">Màu hiện tại: Đỏ</div>
+            <div class="uno-center-piles">
+                <div class="uno-card deck-back" title="Nhấn để rút 1 lá bài">
+                    <div class="uno-center-val">RÚT</div>
+                </div>
+                <div class="uno-discard-mount"></div>
+            </div>
+            <div class="uno-status-banner">Sẵn sàng</div>
+            <div class="uno-wild-picker" style="display:none;">
+                <span style="font-size:11px; font-weight:800; color:#fff;">Chọn màu:</span>
+                <div class="uno-color-choice" data-col="R" style="background:#ff4757;"></div>
+                <div class="uno-color-choice" data-col="B" style="background:#1e90ff;"></div>
+                <div class="uno-color-choice" data-col="Y" style="background:#ffa502;"></div>
+                <div class="uno-color-choice" data-col="G" style="background:#2ed573;"></div>
+            </div>
+        </div>
+        <div class="uno-hand-section">
+            <div class="uno-hand-title">
+                <span class="uno-hand-owner-label">Bài trên tay của bạn</span>
+                <span class="uno-deck-rem-label">Nọc: 90 lá</span>
+            </div>
+            <div class="uno-hand-cards"></div>
+        </div>
+    `;
+    bodyEl.classList.add('uno-body');
+    const playersListEl = bodyEl.querySelector('.uno-players-list');
+    const joinBtn = bodyEl.querySelector('.uno-join-btn');
+    const botBtn = bodyEl.querySelector('.uno-bot-btn');
+    const colorPill = bodyEl.querySelector('.uno-active-color-pill');
+    const deckBackEl = bodyEl.querySelector('.uno-card.deck-back');
+    const discardMount = bodyEl.querySelector('.uno-discard-mount');
+    const statusBanner = bodyEl.querySelector('.uno-status-banner');
+    const wildPicker = bodyEl.querySelector('.uno-wild-picker');
+    const handOwnerLabel = bodyEl.querySelector('.uno-hand-owner-label');
+    const deckRemLabel = bodyEl.querySelector('.uno-deck-rem-label');
+    const handCardsEl = bodyEl.querySelector('.uno-hand-cards');
+
+    let pendingWildCardIndex = null;
+
+    function isFirstHumanInUno(gd) {
+        const me = window.USERNAME || 'Thành viên';
+        for (let i = 0; i < (gd.players || []).length; i++) {
+            if (gd.players[i] !== '🤖 Bot') {
+                return gd.players[i] === me;
+            }
+        }
+        return false;
+    }
+
+    function advanceUnoTurn(gd, steps) {
+        const len = (gd.players || []).length;
+        if (len === 0) {
+            gd.turn_idx = 0;
+            return;
+        }
+        const dir = gd.direction || 1;
+        gd.turn_idx = (((gd.turn_idx + dir * steps) % len) + len) % len;
+    }
+
+    function executePlayUnoCard(player, cardIdx, chosenWildColor) {
+        const gd = inst.data.game_data;
+        if (gd.winner) return;
+        const hand = gd.hands[player] || [];
+        const card = hand[cardIdx];
+        if (!card || !canPlayUnoCard(card, gd.top_card, gd.active_color)) return;
+
+        hand.splice(cardIdx, 1);
+        gd.top_card = card;
+        gd.active_color = card.color === 'W' ? (chosenWildColor || 'R') : card.color;
+
+        if (hand.length === 0) {
+            gd.winner = player;
+            gd.status_text = `🏆 CHIẾN THẮNG! ${player} đã đánh hết bài UNO!`;
+            inst.render();
+            emitWidgetUpdate(wid, null, false);
+            return;
+        }
+
+        const pCount = gd.players.length;
+        let stepCount = 1;
+        let effectNote = '';
+
+        if (card.val === '🔄') {
+            if (pCount === 2) {
+                stepCount = 2;
+                effectNote = ' (Đảo chiều 2 người = Cấm lượt!)';
+            } else {
+                gd.direction = (gd.direction || 1) * -1;
+                effectNote = ' (Đảo chiều vòng đánh!)';
+            }
+        } else if (card.val === '🚫') {
+            stepCount = 2;
+            effectNote = ' (Cấm lượt người kế tiếp!)';
+        } else if (card.val === '+2') {
+            const victimIdx = (((gd.turn_idx + (gd.direction || 1)) % pCount) + pCount) % pCount;
+            const victim = gd.players[victimIdx];
+            drawUnoCardsForPlayer(gd, victim, 2);
+            stepCount = 2;
+            effectNote = ` (${victim} phải rút +2 lá và mất lượt!)`;
+        } else if (card.val === '+4') {
+            const victimIdx = (((gd.turn_idx + (gd.direction || 1)) % pCount) + pCount) % pCount;
+            const victim = gd.players[victimIdx];
+            drawUnoCardsForPlayer(gd, victim, 4);
+            stepCount = 2;
+            effectNote = ` (${victim} phải rút +4 lá và mất lượt!)`;
+        }
+
+        advanceUnoTurn(gd, stepCount);
+        const nextPlayer = gd.players[gd.turn_idx] || '';
+        const unoShout = hand.length === 1 ? ` 🔥 [${player} HÔ UNO!] ` : '';
+        gd.status_text = `${player} đánh [${card.val} ${UNO_COLOR_NAMES[gd.active_color]}]${effectNote}.${unoShout} Lượt của ${nextPlayer}!`;
+
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+        scheduleUnoBotTurn();
+    }
+
+    function executeDrawUnoCard(player) {
+        const gd = inst.data.game_data;
+        if (gd.winner) return;
+        drawUnoCardsForPlayer(gd, player, 1);
+        advanceUnoTurn(gd, 1);
+        const nextPlayer = gd.players[gd.turn_idx] || '';
+        gd.status_text = `${player} đã rút 1 lá bài → Chuyển lượt sang ${nextPlayer}!`;
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+        scheduleUnoBotTurn();
+    }
+
+    function scheduleUnoBotTurn() {
+        const gd = inst.data.game_data;
+        if (!gd || gd.winner) return;
+        const activeP = gd.players[gd.turn_idx];
+        if (activeP !== '🤖 Bot') return;
+        if (!isFirstHumanInUno(gd)) return;
+        if (inst.botTimer) clearTimeout(inst.botTimer);
+        inst.botTimer = setTimeout(() => {
+            const bHand = gd.hands['🤖 Bot'] || [];
+            let playIdx = -1;
+            for (let i = 0; i < bHand.length; i++) {
+                if (canPlayUnoCard(bHand[i], gd.top_card, gd.active_color)) {
+                    playIdx = i;
+                    break;
+                }
+            }
+            if (playIdx !== -1) {
+                const pickedCard = bHand[playIdx];
+                let wildCol = 'R';
+                if (pickedCard.color === 'W') {
+                    const counts = { R: 0, B: 0, Y: 0, G: 0 };
+                    bHand.forEach(c => {
+                        if (counts[c.color] !== undefined) counts[c.color]++;
+                    });
+                    wildCol = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || 'R';
+                }
+                executePlayUnoCard('🤖 Bot', playIdx, wildCol);
+            } else {
+                executeDrawUnoCard('🤖 Bot');
+            }
+        }, 850);
+    }
+
+    wildPicker.querySelectorAll('.uno-color-choice').forEach(choiceEl => {
+        window.bindSafeButton(choiceEl, () => {
+            const col = choiceEl.getAttribute('data-col') || 'R';
+            wildPicker.style.display = 'none';
+            if (pendingWildCardIndex !== null) {
+                const me = window.USERNAME || 'Thành viên';
+                const idx = pendingWildCardIndex;
+                pendingWildCardIndex = null;
+                executePlayUnoCard(me, idx, col);
+            }
+        });
+    });
+
+    window.bindSafeButton(deckBackEl, () => {
+        const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
+        if (gd.winner) return;
+        const activeP = gd.players[gd.turn_idx];
+        if (activeP !== me) {
+            if (window.showToast) window.showToast(`⏳ Đang là lượt của ${activeP}, bạn chưa thể rút bài!`);
+            return;
+        }
+        wildPicker.style.display = 'none';
+        pendingWildCardIndex = null;
+        executeDrawUnoCard(me);
+    });
+
+    window.bindSafeButton(joinBtn, () => {
+        const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
+        if (!Array.isArray(gd.players)) gd.players = [];
+        const idx = gd.players.indexOf(me);
+        if (idx === -1) {
+            gd.players.push(me);
+            if (!gd.hands[me] || gd.hands[me].length === 0) {
+                drawUnoCardsForPlayer(gd, me, 7);
+            }
+            gd.status_text = `👋 ${me} đã tham gia bàn UNO!`;
+        } else {
+            gd.players.splice(idx, 1);
+            if (gd.turn_idx >= gd.players.length) gd.turn_idx = 0;
+            gd.status_text = `🚪 ${me} đã rời bàn UNO.`;
+        }
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+    });
+
+    window.bindSafeButton(botBtn, () => {
+        const gd = inst.data.game_data;
+        const bIdx = (gd.players || []).indexOf('🤖 Bot');
+        if (bIdx === -1) {
+            gd.players.push('🤖 Bot');
+            if (!gd.hands['🤖 Bot'] || gd.hands['🤖 Bot'].length === 0) {
+                drawUnoCardsForPlayer(gd, '🤖 Bot', 7);
+            }
+            gd.status_text = '🤖 Đã thêm Bot vào bàn UNO!';
+        } else {
+            gd.players.splice(bIdx, 1);
+            if (gd.turn_idx >= gd.players.length) gd.turn_idx = 0;
+            gd.status_text = 'Đã tắt Bot khỏi bàn UNO.';
+        }
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+        scheduleUnoBotTurn();
+    });
+
+    inst.resetGame = () => {
+        const oldHumans = ((inst.data.game_data && inst.data.game_data.players) || []).filter(p => p !== '🤖 Bot');
+        const newGd = makeInitialGameData('uno', window.USERNAME || 'Thành viên');
+        if (oldHumans.length > 0) {
+            newGd.players = oldHumans.slice();
+            if (newGd.players.length === 1) newGd.players.push('🤖 Bot');
+            newGd.hands = {};
+            newGd.players.forEach(p => {
+                newGd.hands[p] = newGd.deck.splice(0, 7);
+            });
+        }
+        wildPicker.style.display = 'none';
+        pendingWildCardIndex = null;
+        inst.data.game_data = newGd;
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+    };
+
+    inst.render = () => {
+        const gd = inst.data.game_data;
+        if (!gd) return;
+        const me = window.USERNAME || 'Thành viên';
+        const players = gd.players || [];
+        if (gd.turn_idx >= players.length) gd.turn_idx = 0;
+        const activeP = players[gd.turn_idx] || '';
+
+        playersListEl.innerHTML = '';
+        players.forEach((p, idx) => {
+            const chip = document.createElement('span');
+            chip.className = 'uno-player-chip' + (idx === gd.turn_idx && !gd.winner ? ' active-turn' : '');
+            const cCount = (gd.hands && gd.hands[p]) ? gd.hands[p].length : 0;
+            chip.innerHTML = `<span>${p}</span><span class="uno-badge-cnt">${cCount}</span>`;
+            playersListEl.appendChild(chip);
+        });
+
+        const inGame = players.includes(me);
+        joinBtn.innerText = inGame ? '🚪 Rời ván' : '➕ Vào chơi';
+        botBtn.innerText = players.includes('🤖 Bot') ? 'Tắt Bot' : '🤖 Thêm Bot';
+
+        const actCol = gd.active_color || 'R';
+        colorPill.style.background = UNO_COLOR_BG[actCol] || '#ff4757';
+        colorPill.style.color = actCol === 'Y' ? '#111' : '#fff';
+        const dirArrow = (gd.direction || 1) === 1 ? '↻ Thuận chiều' : '↺ Ngược chiều';
+        colorPill.innerText = `Màu: ${UNO_COLOR_NAMES[actCol] || 'Đỏ'} (${dirArrow})`;
+
+        discardMount.innerHTML = '';
+        if (gd.top_card) {
+            discardMount.appendChild(buildUnoCardDOM(gd.top_card, null));
+        }
+
+        statusBanner.innerText = gd.status_text || 'Hãy đánh bài!';
+        deckRemLabel.innerText = `Nọc: ${(gd.deck || []).length} lá`;
+
+        handCardsEl.innerHTML = '';
+        const myHand = (gd.hands && gd.hands[me]) || [];
+        const isMyTurn = (!gd.winner && activeP === me);
+        handOwnerLabel.innerText = inGame
+            ? `Bài của ${me} (${myHand.length} lá) ${isMyTurn ? '— ĐẾN LƯỢT BẠN!' : ''}`
+            : 'Bạn đang xem (Nhấn "➕ Vào chơi" để nhận 7 lá bài)';
+
+        myHand.forEach((card, cIdx) => {
+            const canPlay = isMyTurn && canPlayUnoCard(card, gd.top_card, gd.active_color);
+            const cardEl = buildUnoCardDOM(card, isMyTurn ? canPlay : null);
+            window.bindSafeButton(cardEl, () => {
+                if (!isMyTurn) {
+                    if (window.showToast) window.showToast(`⏳ Chưa tới lượt của bạn (Đang là lượt ${activeP})!`);
+                    return;
+                }
+                if (!canPlayUnoCard(card, gd.top_card, gd.active_color)) {
+                    if (window.showToast) window.showToast('⚠️ Lá bài này không cùng màu hoặc cùng số/ký hiệu với bài trên bàn!');
+                    return;
+                }
+                if (card.color === 'W') {
+                    pendingWildCardIndex = cIdx;
+                    wildPicker.style.display = 'flex';
+                } else {
+                    wildPicker.style.display = 'none';
+                    pendingWildCardIndex = null;
+                    executePlayUnoCard(me, cIdx, card.color);
+                }
+            });
+            handCardsEl.appendChild(cardEl);
+        });
+    };
+
+    inst.render();
 }
 
 function checkXoWin(board, r, c, val, winLen) {
@@ -1703,7 +2113,8 @@ function mountOrUpdateMultiWidget(wObj, animType) {
         };
         multiInstances[wid] = inst;
 
-        if (wObj.type === 'noitu') buildNoiTuInstanceUI(inst, body);
+        if (wObj.type === 'uno') buildUnoInstanceUI(inst, body);
+        else if (wObj.type === 'noitu') buildNoiTuInstanceUI(inst, body);
         else if (wObj.type === 'ludo') buildLudoInstanceUI(inst, body);
         else if (wObj.type === 'chess') buildChessInstanceUI(inst, body, controls);
         else if (wObj.type === 'xo') buildXoInstanceUI(inst, body);
@@ -1798,6 +2209,7 @@ function mountOrUpdateMultiWidget(wObj, animType) {
     if (typeof wObj.w === 'number') inst.el.style.width = wObj.w + 'px';
     if (typeof wObj.h === 'number') inst.el.style.height = wObj.h + 'px';
     if (wObj.title) inst.titleEl.innerText = wObj.title;
+    inst.el.classList.remove('culled-offscreen');
     inst.el.classList.toggle('minimized', !!wObj.minimized);
     inst.render(animType === 'roll');
 }
