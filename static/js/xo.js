@@ -134,13 +134,14 @@ function makeInitialGameData(type, creatorName) {
         return {
             seats: { R: user, B: '🤖 Bot', Y: null, G: null },
             locked_players: { [user]: 'R' },
+            started: false,
             turn_limit: 15,
-            turn_started_at: Date.now() / 1000,
+            turn_seq: 1,
             horses: { R: [-1, -1, -1, -1], B: [-1, -1, -1, -1], Y: [-1, -1, -1, -1], G: [-1, -1, -1, -1] },
             turn: 'R',
             dice: 6,
             phase: 'roll',
-            status_text: `Lượt của 🔴 Đỏ (${user}): Hãy tung xúc xắc!`,
+            status_text: `Lượt của 🔴 Đỏ (${user}): Hãy tung xúc xắc để bắt đầu ván!`,
             winner: null
         };
     }
@@ -205,7 +206,7 @@ function makeInitialGameData(type, creatorName) {
             duration: 300,
             remaining: 300,
             running: false,
-            updated_at: Date.now() / 1000,
+            sync_seq: 1,
             starter: user
         };
     }
@@ -658,11 +659,14 @@ function buildLudoInstanceUI(inst, bodyEl) {
     const dropCenterCube = create3DDiceDOM(6, false);
     dropOverlay.appendChild(dropCenterCube.el);
 
+    let lastSeenTurnSeq = -1;
+    let localTurnStartMs = Date.now();
+
     toptBtns.forEach(btn => {
         window.bindSafeButton(btn, () => {
             const gd = inst.data.game_data;
             gd.turn_limit = parseInt(btn.getAttribute('data-sec'), 10);
-            gd.turn_started_at = Date.now() / 1000;
+            gd.turn_seq = (gd.turn_seq || 1) + 1;
             inst.render(false);
             emitWidgetUpdate(wid, null, false);
         });
@@ -717,7 +721,7 @@ function buildLudoInstanceUI(inst, bodyEl) {
         }
         const gd = inst.data.game_data;
         if (!gd || gd.winner) {
-            countdownBadge.innerText = '--';
+            countdownBadge.innerText = '🏁';
             return;
         }
         const limit = gd.turn_limit !== undefined ? gd.turn_limit : 15;
@@ -725,13 +729,23 @@ function buildLudoInstanceUI(inst, bodyEl) {
             countdownBadge.innerText = '∞';
             return;
         }
+        if (!gd.started) {
+            countdownBadge.innerText = limit + 's';
+            return;
+        }
+        const curSeq = gd.turn_seq || 1;
+        if (curSeq !== lastSeenTurnSeq) {
+            lastSeenTurnSeq = curSeq;
+            localTurnStartMs = Date.now();
+        }
         const updateTick = () => {
-            const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - (gd.turn_started_at || Date.now() / 1000)));
+            const elapsed = Math.max(0, Math.floor((Date.now() - localTurnStartMs) / 1000));
             const rem = Math.max(0, limit - elapsed);
             countdownBadge.innerText = rem + 's';
             if (rem <= 0) {
                 clearInterval(inst.timerInterval);
                 inst.timerInterval = null;
+                localTurnStartMs = Date.now();
                 const me = window.USERNAME || 'Thành viên';
                 const activeCol = gd.turn;
                 const seatOwner = gd.seats[activeCol];
@@ -747,7 +761,7 @@ function buildLudoInstanceUI(inst, bodyEl) {
                     const nextCol = getNextActiveLudoTurn(gd, activeCol);
                     gd.turn = nextCol;
                     gd.phase = 'roll';
-                    gd.turn_started_at = Date.now() / 1000;
+                    gd.turn_seq = (gd.turn_seq || 1) + 1;
                     gd.status_text = `⏰ Hết ${limit}s! ${LUDO_LABELS[activeCol]} mất lượt → Chuyển sang ${LUDO_LABELS[nextCol]}!`;
                     inst.render(false);
                     emitWidgetUpdate(wid, null, false);
@@ -756,7 +770,7 @@ function buildLudoInstanceUI(inst, bodyEl) {
             }
         };
         updateTick();
-        inst.timerInterval = setInterval(updateTick, 500);
+        inst.timerInterval = setInterval(updateTick, 400);
     }
 
     function executeLudoHorseMove(color, hIdx, isBotOrAutoCall) {
@@ -796,15 +810,14 @@ function buildLudoInstanceUI(inst, bodyEl) {
         }
 
         const bonusTurn = (dice === 6 || dice === 1 || kickedMsg !== '');
+        gd.turn_seq = (gd.turn_seq || 1) + 1;
         if (bonusTurn) {
             gd.phase = 'roll';
-            gd.turn_started_at = Date.now() / 1000;
             gd.status_text = `${LUDO_LABELS[color]} được thưởng thêm lượt!${kickedMsg} Hãy tung xúc xắc!`;
         } else {
             const nextCol = getNextActiveLudoTurn(gd, color);
             gd.turn = nextCol;
             gd.phase = 'roll';
-            gd.turn_started_at = Date.now() / 1000;
             gd.status_text = `${kickedMsg} Lượt của ${LUDO_LABELS[nextCol]} (${gd.seats[nextCol] || 'Trống'}): Hãy tung xúc xắc!`;
         }
 
@@ -825,9 +838,10 @@ function buildLudoInstanceUI(inst, bodyEl) {
             return;
         }
 
+        gd.started = true;
         const val = Math.floor(Math.random() * 6) + 1;
         gd.dice = val;
-        gd.turn_started_at = Date.now() / 1000;
+        gd.turn_seq = (gd.turn_seq || 1) + 1;
 
         const movableIndices = [0, 1, 2, 3].filter(h => canMoveLudoHorse(gd, activeCol, h, val));
         if (movableIndices.length === 0) {
@@ -892,6 +906,7 @@ function buildLudoInstanceUI(inst, bodyEl) {
         const curLimit = (inst.data.game_data && inst.data.game_data.turn_limit !== undefined) ? inst.data.game_data.turn_limit : 15;
         inst.data.game_data = makeInitialGameData('ludo', window.USERNAME || 'Thành viên');
         inst.data.game_data.turn_limit = curLimit;
+        lastSeenTurnSeq = -1;
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
     };
@@ -1501,6 +1516,10 @@ function buildTimerInstanceUI(inst, bodyEl) {
     const pauseBtn = bodyEl.querySelector('.timer-act-btn.pause');
     const resetBtn = bodyEl.querySelector('.timer-act-btn.reset');
 
+    let lastSyncSeq = -1;
+    let localBaseRemaining = 300;
+    let localSyncStartMs = Date.now();
+
     function fmt(sec) {
         const s = Math.max(0, Math.floor(sec));
         return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
@@ -1508,8 +1527,8 @@ function buildTimerInstanceUI(inst, bodyEl) {
 
     function computeCurrentRemaining(gd) {
         if (!gd.running) return Math.max(0, parseInt(gd.remaining, 10) || 0);
-        const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - parseFloat(gd.updated_at || Date.now() / 1000)));
-        return Math.max(0, (parseInt(gd.remaining, 10) || 0) - elapsed);
+        const elapsed = Math.max(0, Math.floor((Date.now() - localSyncStartMs) / 1000));
+        return Math.max(0, localBaseRemaining - elapsed);
     }
 
     preBtns.forEach(btn => {
@@ -1519,7 +1538,7 @@ function buildTimerInstanceUI(inst, bodyEl) {
             gd.duration = sec;
             gd.remaining = sec;
             gd.running = false;
-            gd.updated_at = Date.now() / 1000;
+            gd.sync_seq = (gd.sync_seq || 1) + 1;
             inst.render(false);
             emitWidgetUpdate(wid, null, false);
         });
@@ -1530,7 +1549,7 @@ function buildTimerInstanceUI(inst, bodyEl) {
         if (gd.running) return;
         if ((gd.remaining || 0) <= 0) gd.remaining = gd.duration || 300;
         gd.running = true;
-        gd.updated_at = Date.now() / 1000;
+        gd.sync_seq = (gd.sync_seq || 1) + 1;
         gd.starter = window.USERNAME || 'Thành viên';
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
@@ -1541,7 +1560,7 @@ function buildTimerInstanceUI(inst, bodyEl) {
         if (!gd.running) return;
         gd.remaining = computeCurrentRemaining(gd);
         gd.running = false;
-        gd.updated_at = Date.now() / 1000;
+        gd.sync_seq = (gd.sync_seq || 1) + 1;
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
     });
@@ -1550,13 +1569,14 @@ function buildTimerInstanceUI(inst, bodyEl) {
         const gd = inst.data.game_data;
         gd.remaining = gd.duration || 300;
         gd.running = false;
-        gd.updated_at = Date.now() / 1000;
+        gd.sync_seq = (gd.sync_seq || 1) + 1;
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
     });
 
     inst.resetGame = () => {
         inst.data.game_data = makeInitialGameData('timer', window.USERNAME);
+        lastSyncSeq = -1;
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
     };
@@ -1567,6 +1587,15 @@ function buildTimerInstanceUI(inst, bodyEl) {
         if (inst.timerInterval) {
             clearInterval(inst.timerInterval);
             inst.timerInterval = null;
+        }
+        const curSeq = gd.sync_seq || 1;
+        if (curSeq !== lastSyncSeq) {
+            lastSyncSeq = curSeq;
+            localBaseRemaining = parseInt(gd.remaining, 10);
+            if (isNaN(localBaseRemaining) || localBaseRemaining < 0) {
+                localBaseRemaining = parseInt(gd.duration, 10) || 300;
+            }
+            localSyncStartMs = Date.now();
         }
         const dur = gd.duration || 300;
         preBtns.forEach(b => b.classList.toggle('active', parseInt(b.getAttribute('data-sec'), 10) === dur));
@@ -1592,7 +1621,7 @@ function buildTimerInstanceUI(inst, bodyEl) {
         updateTick();
         if (gd.running) {
             subEl.innerText = `⏱️ Đang chạy (Bật bởi ${gd.starter || 'Thành viên'})`;
-            inst.timerInterval = setInterval(updateTick, 1000);
+            inst.timerInterval = setInterval(updateTick, 500);
         } else {
             subEl.innerText = computeCurrentRemaining(gd) <= 0 ? '⏰ Đã hết giờ!' : '⏸️ Đang tạm dừng / Sẵn sàng';
         }

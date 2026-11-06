@@ -131,16 +131,23 @@ window.showToast = function(text) {
     }, 2600);
 };
 
-function updateOnlineUsersBadge(usersList) {
-    if (!Array.isArray(usersList)) return;
-    window.ROOM_USERS = usersList;
+window.updateOnlineUsersBadge = function(usersList) {
+    const rawList = Array.isArray(usersList) ? usersList.filter(Boolean) : [];
+    const myName = (window.USERNAME || '').trim();
+    if (myName && !rawList.includes(myName)) {
+        rawList.push(myName);
+    }
+    if (rawList.length === 0) {
+        rawList.push(myName || 'Bạn');
+    }
+    window.ROOM_USERS = rawList;
     const countEl = document.getElementById('online-count');
-    if (countEl) countEl.innerText = usersList.length;
+    if (countEl) countEl.innerText = String(Math.max(1, rawList.length));
     const badgeEl = document.getElementById('online-badge');
     if (badgeEl) {
-        badgeEl.title = 'Đang online: ' + usersList.join(', ');
+        badgeEl.title = 'Đang online (' + rawList.length + '): ' + rawList.join(', ');
     }
-}
+};
 
 function applyFullRoomState(state) {
     if (!state) return;
@@ -154,9 +161,7 @@ function applyFullRoomState(state) {
     if (window.loadMediaState) window.loadMediaState(state.media, state.media_list || []);
     if (window.loadScreenShareState && state.screen_share) window.loadScreenShareState(state.screen_share);
     if (window.loadChatHistory && state.chat) window.loadChatHistory(state.chat);
-    if (state.users) {
-        updateOnlineUsersBadge(state.users);
-    }
+    window.updateOnlineUsersBadge(state.users || []);
 }
 
 window.connectWithUsername = function(nameStr) {
@@ -167,6 +172,7 @@ window.connectWithUsername = function(nameStr) {
     if (displayEl) displayEl.innerText = cleanName;
     const newUrl = `${window.location.pathname}?name=${encodeURIComponent(cleanName)}`;
     window.history.replaceState({}, '', newUrl);
+    window.updateOnlineUsersBadge(window.ROOM_USERS);
     if (!socket.connected) {
         socket.connect();
     } else {
@@ -232,7 +238,20 @@ socket.on('room_state', (state) => {
 
 socket.on('room_users', (data) => {
     if (data && data.users) {
-        updateOnlineUsersBadge(data.users);
+        window.updateOnlineUsersBadge(data.users);
+    }
+});
+
+socket.on('user_disconnected', (data) => {
+    if (data && Array.isArray(data.users)) {
+        if (data.users.length === 0 && socket.connected) {
+            socket.emit('join_room', {
+                room_id: ROOM_ID,
+                username: window.USERNAME || 'Thành viên',
+                client_id: window.CLIENT_ID
+            });
+        }
+        window.updateOnlineUsersBadge(data.users);
     }
 });
 
