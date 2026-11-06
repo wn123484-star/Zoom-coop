@@ -16,7 +16,65 @@ const CHESS_PIECE_URLS = {
     bk: 'https://images.chesscomfiles.com/chess-themes/pieces/neo/150/bk.png'
 };
 
-const DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+const CUBE_FACE_PIPS = {
+    1: [5],
+    2: [1, 9],
+    3: [1, 5, 9],
+    4: [1, 3, 7, 9],
+    5: [1, 3, 5, 7, 9],
+    6: [1, 3, 4, 6, 7, 9]
+};
+
+const CUBE_ROTATIONS = {
+    1: { x: 0, y: 0 },
+    6: { x: 0, y: 180 },
+    2: { x: 0, y: 90 },
+    5: { x: 0, y: -90 },
+    3: { x: 90, y: 0 },
+    4: { x: -90, y: 0 }
+};
+
+function create3DDiceDOM(initialVal, isSmall) {
+    const scene = document.createElement('div');
+    scene.className = 'cube-scene' + (isSmall ? ' small-cube' : '');
+    const cube = document.createElement('div');
+    cube.className = 'cube-3d';
+
+    for (let f = 1; f <= 6; f++) {
+        const face = document.createElement('div');
+        face.className = 'cube-face f-' + f;
+        const activePips = CUBE_FACE_PIPS[f];
+        for (let cell = 1; cell <= 9; cell++) {
+            const cellDiv = document.createElement('div');
+            if (activePips.includes(cell)) {
+                cellDiv.className = 'pip' + ((f === 1 || f === 4) ? ' red-pip' : '');
+            }
+            face.appendChild(cellDiv);
+        }
+        cube.appendChild(face);
+    }
+    scene.appendChild(cube);
+
+    function setFace(val, animateSpin) {
+        const v = (val >= 1 && val <= 6) ? val : 6;
+        const target = CUBE_ROTATIONS[v];
+        if (animateSpin) {
+            const randSpinsX = (Math.floor(Math.random() * 2) + 2) * 360;
+            const randSpinsY = (Math.floor(Math.random() * 2) + 2) * 360;
+            cube.style.transition = 'none';
+            cube.style.transform = `rotateX(${randSpinsX}deg) rotateY(${randSpinsY}deg) rotateZ(180deg)`;
+            void cube.offsetWidth;
+            cube.style.transition = 'transform 0.72s cubic-bezier(0.18, 0.89, 0.32, 1.18)';
+            cube.style.transform = `rotateX(${target.x}deg) rotateY(${target.y}deg) rotateZ(0deg)`;
+        } else {
+            cube.style.transition = 'transform 0.25s ease';
+            cube.style.transform = `rotateX(${target.x}deg) rotateY(${target.y}deg) rotateZ(0deg)`;
+        }
+    }
+
+    setFace(initialVal || 6, false);
+    return { el: scene, setFace: setFace };
+}
 
 const LUDO_TRACK = [
     [6, 1], [6, 2], [6, 3], [6, 4], [6, 5],
@@ -51,14 +109,31 @@ const LUDO_COLORS = ['R', 'B', 'Y', 'G'];
 const LUDO_LABELS = { R: '🔴 Đỏ', B: '🔵 Xanh', Y: '🟡 Vàng', G: '🟢 Lá' };
 
 function makeInitialGameData(type, creatorName) {
+    const user = creatorName || 'Thành viên';
+    if (type === 'noitu') {
+        return {
+            players: [user],
+            scores: { [user]: 0 },
+            turn_idx: 0,
+            current_word: '',
+            prev_word: '',
+            last_player: null,
+            pending_verify: false,
+            history: [],
+            used_words: [],
+            status_text: `Lượt của ${user}: Hãy nhập từ mở đầu (tối thiểu 2 tiếng)!`
+        };
+    }
     if (type === 'ludo') {
         return {
-            seats: { R: creatorName || 'Thành viên', B: '🤖 Bot', Y: null, G: null },
+            seats: { R: user, B: '🤖 Bot', Y: null, G: null },
+            locked_players: { [user]: 'R' },
+            started: false,
             horses: { R: [-1, -1, -1, -1], B: [-1, -1, -1, -1], Y: [-1, -1, -1, -1], G: [-1, -1, -1, -1] },
             turn: 'R',
-            dice: null,
+            dice: 6,
             phase: 'roll',
-            status_text: `Lượt của 🔴 Đỏ (${creatorName || 'Bạn'}): Hãy tung xúc xắc!`,
+            status_text: `Lượt của 🔴 Đỏ (${user}): Hãy tung xúc xắc!`,
             winner: null
         };
     }
@@ -84,6 +159,7 @@ function makeInitialGameData(type, creatorName) {
         return {
             board: b,
             turn: 'X',
+            win_len: 5,
             players: { X: null, O: null },
             winner: null,
             winner_name: null,
@@ -113,7 +189,7 @@ function makeInitialGameData(type, creatorName) {
             count: 2,
             values: [6, 6],
             total: 12,
-            roller: creatorName || 'Hệ thống',
+            roller: user,
             history: []
         };
     }
@@ -123,18 +199,19 @@ function makeInitialGameData(type, creatorName) {
             remaining: 300,
             running: false,
             updated_at: Date.now() / 1000,
-            starter: creatorName || ''
+            starter: user
         };
     }
     return {};
 }
 
 function getDefaultWidgetMeta(type, idx) {
-    if (type === 'ludo') return { title: `🐎 Cờ Cá Ngựa #${idx}`, w: 500, h: 630, minW: 450, minH: 560 };
+    if (type === 'noitu') return { title: `🔤 Nối Từ Tiếng Việt #${idx}`, w: 460, h: 480, minW: 360, minH: 380 };
+    if (type === 'ludo') return { title: `🐎 Cờ Cá Ngựa #${idx}`, w: 500, h: 640, minW: 450, minH: 560 };
     if (type === 'chess') return { title: `♟️ Cờ Vua Quốc Tế #${idx}`, w: 480, h: 580, minW: 440, minH: 520 };
-    if (type === 'xo') return { title: `⭕ Cờ Caro XO #${idx}`, w: 500, h: 560, minW: 380, minH: 420 };
+    if (type === 'xo') return { title: `⭕ Cờ Caro XO #${idx}`, w: 500, h: 580, minW: 380, minH: 440 };
     if (type === 'memory') return { title: `🃏 Lật Thẻ Trí Nhớ #${idx}`, w: 380, h: 440, minW: 340, minH: 400 };
-    if (type === 'dice') return { title: `🎲 Bàn Xúc Xắc 3D #${idx}`, w: 360, h: 350, minW: 310, minH: 310 };
+    if (type === 'dice') return { title: `🎲 Bàn Xúc Xắc 3D #${idx}`, w: 380, h: 360, minW: 320, minH: 320 };
     if (type === 'timer') return { title: `⏱️ Đồng Hồ Hẹn Giờ #${idx}`, w: 350, h: 310, minW: 310, minH: 280 };
     return { title: `🎮 Trò Chơi #${idx}`, w: 420, h: 450, minW: 300, minH: 300 };
 }
@@ -196,7 +273,8 @@ function emitWidgetUpdate(wid, extraAnim, echoSelf) {
     });
 }
 
-function checkXoWin(board, r, c, val) {
+function checkXoWin(board, r, c, val, winLen) {
+    const reqLen = winLen || 5;
     const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
     for (let i = 0; i < dirs.length; i++) {
         const dr = dirs[i][0];
@@ -216,9 +294,247 @@ function checkXoWin(board, r, c, val) {
             nr -= dr;
             nc -= dc;
         }
-        if (line.length >= 5) return line;
+        if (line.length >= reqLen) return line;
     }
     return null;
+}
+
+function buildNoiTuInstanceUI(inst, bodyEl) {
+    const wid = inst.data.id;
+    bodyEl.innerHTML = `
+        <div class="noitu-players-bar">
+            <div class="noitu-p-list"></div>
+            <button type="button" class="widget-btn noitu-join-btn">➕ Vào chơi</button>
+        </div>
+        <div class="noitu-stage-box">
+            <div class="noitu-current-word">Bắt đầu ván mới</div>
+            <div class="noitu-next-hint">Hãy nhập một từ Tiếng Việt (2 tiếng trở lên)</div>
+        </div>
+        <div class="noitu-verify-bar" style="display:none;">
+            <span class="noitu-verify-text">Kiểm định từ vừa gửi:</span>
+            <button type="button" class="noitu-veto-btn">❌ Phủ quyết (Từ sai)</button>
+        </div>
+        <div class="noitu-history-box"></div>
+        <form class="noitu-form-row">
+            <input type="text" class="noitu-input" placeholder="Nhập từ nối tiếp..." autocomplete="off">
+            <button type="submit">Gửi từ</button>
+            <button type="button" class="widget-btn close noitu-pass-btn" title="Bỏ lượt và tạo từ mới">🏳️ Bí từ</button>
+        </form>
+    `;
+    bodyEl.classList.add('noitu-body');
+    const pListEl = bodyEl.querySelector('.noitu-p-list');
+    const joinBtn = bodyEl.querySelector('.noitu-join-btn');
+    const curWordEl = bodyEl.querySelector('.noitu-current-word');
+    const hintEl = bodyEl.querySelector('.noitu-next-hint');
+    const verifyBar = bodyEl.querySelector('.noitu-verify-bar');
+    const verifyText = bodyEl.querySelector('.noitu-verify-text');
+    const vetoBtn = bodyEl.querySelector('.noitu-veto-btn');
+    const histBox = bodyEl.querySelector('.noitu-history-box');
+    const formEl = bodyEl.querySelector('.noitu-form-row');
+    const inputEl = bodyEl.querySelector('.noitu-input');
+    const passBtn = bodyEl.querySelector('.noitu-pass-btn');
+
+    inputEl.addEventListener('pointerdown', e => e.stopPropagation());
+    inputEl.addEventListener('keydown', e => e.stopPropagation());
+
+    function getSyllables(str) {
+        return (str || '').trim().toLowerCase().replace(/\s+/g, ' ').split(' ').filter(Boolean);
+    }
+
+    window.bindSafeButton(joinBtn, () => {
+        const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
+        if (!Array.isArray(gd.players)) gd.players = [];
+        if (!gd.scores) gd.scores = {};
+        const idx = gd.players.indexOf(me);
+        if (idx === -1) {
+            gd.players.push(me);
+            if (gd.scores[me] === undefined) gd.scores[me] = 0;
+            gd.status_text = `👋 ${me} đã vào bàn Nối Từ!`;
+        } else {
+            gd.players.splice(idx, 1);
+            if (gd.turn_idx >= gd.players.length) {
+                gd.turn_idx = 0;
+            }
+            gd.status_text = `🚪 ${me} đã rời bàn (Điểm được bảo lưu).`;
+        }
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+    });
+
+    window.bindSafeButton(vetoBtn, () => {
+        const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
+        if (!gd.pending_verify || !gd.current_word) return;
+        const activeUser = gd.players[gd.turn_idx];
+        if (gd.players.length > 1 && me !== activeUser) {
+            if (window.showToast) window.showToast(`⏳ Chỉ người chơi kế tiếp (${activeUser}) mới có quyền phủ quyết từ này!`);
+            return;
+        }
+        const rejectedWord = gd.current_word;
+        const prevAuthor = gd.last_player;
+        if (Array.isArray(gd.used_words)) {
+            gd.used_words = gd.used_words.filter(w => w !== rejectedWord);
+        }
+        if (Array.isArray(gd.history) && gd.history.length > 0) {
+            gd.history[gd.history.length - 1].rejected = true;
+        }
+        gd.current_word = gd.prev_word || '';
+        gd.pending_verify = false;
+        const prevIdx = gd.players.indexOf(prevAuthor);
+        if (prevIdx !== -1) {
+            gd.turn_idx = prevIdx;
+        }
+        gd.status_text = `❌ ${me} đã phủ quyết từ "${rejectedWord}"! Lượt trả về cho ${prevAuthor} nhập lại.`;
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+    });
+
+    window.bindSafeButton(passBtn, () => {
+        const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
+        const activeUser = gd.players[gd.turn_idx];
+        if (me !== activeUser) {
+            if (window.showToast) window.showToast(`⏳ Chưa tới lượt của bạn!`);
+            return;
+        }
+        if (gd.pending_verify && gd.last_player) {
+            gd.scores[gd.last_player] = (gd.scores[gd.last_player] || 0) + 1;
+        }
+        gd.current_word = '';
+        gd.prev_word = '';
+        gd.pending_verify = false;
+        gd.turn_idx = gd.players.length > 0 ? ((gd.turn_idx + 1) % gd.players.length) : 0;
+        const nextP = gd.players[gd.turn_idx] || 'Thành viên';
+        gd.status_text = `🏳️ ${me} chịu bí từ! ${nextP} được quyền mở đầu từ mới.`;
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+    });
+
+    formEl.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
+        if (!Array.isArray(gd.players) || !gd.players.includes(me)) {
+            if (window.showToast) window.showToast('⚠️ Hãy bấm "➕ Vào chơi" ở góc trên bàn để tham gia nối từ!');
+            return;
+        }
+        const activeUser = gd.players[gd.turn_idx];
+        if (me !== activeUser) {
+            if (window.showToast) window.showToast(`⏳ Đang là lượt của ${activeUser}, vui lòng chờ tới lượt!`);
+            return;
+        }
+        const raw = inputEl.value.trim();
+        const syllables = getSyllables(raw);
+        if (syllables.length < 2) {
+            if (window.showToast) window.showToast('⚠️ Từ Tiếng Việt hợp lệ phải gồm ít nhất 2 tiếng (VD: "học tập")!');
+            return;
+        }
+        const normalizedWord = syllables.join(' ');
+        if ((gd.used_words || []).includes(normalizedWord)) {
+            if (window.showToast) window.showToast(`⚠️ Từ "${normalizedWord}" đã được sử dụng trong ván này rồi!`);
+            return;
+        }
+        if (gd.current_word) {
+            const prevSyllables = getSyllables(gd.current_word);
+            const reqSyllable = prevSyllables[prevSyllables.length - 1];
+            if (syllables[0] !== reqSyllable) {
+                if (window.showToast) window.showToast(`⚠️ Từ mới phải bắt đầu bằng tiếng "${reqSyllable} ..."!`);
+                return;
+            }
+        }
+
+        if (gd.pending_verify && gd.last_player) {
+            gd.scores[gd.last_player] = (gd.scores[gd.last_player] || 0) + 1;
+        }
+
+        gd.prev_word = gd.current_word || '';
+        gd.current_word = normalizedWord;
+        gd.last_player = me;
+        gd.pending_verify = true;
+        if (!Array.isArray(gd.used_words)) gd.used_words = [];
+        gd.used_words.push(normalizedWord);
+        if (!Array.isArray(gd.history)) gd.history = [];
+        gd.history.push({ user: me, word: normalizedWord, rejected: false });
+        gd.history = gd.history.slice(-40);
+
+        gd.turn_idx = (gd.turn_idx + 1) % gd.players.length;
+        const nextUser = gd.players[gd.turn_idx];
+        const nextSyl = syllables[syllables.length - 1];
+        gd.status_text = `✅ ${me} nối "${normalizedWord}". Lượt của ${nextUser}: nối tiếp "${nextSyl}..." hoặc Phủ quyết!`;
+
+        inputEl.value = '';
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+    });
+
+    inst.resetGame = () => {
+        const oldPlayers = (inst.data.game_data && inst.data.game_data.players) || [window.USERNAME || 'Thành viên'];
+        const newGd = makeInitialGameData('noitu', window.USERNAME);
+        newGd.players = oldPlayers.length > 0 ? oldPlayers : [window.USERNAME || 'Thành viên'];
+        newGd.scores = {};
+        newGd.players.forEach(p => { newGd.scores[p] = 0; });
+        inst.data.game_data = newGd;
+        inst.render();
+        emitWidgetUpdate(wid, null, false);
+    };
+
+    inst.render = () => {
+        const gd = inst.data.game_data;
+        if (!gd) return;
+        const me = window.USERNAME || 'Thành viên';
+        const players = gd.players || [];
+        if (gd.turn_idx >= players.length) gd.turn_idx = 0;
+        const activeUser = players[gd.turn_idx] || '';
+
+        pListEl.innerHTML = '';
+        if (players.length === 0) {
+            pListEl.innerHTML = '<span style="font-size:11px; color:#888;">Chưa có người chơi</span>';
+        } else {
+            players.forEach((p, idx) => {
+                const b = document.createElement('span');
+                b.className = 'noitu-p-badge' + (idx === gd.turn_idx ? ' active-turn' : '');
+                const sc = (gd.scores && gd.scores[p]) || 0;
+                b.innerText = `${idx + 1}. ${p} (${sc}đ)`;
+                pListEl.appendChild(b);
+            });
+        }
+
+        const inGame = players.includes(me);
+        joinBtn.innerText = inGame ? '🚪 Rời ván' : '➕ Vào chơi';
+
+        if (gd.current_word) {
+            const syls = getSyllables(gd.current_word);
+            const lastSyl = syls[syls.length - 1];
+            curWordEl.innerText = gd.current_word.toUpperCase();
+            hintEl.innerText = `Lượt của ${activeUser || '?'}: Nối tiếp từ bắt đầu bằng "${lastSyl} ..."`;
+            if (gd.pending_verify) {
+                verifyBar.style.display = 'flex';
+                verifyText.innerText = `${gd.last_player} vừa gõ "${gd.current_word}". Hợp lệ không?`;
+            } else {
+                verifyBar.style.display = 'none';
+            }
+        } else {
+            curWordEl.innerText = '🌟 MỞ ĐẦU TỪ MỚI';
+            hintEl.innerText = gd.status_text || `Lượt của ${activeUser || '?'}: Hãy nhập từ ghép bất kỳ!`;
+            verifyBar.style.display = 'none';
+        }
+
+        histBox.innerHTML = '';
+        (gd.history || []).forEach(h => {
+            const chip = document.createElement('span');
+            chip.className = 'noitu-word-chip' + (h.rejected ? ' rejected' : '');
+            chip.innerText = `${h.user}: ${h.word}`;
+            histBox.appendChild(chip);
+        });
+        histBox.scrollTop = histBox.scrollHeight;
+
+        const isMyTurn = (inGame && activeUser === me);
+        inputEl.disabled = !isMyTurn;
+        inputEl.placeholder = isMyTurn ? 'Nhập từ của bạn rồi nhấn Enter...' : `Đang chờ lượt của ${activeUser || 'người chơi'}...`;
+    };
+
+    inst.render();
 }
 
 function ludoGlobalTrackIndex(color, relStep) {
@@ -285,6 +601,17 @@ function getNextActiveLudoTurn(gd, currentTurn) {
     return activeColors[0];
 }
 
+function isDesignatedBotRunner(gd) {
+    const me = window.USERNAME || 'Thành viên';
+    for (let i = 0; i < LUDO_COLORS.length; i++) {
+        const s = gd.seats[LUDO_COLORS[i]];
+        if (s && s !== '🤖 Bot') {
+            return s === me;
+        }
+    }
+    return false;
+}
+
 function buildLudoInstanceUI(inst, bodyEl) {
     const wid = inst.data.id;
     bodyEl.innerHTML = `
@@ -293,16 +620,19 @@ function buildLudoInstanceUI(inst, bodyEl) {
             <div class="ludo-board"></div>
         </div>
         <div class="ludo-controls-bar">
-            <div class="ludo-dice-box">🎲</div>
+            <div class="ludo-3d-dice-mount"></div>
             <div class="ludo-info-text">Sẵn sàng</div>
             <button type="button" class="ludo-roll-btn">🎲 Tung Xúc Xắc</button>
         </div>
     `;
     const seatsBar = bodyEl.querySelector('.ludo-seats-bar');
     const boardEl = bodyEl.querySelector('.ludo-board');
-    const diceBox = bodyEl.querySelector('.ludo-dice-box');
+    const diceMount = bodyEl.querySelector('.ludo-3d-dice-mount');
     const infoText = bodyEl.querySelector('.ludo-info-text');
     const rollBtn = bodyEl.querySelector('.ludo-roll-btn');
+
+    const ludoCube = create3DDiceDOM(6, true);
+    diceMount.appendChild(ludoCube.el);
 
     const cellsMap = {};
     for (let r = 0; r < 15; r++) {
@@ -346,9 +676,14 @@ function buildLudoInstanceUI(inst, bodyEl) {
         });
     });
 
-    function executeLudoHorseMove(color, hIdx) {
+    function executeLudoHorseMove(color, hIdx, isBotCall) {
         const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
         if (gd.winner || gd.turn !== color || gd.phase !== 'move') return;
+        if (!isBotCall && gd.seats[color] !== me) {
+            if (window.showToast) window.showToast(`⏳ Đây là quân của ${gd.seats[color]}, bạn không thể đi hộ!`);
+            return;
+        }
         const dice = gd.dice;
         if (!canMoveLudoHorse(gd, color, hIdx, dice)) return;
 
@@ -380,13 +715,11 @@ function buildLudoInstanceUI(inst, bodyEl) {
         const bonusTurn = (dice === 6 || dice === 1 || kickedMsg !== '');
         if (bonusTurn) {
             gd.phase = 'roll';
-            gd.dice = null;
             gd.status_text = `${LUDO_LABELS[color]} được thưởng thêm lượt!${kickedMsg} Hãy tung xúc xắc!`;
         } else {
             const nextCol = getNextActiveLudoTurn(gd, color);
             gd.turn = nextCol;
             gd.phase = 'roll';
-            gd.dice = null;
             gd.status_text = `${kickedMsg} Lượt của ${LUDO_LABELS[nextCol]} (${gd.seats[nextCol] || 'Trống'}): Hãy tung xúc xắc!`;
         }
 
@@ -395,10 +728,19 @@ function buildLudoInstanceUI(inst, bodyEl) {
         scheduleBotCheck();
     }
 
-    function triggerLudoDiceRoll() {
+    function triggerLudoDiceRoll(isBotCall) {
         const gd = inst.data.game_data;
+        const me = window.USERNAME || 'Thành viên';
         if (gd.winner || gd.phase !== 'roll') return;
         const activeCol = gd.turn;
+        const seatOwner = gd.seats[activeCol];
+
+        if (!isBotCall && seatOwner !== me) {
+            if (window.showToast) window.showToast(`⏳ Đang là lượt của ${seatOwner || 'người khác'}, bạn không thể tung xúc xắc hộ!`);
+            return;
+        }
+
+        gd.started = true;
         const val = Math.floor(Math.random() * 6) + 1;
         gd.dice = val;
 
@@ -425,8 +767,8 @@ function buildLudoInstanceUI(inst, bodyEl) {
             inst.render(true);
             emitWidgetUpdate(wid, 'roll', false);
             setTimeout(() => {
-                executeLudoHorseMove(activeCol, movableIndices[0]);
-            }, 650);
+                executeLudoHorseMove(activeCol, movableIndices[0], isBotCall);
+            }, 780);
             return;
         }
 
@@ -442,22 +784,23 @@ function buildLudoInstanceUI(inst, bodyEl) {
         if (!gd || gd.winner) return;
         const seatOwner = gd.seats[gd.turn];
         if (seatOwner !== '🤖 Bot') return;
+        if (!isDesignatedBotRunner(gd)) return;
         if (inst.botTimer) clearTimeout(inst.botTimer);
         inst.botTimer = setTimeout(() => {
             if (gd.phase === 'roll') {
-                triggerLudoDiceRoll();
+                triggerLudoDiceRoll(true);
             } else if (gd.phase === 'move') {
                 const movables = [0, 1, 2, 3].filter(h => canMoveLudoHorse(gd, gd.turn, h, gd.dice));
                 if (movables.length > 0) {
                     const pick = movables[movables.length - 1];
-                    executeLudoHorseMove(gd.turn, pick);
+                    executeLudoHorseMove(gd.turn, pick, true);
                 }
             }
-        }, 750);
+        }, 850);
     }
 
     window.bindSafeButton(rollBtn, () => {
-        triggerLudoDiceRoll();
+        triggerLudoDiceRoll(false);
     });
 
     inst.resetGame = () => {
@@ -469,6 +812,17 @@ function buildLudoInstanceUI(inst, bodyEl) {
     inst.render = (animateRoll) => {
         const gd = inst.data.game_data;
         if (!gd) return;
+        const me = window.USERNAME || 'Thành viên';
+        if (!gd.locked_players) gd.locked_players = {};
+
+        LUDO_COLORS.forEach(c => {
+            const occ = gd.seats[c];
+            if (occ && occ !== '🤖 Bot') {
+                gd.locked_players[occ] = c;
+            }
+        });
+
+        const myLockedCol = gd.locked_players[me] || null;
 
         seatsBar.innerHTML = '';
         LUDO_COLORS.forEach(col => {
@@ -485,19 +839,37 @@ function buildLudoInstanceUI(inst, bodyEl) {
             const joinBtn = document.createElement('button');
             joinBtn.type = 'button';
             joinBtn.className = 'ludo-seat-btn';
-            joinBtn.innerText = owner === window.USERNAME ? 'Rời' : 'Ngồi';
-            window.bindSafeButton(joinBtn, () => {
-                gd.seats[col] = (gd.seats[col] === window.USERNAME) ? null : (window.USERNAME || 'Thành viên');
-                if (!gd.seats[gd.turn]) gd.turn = getNextActiveLudoTurn(gd, gd.turn);
-                inst.render(false);
-                emitWidgetUpdate(wid, null, false);
-            });
+
+            if (owner === me) {
+                joinBtn.innerText = 'Đã khóa chỗ';
+                joinBtn.disabled = true;
+            } else if (owner && owner !== '🤖 Bot') {
+                joinBtn.innerText = 'Đã có người';
+                joinBtn.disabled = true;
+            } else if (myLockedCol && myLockedCol !== col) {
+                joinBtn.innerText = 'Khóa đổi chỗ';
+                joinBtn.disabled = true;
+            } else {
+                joinBtn.innerText = 'Ngồi vào đây';
+                window.bindSafeButton(joinBtn, () => {
+                    if (gd.locked_players[me] && gd.locked_players[me] !== col) {
+                        if (window.showToast) window.showToast(`⚠️ Bạn đã ngồi ghế ${LUDO_LABELS[gd.locked_players[me]]} trong ván này, không được chuyển chỗ!`);
+                        return;
+                    }
+                    gd.seats[col] = me;
+                    gd.locked_players[me] = col;
+                    inst.render(false);
+                    emitWidgetUpdate(wid, null, false);
+                });
+            }
 
             const botBtn = document.createElement('button');
             botBtn.type = 'button';
             botBtn.className = 'ludo-seat-btn';
             botBtn.innerText = owner === '🤖 Bot' ? 'Tắt Bot' : '🤖 Bot';
+            botBtn.disabled = (owner && owner !== '🤖 Bot');
             window.bindSafeButton(botBtn, () => {
+                if (gd.seats[col] && gd.seats[col] !== '🤖 Bot') return;
                 gd.seats[col] = (gd.seats[col] === '🤖 Bot') ? null : '🤖 Bot';
                 if (!gd.seats[gd.turn]) gd.turn = getNextActiveLudoTurn(gd, gd.turn);
                 inst.render(false);
@@ -532,30 +904,23 @@ function buildLudoInstanceUI(inst, bodyEl) {
                 const horseEl = document.createElement('div');
                 horseEl.className = `ludo-horse color-${col}`;
                 horseEl.innerText = '♞';
-                const isMovable = (!gd.winner && gd.turn === col && gd.phase === 'move' && canMoveLudoHorse(gd, col, hIdx, gd.dice));
-                if (isMovable) {
+                const canClickMove = (!gd.winner && gd.turn === col && gd.phase === 'move' && gd.seats[col] === me && canMoveLudoHorse(gd, col, hIdx, gd.dice));
+                if (canClickMove) {
                     horseEl.classList.add('movable');
                     window.bindSafeButton(horseEl, () => {
-                        executeLudoHorseMove(col, hIdx);
+                        executeLudoHorseMove(col, hIdx, false);
                     });
                 }
                 cell.appendChild(horseEl);
             });
         });
 
-        if (animateRoll) {
-            diceBox.classList.add('rolling');
-            setTimeout(() => {
-                diceBox.classList.remove('rolling');
-                diceBox.innerText = gd.dice ? DICE_FACES[(gd.dice - 1) % 6] : '🎲';
-            }, 520);
-        } else {
-            diceBox.classList.remove('rolling');
-            diceBox.innerText = gd.dice ? DICE_FACES[(gd.dice - 1) % 6] : '🎲';
-        }
+        ludoCube.setFace(gd.dice || 6, !!animateRoll);
 
         infoText.innerText = gd.status_text || 'Hãy tung xúc xắc!';
-        rollBtn.disabled = (gd.phase !== 'roll' || !!gd.winner);
+        const isMyTurnToRoll = (!gd.winner && gd.phase === 'roll' && gd.seats[gd.turn] === me);
+        rollBtn.disabled = !isMyTurnToRoll;
+        rollBtn.innerText = isMyTurnToRoll ? '🎲 Tung Xúc Xắc' : `⏳ Lượt: ${gd.seats[gd.turn] || LUDO_LABELS[gd.turn]}`;
     };
 
     inst.render(false);
@@ -765,6 +1130,11 @@ function buildChessInstanceUI(inst, bodyEl, headerControls) {
 function buildXoInstanceUI(inst, bodyEl) {
     const wid = inst.data.id;
     bodyEl.innerHTML = `
+        <div class="xo-mode-bar">
+            <span>Luật thắng:</span>
+            <button type="button" class="xo-len-btn" data-len="4">⚡ Chạm 4 thắng</button>
+            <button type="button" class="xo-len-btn active" data-len="5">🏆 Chạm 5 thắng</button>
+        </div>
         <div class="xo-status">Sẵn sàng</div>
         <div class="xo-board-wrapper">
             <div class="xo-board"></div>
@@ -772,6 +1142,16 @@ function buildXoInstanceUI(inst, bodyEl) {
     `;
     const statusEl = bodyEl.querySelector('.xo-status');
     const boardEl = bodyEl.querySelector('.xo-board');
+    const lenBtns = bodyEl.querySelectorAll('.xo-len-btn');
+
+    lenBtns.forEach(btn => {
+        window.bindSafeButton(btn, () => {
+            const gd = inst.data.game_data;
+            gd.win_len = parseInt(btn.getAttribute('data-len'), 10) || 5;
+            inst.render(false);
+            emitWidgetUpdate(wid, null, false);
+        });
+    });
 
     for (let r = 0; r < 20; r++) {
         for (let c = 0; c < 20; c++) {
@@ -783,7 +1163,7 @@ function buildXoInstanceUI(inst, bodyEl) {
                 const turn = gd.turn;
                 if (!gd.players[turn]) gd.players[turn] = window.USERNAME || 'Thành viên';
                 gd.board[r][c] = turn;
-                const winLine = checkXoWin(gd.board, r, c, turn);
+                const winLine = checkXoWin(gd.board, r, c, turn, gd.win_len || 5);
                 if (winLine) {
                     gd.status = 'finished';
                     gd.winner = turn;
@@ -800,7 +1180,9 @@ function buildXoInstanceUI(inst, bodyEl) {
     }
 
     inst.resetGame = () => {
+        const curLen = (inst.data.game_data && inst.data.game_data.win_len) || 5;
         inst.data.game_data = makeInitialGameData('xo', window.USERNAME);
+        inst.data.game_data.win_len = curLen;
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
     };
@@ -808,6 +1190,9 @@ function buildXoInstanceUI(inst, bodyEl) {
     inst.render = () => {
         const gd = inst.data.game_data;
         if (!gd || !gd.board) return;
+        const wLen = gd.win_len || 5;
+        lenBtns.forEach(b => b.classList.toggle('active', parseInt(b.getAttribute('data-len'), 10) === wLen));
+
         const cells = boardEl.getElementsByClassName('xo-cell');
         const winSet = new Set();
         if (Array.isArray(gd.winning_line)) {
@@ -824,7 +1209,7 @@ function buildXoInstanceUI(inst, bodyEl) {
         }
         const pX = (gd.players && gd.players.X) || 'Chờ...';
         const pO = (gd.players && gd.players.O) || 'Chờ...';
-        let html = `<span style="color:#00d2ff">X: ${pX}</span> vs <span style="color:#ff4757">O: ${pO}</span>`;
+        let html = `<span style="color:#00d2ff">X: ${pX}</span> vs <span style="color:#ff4757">O: ${pO}</span> (Chạm ${wLen})`;
         if (gd.status === 'finished') {
             html += ` | <b style="color:#feca57">🏆 ${gd.winner_name} (${gd.winner}) THẮNG!</b>`;
         } else {
@@ -914,8 +1299,8 @@ function buildDiceInstanceUI(inst, bodyEl) {
             <button type="button" class="dice-cnt-btn" data-count="3">3 Viên</button>
         </div>
         <div class="dice-stage"></div>
-        <div class="dice-result-text">Nhấn nút để lắc xúc xắc!</div>
-        <button type="button" class="dice-roll-main-btn">🎲 LẮC XÚC XẮC NGAY</button>
+        <div class="dice-result-text">Nhấn nút để lắc xúc xắc 3D!</div>
+        <button type="button" class="dice-roll-main-btn">🎲 LẮC XÚC XẮC 3D</button>
         <div class="dice-history-list">Chưa có lượt tung</div>
     `;
     bodyEl.classList.add('dice-body');
@@ -924,12 +1309,17 @@ function buildDiceInstanceUI(inst, bodyEl) {
     const rollBtn = bodyEl.querySelector('.dice-roll-main-btn');
     const histEl = bodyEl.querySelector('.dice-history-list');
     const cntBtns = bodyEl.querySelectorAll('.dice-cnt-btn');
+    let cubeObjs = [];
 
     cntBtns.forEach(btn => {
         window.bindSafeButton(btn, () => {
             const gd = inst.data.game_data;
             gd.count = parseInt(btn.getAttribute('data-count'), 10) || 2;
+            gd.values = Array(gd.count).fill(6);
+            gd.total = gd.count * 6;
+            cubeObjs = [];
             inst.render(false);
+            emitWidgetUpdate(wid, null, false);
         });
     });
 
@@ -948,6 +1338,7 @@ function buildDiceInstanceUI(inst, bodyEl) {
 
     inst.resetGame = () => {
         inst.data.game_data = makeInitialGameData('dice', window.USERNAME);
+        cubeObjs = [];
         inst.render(false);
         emitWidgetUpdate(wid, null, false);
     };
@@ -955,21 +1346,22 @@ function buildDiceInstanceUI(inst, bodyEl) {
     inst.render = (animate) => {
         const gd = inst.data.game_data;
         if (!gd) return;
-        cntBtns.forEach(b => b.classList.toggle('active', parseInt(b.getAttribute('data-count'), 10) === (gd.count || 2)));
-        stage.innerHTML = '';
         const vals = gd.values || [6, 6];
-        const cubes = vals.map(v => {
-            const c = document.createElement('div');
-            c.className = 'dice-cube' + (animate ? ' rolling' : '') + (v === 6 ? ' high-val' : '');
-            c.innerText = DICE_FACES[(v - 1) % 6];
-            stage.appendChild(c);
-            return c;
-        });
-        if (animate) {
-            setTimeout(() => {
-                cubes.forEach(c => c.classList.remove('rolling'));
-            }, 650);
+        cntBtns.forEach(b => b.classList.toggle('active', parseInt(b.getAttribute('data-count'), 10) === vals.length));
+
+        if (cubeObjs.length !== vals.length) {
+            stage.innerHTML = '';
+            cubeObjs = vals.map(v => {
+                const c = create3DDiceDOM(v, false);
+                stage.appendChild(c.el);
+                return c;
+            });
         }
+
+        cubeObjs.forEach((cObj, idx) => {
+            cObj.setFace(vals[idx] || 6, !!animate);
+        });
+
         resText.innerHTML = `🎉 <b>${gd.roller || 'Hệ thống'}</b>: <b>${vals.join(' + ')} = ${gd.total} nút</b>`;
         if (gd.history && gd.history.length > 0) {
             histEl.innerText = 'Lịch sử: ' + gd.history.slice().reverse().join(' | ');
@@ -1182,7 +1574,8 @@ function mountOrUpdateMultiWidget(wObj, animType) {
         };
         multiInstances[wid] = inst;
 
-        if (wObj.type === 'ludo') buildLudoInstanceUI(inst, body);
+        if (wObj.type === 'noitu') buildNoiTuInstanceUI(inst, body);
+        else if (wObj.type === 'ludo') buildLudoInstanceUI(inst, body);
         else if (wObj.type === 'chess') buildChessInstanceUI(inst, body, controls);
         else if (wObj.type === 'xo') buildXoInstanceUI(inst, body);
         else if (wObj.type === 'memory') buildMemoryInstanceUI(inst, body);
