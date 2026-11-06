@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Bảng Chung Online - Phòng {{ room_id }}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230984e3'/><circle cx='32' cy='32' r='18' fill='%2300d2ff'/></svg>">
-<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="/static/css/style.css?v=24">
 </head>
 <body class="fade-in light-theme">
 <div id="dynamic-bg" class="bg-light-dots"></div>
@@ -367,12 +367,12 @@
 const ROOM_ID = "{{ room_id }}";
 window.USERNAME = "{{ username }}";
 </script>
-<script src="/static/js/socket_client.js"></script>
-<script src="/static/js/pointer.js"></script>
-<script src="/static/js/canvas.js"></script>
-<script src="/static/js/sticky.js"></script>
-<script src="/static/js/xo.js"></script>
-<script src="/static/js/media.js"></script>
-<script src="/static/js/ui.js"></script>
+<script src="/static/js/socket_client.js?v=24"></script>
+<script src="/static/js/pointer.js?v=24"></script>
+<script src="/static/js/canvas.js?v=24"></script>
+<script src="/static/js/sticky.js?v=24"></script>
+<script src="/static/js/xo.js?v=24"></script>
+<script src="/static/js/media.js?v=24"></script>
+<script src="/static/js/ui.js?v=24"></script>
 </body>
 </html>
