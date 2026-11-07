@@ -1,8 +1,63 @@
 window.SyncGameModules = window.SyncGameModules || {};
 window.ActiveModularGames = window.ActiveModularGames || {};
 window.KnownMultiWidgets = window.KnownMultiWidgets || {};
+window.RoomGlobalLeaderboards = window.RoomGlobalLeaderboards || {
+    snake: {},
+    blockblast: {},
+    fishing: {},
+    drawguess: {}
+};
 
-const MODULAR_TYPES_SET = new Set(['fishing', 'snake', 'blockblast', 'drawguess']);
+const MODULAR_TYPES_SET = new Set(['fishing', 'snake', 'blockblast', 'drawguess', 'pvz']);
+
+window.updateGlobalGameScore = function(gameType, playerName, scoreVal) {
+    if (!gameType || !playerName) return;
+    if (!window.RoomGlobalLeaderboards[gameType]) {
+        window.RoomGlobalLeaderboards[gameType] = {};
+    }
+    const prev = window.RoomGlobalLeaderboards[gameType][playerName] || 0;
+    if (scoreVal >= prev) {
+        window.RoomGlobalLeaderboards[gameType][playerName] = scoreVal;
+    }
+};
+
+window.getGlobalLeaderboardSorted = function(gameType, localScoresMap) {
+    if (!window.RoomGlobalLeaderboards[gameType]) {
+        window.RoomGlobalLeaderboards[gameType] = {};
+    }
+    const merged = Object.assign({}, window.RoomGlobalLeaderboards[gameType]);
+    if (localScoresMap && typeof localScoresMap === 'object') {
+        Object.entries(localScoresMap).forEach(([u, sc]) => {
+            if (!merged[u] || sc > merged[u]) {
+                merged[u] = sc;
+                window.RoomGlobalLeaderboards[gameType][u] = sc;
+            }
+        });
+    }
+    Object.values(window.KnownMultiWidgets).forEach(w => {
+        if (w && w.type === gameType && w.game_data) {
+            const gd = w.game_data;
+            if (gd.scores && typeof gd.scores === 'object') {
+                Object.entries(gd.scores).forEach(([u, sc]) => {
+                    if (!merged[u] || sc > merged[u]) {
+                        merged[u] = sc;
+                        window.RoomGlobalLeaderboards[gameType][u] = sc;
+                    }
+                });
+            }
+            if (gameType === 'snake' && gd.snakes && typeof gd.snakes === 'object') {
+                Object.values(gd.snakes).forEach(sn => {
+                    if (sn && sn.name && typeof sn.score === 'number') {
+                        if (!merged[sn.name] || sn.score > merged[sn.name]) {
+                            merged[sn.name] = sn.score;
+                        }
+                    }
+                });
+            }
+        }
+    });
+    return Object.entries(merged).sort((a, b) => b[1] - a[1]);
+};
 
 window.SyncTextUtils = {
     removeAccents: function(str) {
@@ -66,22 +121,30 @@ window.SyncTextUtils = {
         const wordRatio = tWords.length > 0 ? matchedWords / tWords.length : 0;
         const bestScore = Math.max(sim, wordRatio * 0.9);
 
-        if (bestScore >= 0.84 && dist <= 2) {
+        if (bestScore >= 0.82 && dist <= 2) {
             return { status: 'near_accept', similarity: bestScore };
         }
-        if (bestScore >= 0.62) {
+        if (bestScore >= 0.60) {
             return { status: 'close', similarity: bestScore };
         }
         return { status: 'wrong', similarity: bestScore };
     }
 };
 
-window.canCurrentUserModifyWidget = function(wObj) {
+window.isWidgetCreator = function(wObj) {
     if (!wObj) return true;
     const myId = window.CLIENT_ID || '';
     const myName = window.USERNAME || '';
     if (wObj.creator_id && myId && wObj.creator_id === myId) return true;
     if (wObj.creator && myName && wObj.creator === myName) return true;
+    return false;
+};
+
+window.canCurrentUserModifyWidget = function(wObj) {
+    if (!wObj) return true;
+    if (window.isWidgetCreator(wObj)) return true;
+    const myId = window.CLIENT_ID || '';
+    const myName = window.USERNAME || '';
 
     const gd = wObj.game_data || {};
     let humanCount = 0;
@@ -160,7 +223,7 @@ window.canCurrentUserModifyWidget = function(wObj) {
                 const known = window.KnownMultiWidgets[payload.id];
                 if (known && !window.canCurrentUserModifyWidget(known)) {
                     if (window.showToast) {
-                        window.showToast('🔒 Chỉ người tạo bàn hoặc người đang ngồi chơi mới được đóng bàn này!');
+                        window.showToast('🔒 Bàn chơi đang có người chơi! Bạn hãy bấm "➕ Bàn Riêng" để mở bàn của mình nhé.');
                     }
                     return;
                 }
@@ -192,36 +255,46 @@ function purgeDuplicateBlankCardsForId(wid) {
     }
 }
 
-function getSpawnPositionForGame(defaultW, defaultH) {
+function getSpawnPositionForGame(defaultW, defaultH, referenceEl) {
+    if (referenceEl) {
+        const rx = parseFloat(referenceEl.style.left) || 2200;
+        const ry = parseFloat(referenceEl.style.top) || 2100;
+        const rw = parseFloat(referenceEl.style.width) || defaultW;
+        return {
+            x: Math.round(rx + rw + 28),
+            y: Math.round(ry)
+        };
+    }
     const cx = window.innerWidth / 2;
     const cy = window.innerHeight / 2;
     const worldCenter = window.getWorkspaceCoords ? window.getWorkspaceCoords(cx, cy) : { x: 2500, y: 2500 };
-    const jitterX = Math.floor((Math.random() - 0.5) * 80);
-    const jitterY = Math.floor((Math.random() - 0.5) * 80);
+    const jitterX = Math.floor((Math.random() - 0.5) * 70);
+    const jitterY = Math.floor((Math.random() - 0.5) * 70);
     return {
         x: Math.round(worldCenter.x - defaultW / 2 + jitterX),
         y: Math.round(worldCenter.y - defaultH / 2 + jitterY)
     };
 }
 
-window.spawnModularGameOnBoard = function(gameType) {
+window.spawnModularGameOnBoard = function(gameType, referenceEl) {
     const mod = window.SyncGameModules[gameType];
     if (!mod) return false;
     const w = mod.defaultWidth || 880;
     const h = mod.defaultHeight || 620;
-    const pos = getSpawnPositionForGame(w, h);
+    const pos = getSpawnPositionForGame(w, h, referenceEl);
     const wid = 'mw_' + gameType + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const initialData = typeof mod.createInitialData === 'function' ? mod.createInitialData() : {};
+    const myName = window.USERNAME || 'Thành viên';
     const widgetObj = {
         id: wid,
         type: gameType,
-        title: mod.title || '🎮 Bàn Chơi Mới',
+        title: `${mod.title || '🎮 Bàn Chơi'} — ${myName}`,
         x: pos.x,
         y: pos.y,
         w: w,
         h: h,
         minimized: false,
-        creator: window.USERNAME || 'Thành viên',
+        creator: myName,
         creator_id: window.CLIENT_ID || '',
         game_data: initialData
     };
@@ -233,14 +306,24 @@ window.spawnModularGameOnBoard = function(gameType) {
         widget: widgetObj
     });
     if (window.closeAllPopovers) window.closeAllPopovers();
+    if (referenceEl && window.showToast) {
+        window.showToast(`➕ Đã mở một bàn ${mod.title} riêng cho bạn ngay bên cạnh!`);
+    }
     return true;
 };
 
 function bindModularWidgetFrameEvents(el, widgetObj) {
     const header = el.querySelector('.widget-header');
+    const cloneBtn = el.querySelector('.mod-clone-btn');
     const minBtn = el.querySelector('.mod-min-btn');
     const closeBtn = el.querySelector('.mod-close-btn');
     const wid = widgetObj.id;
+
+    if (cloneBtn) {
+        window.bindSafeButton(cloneBtn, () => {
+            window.spawnModularGameOnBoard(widgetObj.type, el);
+        });
+    }
 
     if (minBtn) {
         window.bindSafeButton(minBtn, () => {
@@ -259,7 +342,7 @@ function bindModularWidgetFrameEvents(el, widgetObj) {
             const latestObj = window.KnownMultiWidgets[wid] || widgetObj;
             if (!window.canCurrentUserModifyWidget(latestObj)) {
                 if (window.showToast) {
-                    window.showToast('🔒 Bạn không ngồi chơi trong bàn này nên không thể đóng bàn của người khác!');
+                    window.showToast('🔒 Bàn này đang có người chơi! Hãy bấm "➕ Bàn Riêng" nếu bạn muốn tạo bàn mới.');
                 }
                 return;
             }
@@ -304,7 +387,7 @@ function bindModularWidgetFrameEvents(el, widgetObj) {
             el.style.left = nx + 'px';
             el.style.top = ny + 'px';
             const now = Date.now();
-            if (now - lastSync > 60) {
+            if (now - lastSync > 65) {
                 lastSync = now;
                 socket.emit('multi_widget_event', {
                     room_id: ROOM_ID,
@@ -338,6 +421,12 @@ function bindModularWidgetFrameEvents(el, widgetObj) {
     if (window.makeWidgetResizable) {
         const mod = window.SyncGameModules[widgetObj.type] || {};
         window.makeWidgetResizable(el, mod.minWidth || 500, mod.minHeight || 400, true, (nw, nh) => {
+            widgetObj.w = nw;
+            widgetObj.h = nh;
+            const inst = window.ActiveModularGames[wid];
+            if (inst && typeof inst.onResize === 'function') {
+                inst.onResize(nw, nh);
+            }
             socket.emit('multi_widget_event', {
                 room_id: ROOM_ID,
                 action: 'update',
@@ -345,10 +434,6 @@ function bindModularWidgetFrameEvents(el, widgetObj) {
                 w: nw,
                 h: nh
             });
-            const inst = window.ActiveModularGames[wid];
-            if (inst && typeof inst.onResize === 'function') {
-                inst.onResize(nw, nh);
-            }
         });
     }
 }
@@ -384,18 +469,18 @@ function renderOrUpdateModularWidget(widgetObj, animPayload) {
         el.style.width = (widgetObj.w || mod.defaultWidth || 880) + 'px';
         el.style.height = (widgetObj.h || mod.defaultHeight || 620) + 'px';
 
-        const ownerTag = widgetObj.creator ? `<small style="opacity:0.75; font-size:10px; margin-left:6px;">(Chủ bàn: ${widgetObj.creator})</small>` : '';
         el.innerHTML = `
             <div class="widget-header">
-                <span class="widget-title">${widgetObj.title || mod.title || '🎮 Bàn Chơi'}${ownerTag}</span>
+                <span class="widget-title">${widgetObj.title || mod.title || '🎮 Bàn Chơi'}</span>
                 <div class="widget-controls">
                     <span class="mod-header-extra"></span>
+                    <button type="button" class="widget-btn mod-clone-btn" style="background:rgba(46,213,115,0.2); color:#2ed573; border-color:#2ed573;" title="Tạo một bàn chơi riêng bên cạnh để bạn chơi độc lập mà không ảnh hưởng bàn này">➕ Bàn Riêng</button>
                     <button type="button" class="widget-btn mod-min-btn" title="Thu gọn hoặc Mở rộng">—</button>
-                    <button type="button" class="widget-btn close mod-close-btn" title="Đóng bàn chơi (Chỉ người chơi trong bàn)">✕</button>
+                    <button type="button" class="widget-btn close mod-close-btn" title="Đóng bàn chơi (Chỉ chủ bàn / người đang chơi)">✕</button>
                 </div>
             </div>
             <div class="widget-body modular-widget-body"></div>
-            <div class="widget-resizer" title="Kéo để chỉnh kích thước bàn chơi"></div>
+            <div class="widget-resizer" title="Kéo giãn để mở rộng không gian bàn chơi"></div>
         `;
         gamesLayer.appendChild(el);
         bindModularWidgetFrameEvents(el, widgetObj);
@@ -424,25 +509,282 @@ function renderOrUpdateModularWidget(widgetObj, animPayload) {
             });
         }
     } else {
+        const prevW = parseFloat(el.style.width) || 0;
+        const prevH = parseFloat(el.style.height) || 0;
         if (typeof widgetObj.x === 'number') el.style.left = widgetObj.x + 'px';
         if (typeof widgetObj.y === 'number') el.style.top = widgetObj.y + 'px';
         if (typeof widgetObj.w === 'number') el.style.width = widgetObj.w + 'px';
         if (typeof widgetObj.h === 'number') el.style.height = widgetObj.h + 'px';
         el.classList.toggle('minimized', !!widgetObj.minimized);
         const inst = window.ActiveModularGames[widgetObj.id];
-        if (inst && typeof inst.onSync === 'function') {
-            inst.onSync(widgetObj.game_data || {}, animPayload || null, widgetObj);
+        if (inst) {
+            if (typeof widgetObj.w === 'number' && typeof widgetObj.h === 'number' && (Math.abs(widgetObj.w - prevW) > 5 || Math.abs(widgetObj.h - prevH) > 5)) {
+                if (typeof inst.onResize === 'function') {
+                    inst.onResize(widgetObj.w, widgetObj.h);
+                }
+            }
+            if (typeof inst.onSync === 'function') {
+                inst.onSync(widgetObj.game_data || {}, animPayload || null, widgetObj);
+            }
         }
     }
     setTimeout(() => purgeDuplicateBlankCardsForId(widgetObj.id), 10);
     return true;
 }
 
+window.registerSyncGameModule('pvz', {
+    title: '🌻 Plants vs Zombies (71 Cấp Độ Co-op)',
+    defaultWidth: 940,
+    defaultHeight: 640,
+    minWidth: 640,
+    minHeight: 460,
+    createInitialData: function() {
+        return {
+            url: '/static/custom_games/plants_vs_zombies_71_levels_ver7_2_complete.html',
+            seed: Math.floor(Math.random() * 999999) + 1,
+            allowCoopClick: true,
+            owner: window.USERNAME || 'Thành viên',
+            ownerId: window.CLIENT_ID || ''
+        };
+    },
+    mount: function(ctx) {
+        const { id, bodyEl, widgetObj, emitUpdate } = ctx;
+        let state = (widgetObj.game_data && widgetObj.game_data.url)
+            ? JSON.parse(JSON.stringify(widgetObj.game_data))
+            : this.createInitialData();
+
+        bodyEl.innerHTML = `
+        <div class="arcade-root">
+            <div class="arcade-top-bar">
+                <div class="arcade-group">
+                    <span class="arcade-pill">🌻 Chủ bàn: <b class="pvz-owner-lbl">${state.owner || 'Thành viên'}</b></span>
+                    <button type="button" class="arcade-btn green pvz-coop-toggle">🤝 Co-op: MỌI NGƯỜI CÙNG CHƠI</button>
+                    <button type="button" class="arcade-btn pvz-reload-btn">🔄 Đồng Bộ Lại Màn</button>
+                </div>
+                <div class="arcade-group">
+                    <button type="button" class="arcade-btn gold pvz-upload-html-btn" title="Chọn tệp .html từ máy nếu bạn chưa chép vào static/custom_games">📂 Chọn Tệp HTML Khác</button>
+                    <input type="file" class="pvz-file-inp" accept=".html,.htm" style="display:none;">
+                </div>
+            </div>
+            <div class="pvz-stage-wrap">
+                <iframe class="pvz-iframe" allow="autoplay; fullscreen"></iframe>
+                <div class="pvz-cursor-layer"></div>
+            </div>
+        </div>`;
+
+        const iframe = bodyEl.querySelector('.pvz-iframe');
+        const cursorLayer = bodyEl.querySelector('.pvz-cursor-layer');
+        const btnCoopToggle = bodyEl.querySelector('.pvz-coop-toggle');
+        const btnReload = bodyEl.querySelector('.pvz-reload-btn');
+        const btnUploadHtml = bodyEl.querySelector('.pvz-upload-html-btn');
+        const fileInp = bodyEl.querySelector('.pvz-file-inp');
+
+        const remoteCursors = {};
+        let isCreator = window.isWidgetCreator(widgetObj);
+
+        function updateCoopBtnUI() {
+            btnCoopToggle.classList.toggle('green', !!state.allowCoopClick);
+            btnCoopToggle.textContent = state.allowCoopClick
+                ? '🤝 Co-op: CẢ PHÒNG CÙNG TRỒNG CÂY'
+                : '🔒 Chế độ: CHỈ CHỦ BÀN ĐIỀU KHIỂN';
+        }
+        updateCoopBtnUI();
+
+        window.bindSafeButton(btnCoopToggle, () => {
+            if (!window.isWidgetCreator(widgetObj)) {
+                if (window.showToast) window.showToast('🔒 Chỉ chủ bàn mới được bật/tắt quyền Co-op!');
+                return;
+            }
+            state.allowCoopClick = !state.allowCoopClick;
+            updateCoopBtnUI();
+            emitUpdate(state, null, false);
+        });
+
+        window.bindSafeButton(btnReload, () => {
+            state.seed = Math.floor(Math.random() * 999999) + 1;
+            loadPvzIframe();
+            emitUpdate(state, { type: 'reload', seed: state.seed }, false);
+        });
+
+        window.bindSafeButton(btnUploadHtml, () => {
+            fileInp.click();
+        });
+
+        fileInp.addEventListener('change', () => {
+            if (!fileInp.files || !fileInp.files[0]) return;
+            const fd = new FormData();
+            fd.append('file', fileInp.files[0]);
+            fetch('/upload', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if (res && res.url) {
+                        state.url = res.url;
+                        state.seed = Math.floor(Math.random() * 999999) + 1;
+                        loadPvzIframe();
+                        emitUpdate(state, { type: 'reload', seed: state.seed }, false);
+                        if (window.showToast) window.showToast('🌻 Đã nạp tệp Game HTML lên bàn Co-op!');
+                    }
+                });
+        });
+
+        function injectCoopBridgeIntoIframe() {
+            try {
+                const win = iframe.contentWindow;
+                const doc = iframe.contentDocument || (win && win.document);
+                if (!win || !doc || win._pvzCoopInjected) return;
+                win._pvzCoopInjected = true;
+
+                let sVal = state.seed || 123456;
+                win.Math.random = function() {
+                    sVal = (sVal * 1664525 + 1013904223) % 4294967296;
+                    return sVal / 4294967296;
+                };
+
+                let lastMoveSend = 0;
+                doc.addEventListener('pointermove', (e) => {
+                    const now = Date.now();
+                    if (now - lastMoveSend < 55) return;
+                    lastMoveSend = now;
+                    const w = Math.max(1, win.innerWidth);
+                    const h = Math.max(1, win.innerHeight);
+                    socket.emit('html_coop_event', {
+                        room_id: ROOM_ID,
+                        widget_id: id,
+                        sender_id: window.CLIENT_ID,
+                        username: window.USERNAME || 'Thành viên',
+                        ev_type: 'move',
+                        rx: Number((e.clientX / w).toFixed(4)),
+                        ry: Number((e.clientY / h).toFixed(4))
+                    });
+                }, true);
+
+                ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach(evName => {
+                    doc.addEventListener(evName, (e) => {
+                        if (e._fromCoopRemote) return;
+                        if (!state.allowCoopClick && !window.isWidgetCreator(widgetObj)) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (window.showToast && evName === 'pointerdown') {
+                                window.showToast('👀 Bạn đang ở chế độ Khán giả / Trọng tài! Bấm "➕ Bàn Riêng" nếu muốn chơi màn riêng.');
+                            }
+                            return;
+                        }
+                        const w = Math.max(1, win.innerWidth);
+                        const h = Math.max(1, win.innerHeight);
+                        socket.emit('html_coop_event', {
+                            room_id: ROOM_ID,
+                            widget_id: id,
+                            sender_id: window.CLIENT_ID,
+                            username: window.USERNAME || 'Thành viên',
+                            ev_type: evName,
+                            rx: Number((e.clientX / w).toFixed(4)),
+                            ry: Number((e.clientY / h).toFixed(4)),
+                            button: e.button || 0
+                        });
+                    }, true);
+                });
+
+                doc.addEventListener('keydown', (e) => {
+                    if (e._fromCoopRemote) return;
+                    if (!state.allowCoopClick && !window.isWidgetCreator(widgetObj)) return;
+                    socket.emit('html_coop_event', {
+                        room_id: ROOM_ID,
+                        widget_id: id,
+                        sender_id: window.CLIENT_ID,
+                        username: window.USERNAME || 'Thành viên',
+                        ev_type: 'keydown',
+                        key: e.key,
+                        code: e.code,
+                        keyCode: e.keyCode
+                    });
+                }, true);
+            } catch (err) {}
+        }
+
+        function handleIncomingCoopEvent(data) {
+            if (!data || data.widget_id !== id || data.sender_id === window.CLIENT_ID) return;
+            const stageRect = cursorLayer.getBoundingClientRect();
+            const px = (data.rx || 0.5) * stageRect.width;
+            const py = (data.ry || 0.5) * stageRect.height;
+
+            let rc = remoteCursors[data.sender_id];
+            if (!rc) {
+                rc = document.createElement('div');
+                rc.className = 'pvz-remote-cursor';
+                rc.innerHTML = `<div class="rc-dot"></div><div class="rc-tag"></div>`;
+                cursorLayer.appendChild(rc);
+                remoteCursors[data.sender_id] = rc;
+            }
+            rc.style.left = px + 'px';
+            rc.style.top = py + 'px';
+            rc.querySelector('.rc-tag').textContent = data.username || 'Đồng đội';
+
+            if (data.ev_type === 'pointerdown' || data.ev_type === 'click') {
+                rc.classList.add('clicking');
+                setTimeout(() => rc.classList.remove('clicking'), 220);
+            }
+
+            try {
+                const win = iframe.contentWindow;
+                const doc = iframe.contentDocument || (win && win.document);
+                if (!win || !doc) return;
+                if (data.ev_type === 'keydown') {
+                    const ke = new KeyboardEvent('keydown', { key: data.key, code: data.code, keyCode: data.keyCode, bubbles: true });
+                    ke._fromCoopRemote = true;
+                    doc.dispatchEvent(ke);
+                } else if (data.ev_type !== 'move') {
+                    const cx = (data.rx || 0.5) * win.innerWidth;
+                    const cy = (data.ry || 0.5) * win.innerHeight;
+                    const targetEl = doc.elementFromPoint(cx, cy) || doc.body;
+                    if (targetEl) {
+                        const me = new MouseEvent(data.ev_type === 'pointerdown' ? 'mousedown' : data.ev_type, {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: cx,
+                            clientY: cy,
+                            button: data.button || 0
+                        });
+                        me._fromCoopRemote = true;
+                        targetEl.dispatchEvent(me);
+                    }
+                }
+            } catch (err) {}
+        }
+
+        socket.on('html_coop_event', handleIncomingCoopEvent);
+
+        function loadPvzIframe() {
+            iframe.onload = () => {
+                injectCoopBridgeIntoIframe();
+            };
+            iframe.src = state.url + (state.url.includes('?') ? '&' : '?') + 'seed=' + (state.seed || 1);
+        }
+
+        loadPvzIframe();
+
+        return {
+            onSync: function(remoteData, animPayload) {
+                if (!remoteData) return;
+                const urlChanged = remoteData.url && remoteData.url !== state.url;
+                const seedChanged = animPayload && animPayload.type === 'reload';
+                state = Object.assign(state, remoteData);
+                updateCoopBtnUI();
+                if (urlChanged || seedChanged) {
+                    loadPvzIframe();
+                }
+            },
+            destroy: function() {
+                socket.off('html_coop_event', handleIncomingCoopEvent);
+            }
+        };
+    }
+});
+
 document.querySelectorAll('.create-mod-game-btn').forEach(btn => {
     window.bindSafeButton(btn, () => {
         const gType = btn.getAttribute('data-game-type');
         if (gType && window.SyncGameModules[gType]) {
-            window.spawnModularGameOnBoard(gType);
+            window.spawnModularGameOnBoard(gType, null);
         }
     });
 });
