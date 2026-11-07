@@ -1,0 +1,35 @@
+.uno-body { display: flex; flex-direction: column; flex: 1; padding: 8px 10px; gap: 8px; overflow: hidden; background: radial-gradient(circle at center, rgba(20, 30, 48, 0.55), rgba(10, 12, 20, 0.85)); }
+body.light-theme .uno-body { background: radial-gradient(circle at center, #eef2f7, #dbe4f0); }
+.uno-top-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; background: rgba(0,0,0,0.22); padding: 6px 8px; border-radius: 10px; }
+body.light-theme .uno-top-bar { background: rgba(255,255,255,0.75); }
+.uno-players-list { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; align-items: center; }
+.uno-player-chip { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.16); display: inline-flex; align-items: center; gap: 4px; }
+body.light-theme .uno-player-chip { background: #fff; color: #1e272e; border-color: rgba(0,0,0,0.12); }
+.uno-player-chip.active-turn { background: #feca57; color: #000; border-color: #fff; box-shadow: 0 0 12px rgba(254, 202, 87, 0.7); transform: scale(1.04); }
+.uno-player-chip .uno-badge-cnt { background: #ff4757; color: #fff; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 900; }
+.uno-arena { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; position: relative; min-height: 155px; }
+.uno-center-piles { display: flex; align-items: center; justify-content: center; gap: 24px; }
+.uno-card { width: 58px; height: 86px; border-radius: 10px; border: 3px solid #fff; box-shadow: 0 6px 14px rgba(0,0,0,0.45); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; font-weight: 900; color: #fff; cursor: pointer; user-select: none; transition: transform 0.16s ease, box-shadow 0.16s ease; flex-shrink: 0; }
+.uno-card .uno-corner-tl { position: absolute; top: 4px; left: 5px; font-size: 11px; line-height: 1; }
+.uno-card .uno-corner-br { position: absolute; bottom: 4px; right: 5px; font-size: 11px; line-height: 1; transform: rotate(180deg); }
+.uno-card .uno-center-val { font-size: 24px; text-shadow: 0 2px 4px rgba(0,0,0,0.45); background: rgba(255,255,255,0.18); width: 42px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transform: rotate(-15deg); }
+.uno-card.color-R { background: linear-gradient(135deg, #ff4757, #c0392b); }
+.uno-card.color-B { background: linear-gradient(135deg, #1e90ff, #0984e3); }
+.uno-card.color-Y { background: linear-gradient(135deg, #ffa502, #e67e22); color: #111; }
+.uno-card.color-Y .uno-center-val { text-shadow: none; background: rgba(255,255,255,0.35); }
+.uno-card.color-G { background: linear-gradient(135deg, #2ed573, #00b894); }
+.uno-card.color-W { background: linear-gradient(135deg, #ff4757 25%, #1e90ff 25%, #1e90ff 50%, #ffa502 50%, #ffa502 75%, #2ed573 75%); }
+.uno-card.deck-back { background: linear-gradient(135deg, #1e272e, #0f1419); border-color: #feca57; }
+.uno-card.deck-back .uno-center-val { background: #ff4757; color: #feca57; font-size: 13px; letter-spacing: 0.5px; width: 46px; height: 34px; border-radius: 16px; }
+.uno-card.playable:hover { transform: translateY(-12px) scale(1.08); box-shadow: 0 12px 22px rgba(0, 210, 255, 0.6); border-color: #feca57; z-index: 12; }
+.uno-card.unplayable { opacity: 0.55; cursor: not-allowed; filter: saturate(0.65); }
+.uno-active-color-pill { padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 800; color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: inline-flex; align-items: center; gap: 6px; }
+.uno-status-banner { font-size: 12px; font-weight: 700; text-align: center; color: #00d2ff; padding: 2px 8px; }
+body.light-theme .uno-status-banner { color: #0984e3; }
+.uno-wild-picker { display: flex; gap: 8px; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); padding: 8px 12px; border-radius: 12px; border: 1px solid #00d2ff; position: absolute; z-index: 25; }
+.uno-color-choice { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; transition: transform 0.15s; }
+.uno-color-choice:hover { transform: scale(1.2); }
+.uno-hand-section { display: flex; flex-direction: column; gap: 4px; background: rgba(0,0,0,0.28); padding: 8px; border-radius: 12px; border-top: 1px solid rgba(255,255,255,0.1); }
+body.light-theme .uno-hand-section { background: rgba(255,255,255,0.8); border-color: rgba(0,0,0,0.1); }
+.uno-hand-title { font-size: 11px; font-weight: 800; color: #94a3b8; display: flex; justify-content: space-between; }
+.uno-hand-cards { display: flex; gap: 6px; overflow-x: auto; padding: 12px 6px 4px 6px; min-height: 102px; align-items: center; touch-action: pan-x; }

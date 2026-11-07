@@ -1,0 +1,6 @@
+.memory-grid-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 12px; overflow: auto; }
+.memory-grid { display: grid; grid-template-columns: repeat(4, 72px); grid-template-rows: repeat(4, 72px); gap: 8px; }
+.memory-card { width: 72px; height: 72px; border-radius: 12px; background: linear-gradient(135deg, #00d2ff, #0984e3); color: #fff; font-size: 30px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.2s, background 0.2s; }
+.memory-card:hover { transform: scale(1.05); }
+.memory-card.revealed { background: #fff; color: #222; border: 2px solid #00d2ff; }
+.memory-card.matched { background: #55efc4; color: #000; border: 2px solid #00b894; cursor: default; }

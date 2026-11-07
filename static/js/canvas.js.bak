@@ -147,9 +147,9 @@ window.centerWorkspace = function() {
     targetPanY = -(2500 - window.innerHeight / 2);
 };
 
-window.zoomByStep = function(factor) {
-    const cx = window.innerWidth / 2;
-    const cy = window.innerHeight / 2;
+window.zoomByStep = function(factor, pivotX, pivotY) {
+    const cx = typeof pivotX === 'number' ? pivotX : window.innerWidth / 2;
+    const cy = typeof pivotY === 'number' ? pivotY : window.innerHeight / 2;
     const nextScale = Math.min(Math.max(0.15, targetScale * factor), 4.0);
     targetPanX = cx - (cx - targetPanX) * (nextScale / targetScale);
     targetPanY = cy - (cy - targetPanY) * (nextScale / targetScale);
@@ -219,6 +219,17 @@ document.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_' || e.key === '0')) {
+        e.preventDefault();
+        if (e.key === '0') {
+            window.centerWorkspace();
+        } else if (e.key === '-' || e.key === '_') {
+            window.zoomByStep(0.85);
+        } else {
+            window.zoomByStep(1.18);
+        }
+        return;
+    }
     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable)) {
         if (e.key === 'Escape') {
             deselectAllTextBoxes(null);
@@ -303,18 +314,87 @@ function mainAnimationLoop() {
 mainAnimationLoop();
 
 window.addEventListener('wheel', (e) => {
-    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.scroll-strip') || e.target.closest('.media-content') || e.target.closest('.board-media-body') || e.target.closest('.tool-popover') || e.target.closest('.text-box-editor') || e.target.closest('.sticky-content') || e.target.closest('.noitu-history-box')) {
+    if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const rawDelta = Math.max(-60, Math.min(60, e.deltaY));
+        const factor = Math.exp(-rawDelta * 0.012);
+        window.zoomByStep(factor, e.clientX, e.clientY);
+        return;
+    }
+    if (e.target.closest('.xo-board-wrapper') || e.target.closest('.chat-messages') || e.target.closest('.settings-body') || e.target.closest('.scroll-strip') || e.target.closest('.media-content') || e.target.closest('.board-media-body') || e.target.closest('.tool-popover') || e.target.closest('.text-box-editor') || e.target.closest('.sticky-content') || e.target.closest('.noitu-history-box') || e.target.closest('.uno-hand-cards') || e.target.closest('.ludo-board-wrap')) {
         return;
     }
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    const nextScale = Math.min(Math.max(0.15, targetScale * factor), 4.0);
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-    targetPanX = mouseX - (mouseX - targetPanX) * (nextScale / targetScale);
-    targetPanY = mouseY - (mouseY - targetPanY) * (nextScale / targetScale);
-    targetScale = nextScale;
-}, { passive: false });
+    window.zoomByStep(factor, e.clientX, e.clientY);
+}, { passive: false, capture: true });
+
+let gestureStartScale = 1;
+window.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+    gestureStartScale = targetScale;
+}, { passive: false, capture: true });
+
+window.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    if (typeof e.scale === 'number' && e.scale > 0) {
+        const desired = Math.min(Math.max(0.15, gestureStartScale * e.scale), 4.0);
+        window.zoomByStep(desired / targetScale, e.clientX || window.innerWidth / 2, e.clientY || window.innerHeight / 2);
+    }
+}, { passive: false, capture: true });
+
+window.addEventListener('gestureend', (e) => {
+    e.preventDefault();
+}, { passive: false, capture: true });
+
+let globalPinchActive = false;
+let globalPinchDist = 0;
+let globalPinchScale = 1;
+let globalPinchCenter = { x: 0, y: 0 };
+
+window.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length >= 2) {
+        e.preventDefault();
+        globalPinchActive = true;
+        drawing = false;
+        isPanning = false;
+        currentStroke = null;
+        textDragBox = null;
+        scheduleRedrawDraft();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        globalPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        globalPinchScale = targetScale;
+        globalPinchCenter = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+    }
+}, { passive: false, capture: true });
+
+window.addEventListener('touchmove', (e) => {
+    if (globalPinchActive && e.touches && e.touches.length >= 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const cx = (t1.clientX + t2.clientX) / 2;
+        const cy = (t1.clientY + t2.clientY) / 2;
+        if (globalPinchDist > 10) {
+            const nextScale = Math.min(Math.max(0.15, globalPinchScale * (dist / globalPinchDist)), 4.0);
+            targetPanX = cx - (globalPinchCenter.x - targetPanX) * (nextScale / targetScale) + (cx - globalPinchCenter.x);
+            targetPanY = cy - (globalPinchCenter.y - targetPanY) * (nextScale / targetScale) + (cy - globalPinchCenter.y);
+            targetScale = nextScale;
+            globalPinchCenter = { x: cx, y: cy };
+        }
+    }
+}, { passive: false, capture: true });
+
+window.addEventListener('touchend', (e) => {
+    if (!e.touches || e.touches.length < 2) {
+        globalPinchActive = false;
+        globalPinchDist = 0;
+    }
+}, { passive: false, capture: true });
 
 const PEN_TOOLS = ['pen', 'highlighter', 'calligraphy', 'marker', 'neon', 'rainbow', 'dashed', 'spray', 'laser'];
 const SHAPE_TOOLS = ['line', 'arrow', 'darrow', 'rect', 'circle', 'triangle', 'diamond', 'star', 'hexagon'];
@@ -1256,26 +1336,9 @@ window.addEventListener('mouseup', () => {
     endPointerAction();
 });
 
-let pinchStartDist = 0;
-let pinchStartScale = 1;
-let pinchCenter = { x: 0, y: 0 };
-
 canvas.addEventListener('touchstart', (e) => {
     if (e.target !== canvas) return;
-    if (e.touches.length === 2) {
-        e.preventDefault();
-        drawing = false;
-        currentStroke = null;
-        textDragBox = null;
-        scheduleRedrawDraft();
-        const t1 = e.touches[0];
-        const t2 = e.touches[1];
-        pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        pinchStartScale = targetScale;
-        pinchCenter = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
-        return;
-    }
-    if (e.touches.length === 1) {
+    if (e.touches.length === 1 && !globalPinchActive) {
         e.preventDefault();
         const t = e.touches[0];
         startPointerAction(t.clientX, t.clientY, 0);
@@ -1283,23 +1346,7 @@ canvas.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-        e.preventDefault();
-        const t1 = e.touches[0];
-        const t2 = e.touches[1];
-        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        const cx = (t1.clientX + t2.clientX) / 2;
-        const cy = (t1.clientY + t2.clientY) / 2;
-        if (pinchStartDist > 10) {
-            const nextScale = Math.min(Math.max(0.15, pinchStartScale * (dist / pinchStartDist)), 4.0);
-            targetPanX = cx - (pinchCenter.x - targetPanX) * (nextScale / targetScale) + (cx - pinchCenter.x);
-            targetPanY = cy - (pinchCenter.y - targetPanY) * (nextScale / targetScale) + (cy - pinchCenter.y);
-            targetScale = nextScale;
-            pinchCenter = { x: cx, y: cy };
-        }
-        return;
-    }
-    if (e.touches.length === 1 && (drawing || isPanning)) {
+    if (e.touches.length === 1 && !globalPinchActive && (drawing || isPanning)) {
         e.preventDefault();
         const t = e.touches[0];
         movePointerAction(t.clientX, t.clientY);
@@ -1307,7 +1354,6 @@ canvas.addEventListener('touchmove', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('touchend', () => {
-    pinchStartDist = 0;
     endPointerAction();
 });
 

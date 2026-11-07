@@ -2,13 +2,22 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 <title>Bảng Chung Online - Phòng {{ room_id }}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230984e3'/><circle cx='32' cy='32' r='18' fill='%2300d2ff'/></svg>">
-<link rel="stylesheet" href="/static/css/style.css?v=26">
+<link rel="stylesheet" href="/static/css/style.css?v=29">
 </head>
 <body class="fade-in light-theme">
-<div id="dynamic-bg" class="bg-light-dots"></div>
+<div id="dynamic-bg" class="bg-light-dots">
+<div id="bg-cosmos-layer" class="bg-cosmos-layer">
+<div class="cosmos-nebula-glow"></div>
+<div class="cosmos-wheel-outer"></div>
+<div class="cosmos-wheel-mid"></div>
+<div class="cosmos-wheel-inner"></div>
+<div class="cosmos-core"></div>
+</div>
+<canvas id="bg-fx-canvas"></canvas>
+</div>
 
 <input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.html,.htm,.txt,.md,.json,.py,.js,.css" style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0;">
 
@@ -125,7 +134,7 @@
 </div>
 
 <div class="top-right-actions">
-<button type="button" id="fab-settings" class="fab-btn glass-effect" title="Tùy chỉnh không gian & hình nền">⚙️</button>
+<button type="button" id="fab-settings" class="fab-btn glass-effect" title="Tùy chỉnh không gian & hình nền động">⚙️</button>
 </div>
 </div>
 
@@ -237,6 +246,7 @@
 <div id="popover-games" class="tool-popover glass-effect">
 <div class="popover-title">🎮 Tạo Bàn Chơi Mới (Mở Nhiều Bàn Cùng Lúc)</div>
 <div class="popover-grid single-col">
+<button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="uno">🃏 ➕ Tạo Bàn Bài UNO (2 - 8 Người & Bot)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="noitu">🔤 ➕ Tạo Bàn Nối Từ Tiếng Việt (Nhiều người)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="ludo">🐎 ➕ Tạo Bàn Cờ Cá Ngựa (Xúc Xắc 3D Rơi + Hẹn Giờ)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="chess">♟️ ➕ Tạo Bàn Cờ Vua Quốc Tế (Chess.com)</button>
@@ -264,7 +274,7 @@
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
 <button type="button" id="group-webmedia-btn" class="dock-btn highlight-dock group-trigger-btn" data-popover="popover-webmedia" title="Mở Tab Web riêng, Đăng tệp HTML Game, Ảnh, Video, PDF, Word, Excel">🌐<span>Web / HTML / Tài Liệu ▾</span></button>
 <button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
-<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Tạo nhiều bàn Nối Từ, Cờ Cá Ngựa, Cờ Vua, Caro, Xúc Xắc 3D trên mặt bảng">🎮<span>Tạo Bàn Chơi ▾</span></button>
+<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Tạo nhiều bàn UNO, Nối Từ, Cờ Cá Ngựa, Cờ Vua, Caro, Xúc Xắc 3D trên mặt bảng">🎮<span>Tạo Bàn Chơi ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
 <button type="button" id="group-backup-btn" class="dock-btn secondary group-trigger-btn" data-popover="popover-backup" title="Sao lưu JSON, Khôi phục JSON hoặc Xuất ảnh PNG">📦<span>Sao lưu ▾</span></button>
@@ -275,10 +285,51 @@
 
 <div id="settings-overlay" class="settings-overlay glass-effect">
 <div class="settings-header">
-<span>⚙️ Tùy chỉnh Không gian</span>
+<span>⚙️ Tùy chỉnh Không gian & Nền Động</span>
 <button type="button" id="close-settings" class="widget-btn close" title="Đóng">✕</button>
 </div>
 <div class="settings-body">
+<div class="setting-group">
+<label>🌌 Vũ Trụ Xoay 360° & Đa Chiều (Nền Động)</label>
+<div class="bg-options">
+<button type="button" class="bg-opt-btn" data-bg="bg-galaxy">🌌 Thiên Hà Xoáy</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-blackhole">🕳️ Hố Đen Vũ Trụ</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-nebula-vortex">🌀 Tinh Vân Xoáy</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-astral-runes">۞ Vòng Ma Pháp</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-wormhole">🪐 Cổng Không Gian</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-solar-system">☀️ Hệ Mặt Trời Xoay</button>
+</div>
+</div>
+<div class="setting-group">
+<label>✨ Nền Động Huyền Ảo & Đêm Nghệ Thuật</label>
+<div class="bg-options">
+<button type="button" class="bg-opt-btn" data-bg="bg-magical">✨ Cực Quang Aurora</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-fireflies">🧚 Đom Đóm Rừng Đêm</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-deep-abyss">🪼 Thủy Cung Phát Quang</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-stars">🌠 Mưa Sao Băng</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-lava-ember">🔥 Hỏa Sơn Tinh Hồng</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-crystal-cave">💎 Động Pha Lê</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-cyberpunk">🌆 Cyberpunk Neon</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-matrix">💻 Mưa Ma Trận Số</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-forest">🌲 Rừng Đêm Zen</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-blueprint">🗺️ Bản Vẽ Kỹ Thuật</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-dots">🌑 Chấm Tối Tối Giản</button>
+</div>
+</div>
+<div class="setting-group">
+<label>🌸 Giao Diện Sáng Động & Tươi Mới</label>
+<div class="bg-options">
+<button type="button" class="bg-opt-btn active" data-bg="bg-light-dots">⚪ Chấm Sáng</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-grid">📐 Lưới Sáng</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-sakura">🌸 Mưa Hoa Anh Đào</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-clouds">☁️ Bầu Trời Mây Trôi</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-ocean">🌊 Đại Dương Bọt Sóng</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-mint">🌿 Bạc Hà Sương Mai</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-sunset">🌅 Hoàng Hôn Ấm</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-pastel">🌈 Pastel Aurora</button>
+<button type="button" class="bg-opt-btn" data-bg="bg-light-paper">📜 Giấy Kraft Ấm</button>
+</div>
+</div>
 <div class="setting-group">
 <label>Chế độ Công cụ Tẩy (Eraser)</label>
 <div class="bg-options">
@@ -287,33 +338,11 @@
 </div>
 </div>
 <div class="setting-group">
-<label>Giao diện Sáng & Tươi Mới</label>
-<div class="bg-options">
-<button type="button" class="bg-opt-btn active" data-bg="bg-light-dots">⚪ Chấm Sáng</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-grid">📐 Lưới Sáng</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-sakura">🌸 Hoa Anh Đào</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-mint">🌿 Bạc Hà Mint</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-sunset">🌅 Hoàng Hôn</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-ocean">🌊 Đại Dương</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-paper">📜 Giấy Kraft Ấm</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-light-pastel">🌈 Pastel Aurora</button>
+<label>Hiển thị, Hiệu năng & Đồng bộ</label>
+<div class="toggle-row">
+<span>Hoạt ảnh nền động huyền ảo</span>
+<input type="checkbox" id="toggle-bg-anim" checked>
 </div>
-</div>
-<div class="setting-group">
-<label>Giao diện Tối & Chuyên Nghiệp</label>
-<div class="bg-options">
-<button type="button" class="bg-opt-btn" data-bg="bg-magical">✨ Huyền Ảo</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-galaxy">🌌 Tinh Vân Galaxy</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-forest">🌲 Rừng Đêm Zen</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-blueprint">🗺️ Bản Vẽ Kỹ Thuật</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-cyberpunk">🌆 Cyberpunk</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-matrix">💻 Lưới Neon</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-stars">🌠 Trời Sao Đêm</button>
-<button type="button" class="bg-opt-btn" data-bg="bg-dots">🌑 Dark Dots</button>
-</div>
-</div>
-<div class="setting-group">
-<label>Hiển thị & Đồng bộ</label>
 <div class="toggle-row">
 <span>Hiện con trỏ người khác</span>
 <input type="checkbox" id="toggle-cursors" checked>
@@ -380,12 +409,12 @@
 const ROOM_ID = "{{ room_id }}";
 window.USERNAME = "{{ username }}";
 </script>
-<script src="/static/js/socket_client.js?v=26"></script>
-<script src="/static/js/pointer.js?v=26"></script>
-<script src="/static/js/canvas.js?v=26"></script>
-<script src="/static/js/sticky.js?v=26"></script>
-<script src="/static/js/xo.js?v=26"></script>
-<script src="/static/js/media.js?v=26"></script>
-<script src="/static/js/ui.js?v=26"></script>
+<script src="/static/js/socket_client.js?v=29"></script>
+<script src="/static/js/pointer.js?v=29"></script>
+<script src="/static/js/canvas.js?v=29"></script>
+<script src="/static/js/sticky.js?v=29"></script>
+<script src="/static/js/xo.js?v=29"></script>
+<script src="/static/js/media.js?v=29"></script>
+<script src="/static/js/ui.js?v=29"></script>
 </body>
 </html>

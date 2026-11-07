@@ -1,0 +1,24 @@
+.noitu-body { display: flex; flex-direction: column; flex: 1; padding: 10px 12px; gap: 8px; overflow: hidden; }
+.noitu-players-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; background: rgba(0,0,0,0.2); border-radius: 10px; flex-wrap: wrap; }
+body.light-theme .noitu-players-bar { background: rgba(0,0,0,0.05); }
+.noitu-p-list { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; align-items: center; }
+.noitu-p-badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
+body.light-theme .noitu-p-badge { background: #fff; border-color: rgba(0,0,0,0.15); color: #222; }
+.noitu-p-badge.active-turn { background: #00d2ff; color: #000; border-color: #00d2ff; box-shadow: 0 0 10px rgba(0,210,255,0.45); }
+.noitu-stage-box { background: linear-gradient(135deg, rgba(0,210,255,0.12), rgba(9,132,227,0.18)); border: 1.5px solid rgba(0,210,255,0.4); border-radius: 12px; padding: 10px 12px; text-align: center; display: flex; flex-direction: column; gap: 4px; }
+.noitu-current-word { font-size: 24px; font-weight: 900; color: #00d2ff; letter-spacing: 0.5px; }
+body.light-theme .noitu-current-word { color: #0984e3; }
+.noitu-next-hint { font-size: 12px; font-weight: 700; color: #feca57; }
+body.light-theme .noitu-next-hint { color: #d68910; }
+.noitu-verify-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: rgba(255, 71, 87, 0.14); border: 1px solid rgba(255, 71, 87, 0.4); padding: 6px 10px; border-radius: 10px; font-size: 11px; }
+.noitu-veto-btn { background: #ff4757; color: #fff; border: none; padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.noitu-veto-btn:hover { background: #ff6b81; }
+.noitu-history-box { flex: 1; overflow-y: auto; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px; padding: 6px; background: rgba(0,0,0,0.18); border-radius: 10px; touch-action: pan-y; }
+body.light-theme .noitu-history-box { background: rgba(0,0,0,0.04); }
+.noitu-word-chip { padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); }
+body.light-theme .noitu-word-chip { background: #fff; border-color: rgba(0,0,0,0.12); color: #222; }
+.noitu-word-chip.rejected { text-decoration: line-through; opacity: 0.55; color: #ff4757; border-color: #ff4757; }
+.noitu-form-row { display: flex; gap: 6px; width: 100%; margin: 0; padding: 0; background: none; border: none; box-shadow: none; }
+.noitu-form-row input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(0, 210, 255, 0.4); background: rgba(0,0,0,0.35); color: #fff; font-size: 13px; font-weight: 600; user-select: text !important; -webkit-user-select: text !important; }
+body.light-theme .noitu-form-row input { background: #fff; color: #111; }
+.noitu-form-row button { padding: 8px 14px; border-radius: 8px; border: none; background: #00d2ff; color: #000; font-weight: 800; font-size: 12px; cursor: pointer; white-space: nowrap; }

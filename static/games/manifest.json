@@ -1,0 +1,68 @@
+{
+  "version": 30,
+  "modules": {
+    "uno": {
+      "title": "Bài UNO Nhiều Người",
+      "html": "/static/games/uno/uno.html",
+      "css": "/static/games/uno/uno.css",
+      "js": "/static/games/uno/uno.js",
+      "ready": false
+    },
+    "noitu": {
+      "title": "Nối Từ Tiếng Việt",
+      "html": "/static/games/noitu/noitu.html",
+      "css": "/static/games/noitu/noitu.css",
+      "js": "/static/games/noitu/noitu.js",
+      "ready": false
+    },
+    "ludo": {
+      "title": "Cờ Cá Ngựa 3D",
+      "html": "/static/games/ludo/ludo.html",
+      "css": "/static/games/ludo/ludo.css",
+      "js": "/static/games/ludo/ludo.js",
+      "ready": false
+    },
+    "chess": {
+      "title": "Cờ Vua Quốc Tế",
+      "html": "/static/games/chess/chess.html",
+      "css": "/static/games/chess/chess.css",
+      "js": "/static/games/chess/chess.js",
+      "ready": false
+    },
+    "xo": {
+      "title": "Cờ Caro XO",
+      "html": "/static/games/xo/xo.html",
+      "css": "/static/games/xo/xo.css",
+      "js": "/static/games/xo/xo.js",
+      "ready": false
+    },
+    "memory": {
+      "title": "Lật Thẻ Trí Nhớ",
+      "html": "/static/games/memory/memory.html",
+      "css": "/static/games/memory/memory.css",
+      "js": "/static/games/memory/memory.js",
+      "ready": false
+    },
+    "dice": {
+      "title": "Xúc Xắc 3D",
+      "html": "/static/games/dice/dice.html",
+      "css": "/static/games/dice/dice.css",
+      "js": "/static/games/dice/dice.js",
+      "ready": false
+    },
+    "timer": {
+      "title": "Đồng Hồ Pomodoro",
+      "html": "/static/games/timer/timer.html",
+      "css": "/static/games/timer/timer.css",
+      "js": "/static/games/timer/timer.js",
+      "ready": false
+    },
+    "fishing": {
+      "title": "Bắn Cá Đại Dương 8 Người",
+      "html": "/static/games/fishing/fishing.html",
+      "css": "/static/games/fishing/fishing.css",
+      "js": "/static/games/fishing/fishing.js",
+      "ready": false
+    }
+  }
+}

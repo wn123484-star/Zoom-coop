@@ -22,8 +22,28 @@ const dynamicBgEl = document.getElementById('dynamic-bg');
     cEl.style.zIndex = String(idx + 1);
 });
 
+let bgFxCanvas = document.getElementById('bg-fx-canvas');
+let bgFxCtx = null;
 if (dynamicBgEl) {
     dynamicBgEl.style.backgroundPosition = '';
+    dynamicBgEl.style.transform = 'translate3d(0,0,0)';
+    if (!document.getElementById('bg-cosmos-layer')) {
+        const cosmosLayer = document.createElement('div');
+        cosmosLayer.id = 'bg-cosmos-layer';
+        cosmosLayer.className = 'bg-cosmos-layer';
+        ['cosmos-nebula-glow', 'cosmos-wheel-outer', 'cosmos-wheel-mid', 'cosmos-wheel-inner', 'cosmos-core'].forEach(cls => {
+            const d = document.createElement('div');
+            d.className = cls;
+            cosmosLayer.appendChild(d);
+        });
+        dynamicBgEl.appendChild(cosmosLayer);
+    }
+    if (!bgFxCanvas) {
+        bgFxCanvas = document.createElement('canvas');
+        bgFxCanvas.id = 'bg-fx-canvas';
+        dynamicBgEl.appendChild(bgFxCanvas);
+    }
+    bgFxCtx = bgFxCanvas.getContext('2d', { alpha: true });
 }
 
 window.workspaceScale = 1;
@@ -61,6 +81,659 @@ let flushDeleteTimer = null;
 let pendingEraserPoints = [];
 let flushEraserSegmentTimer = null;
 
+const STATIC_BG_THEMES = new Set(['bg-light-dots', 'bg-light-grid', 'bg-light-paper', 'bg-dots', 'bg-grid', 'bg-solid', 'bg-blueprint']);
+let currentBgTheme = (dynamicBgEl && dynamicBgEl.className) ? dynamicBgEl.className.trim() : 'bg-light-dots';
+let bgAnimEnabled = localStorage.getItem('syncspace_bg_anim') !== '0';
+let bgFxWidth = window.innerWidth || 1280;
+let bgFxHeight = window.innerHeight || 720;
+let bgParticles = [];
+let bgMeteors = [];
+let bgMatrixCols = [];
+let bgSolarPlanets = [];
+let bgGlobalAngle = 0;
+let lastBgFrameTime = 0;
+let bgStaticDrawn = false;
+
+const MATRIX_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ';
+
+function initBgParticlesForTheme(theme) {
+    bgParticles = [];
+    bgMeteors = [];
+    bgMatrixCols = [];
+    bgSolarPlanets = [];
+    bgStaticDrawn = false;
+    const w = bgFxWidth;
+    const h = bgFxHeight;
+    const maxR = Math.hypot(w, h) * 0.62;
+
+    if (theme === 'bg-galaxy' || theme === 'bg-nebula-vortex') {
+        const count = theme === 'bg-galaxy' ? 170 : 130;
+        const palette = theme === 'bg-galaxy'
+            ? ['#ffffff', '#00d2ff', '#ffd89b', '#ff6b81', '#d6a2e8', '#70a1ff']
+            : ['#00f5d4', '#00d2ff', '#ff2e93', '#d6a2e8', '#ffffff'];
+        for (let i = 0; i < count; i++) {
+            const arm = i % 3;
+            const frac = Math.pow(Math.random(), 0.78);
+            const r = 18 + frac * maxR;
+            const baseAng = (arm * (Math.PI * 2 / 3)) + frac * 4.2 + (Math.random() - 0.5) * 0.65;
+            bgParticles.push({
+                r: r,
+                angle: baseAng,
+                speed: (0.0018 + (1 - frac) * 0.0038) * (theme === 'bg-galaxy' ? 1 : -0.85),
+                size: 0.9 + Math.random() * 2.2,
+                color: palette[i % palette.length],
+                alpha: 0.35 + Math.random() * 0.65,
+                twinkleSpeed: 0.02 + Math.random() * 0.04,
+                phase: Math.random() * Math.PI * 2,
+                tilt: theme === 'bg-galaxy' ? 0.58 : 0.85
+            });
+        }
+        for (let i = 0; i < 65; i++) {
+            bgParticles.push({
+                staticStar: true,
+                x: Math.random() * w,
+                y: Math.random() * h,
+                size: 0.7 + Math.random() * 1.4,
+                color: '#ffffff',
+                alpha: 0.25 + Math.random() * 0.6,
+                twinkleSpeed: 0.015 + Math.random() * 0.03,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    } else if (theme === 'bg-blackhole') {
+        const palette = ['#fff6d6', '#ffbe76', '#ff9f43', '#ff6b6b', '#a55eea', '#00d2ff'];
+        const baseHoleR = Math.min(w, h) * 0.11;
+        for (let i = 0; i < 165; i++) {
+            const frac = Math.pow(Math.random(), 1.25);
+            const r = baseHoleR * 1.18 + frac * (maxR * 0.85);
+            bgParticles.push({
+                r: r,
+                angle: Math.random() * Math.PI * 2,
+                speed: 0.0045 + (1 - frac) * 0.012,
+                size: 1.0 + Math.random() * 2.3,
+                color: palette[i % palette.length],
+                alpha: 0.4 + Math.random() * 0.6,
+                tilt: 0.38,
+                lensing: i % 5 === 0
+            });
+        }
+    } else if (theme === 'bg-astral-runes') {
+        const palette = ['#feca57', '#00d2ff', '#ff9ff3', '#fff2a3'];
+        for (let i = 0; i < 95; i++) {
+            const ringIdx = i % 4;
+            const ringR = Math.min(w, h) * (0.14 + ringIdx * 0.1);
+            bgParticles.push({
+                r: ringR + (Math.random() - 0.5) * 26,
+                angle: Math.random() * Math.PI * 2,
+                speed: (ringIdx % 2 === 0 ? 1 : -1) * (0.002 + ringIdx * 0.0008),
+                size: 1.2 + Math.random() * 2.2,
+                color: palette[i % palette.length],
+                alpha: 0.45 + Math.random() * 0.55,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    } else if (theme === 'bg-wormhole') {
+        const palette = ['#00d2ff', '#70a1ff', '#d6a2e8', '#55efc4', '#ffffff'];
+        for (let i = 0; i < 140; i++) {
+            bgParticles.push({
+                r: 12 + Math.random() * maxR,
+                angle: Math.random() * Math.PI * 2,
+                speed: 0.006 + Math.random() * 0.008,
+                radialSpeed: 0.65 + Math.random() * 1.4,
+                maxR: maxR,
+                size: 1.1 + Math.random() * 2.2,
+                color: palette[i % palette.length],
+                alpha: 0.45 + Math.random() * 0.55
+            });
+        }
+    } else if (theme === 'bg-solar-system') {
+        const minDim = Math.min(w, h);
+        const defs = [
+            { name: 'Mercury', rFrac: 0.09, size: 3.2, speed: 0.014, color: '#cbd5e1' },
+            { name: 'Venus', rFrac: 0.13, size: 4.6, speed: 0.010, color: '#feca57' },
+            { name: 'Earth', rFrac: 0.18, size: 5.2, speed: 0.0075, color: '#00d2ff', hasMoon: true },
+            { name: 'Mars', rFrac: 0.23, size: 4.0, speed: 0.0058, color: '#ff6b6b' },
+            { name: 'Jupiter', rFrac: 0.30, size: 8.8, speed: 0.0038, color: '#ff9f43' },
+            { name: 'Saturn', rFrac: 0.37, size: 7.4, speed: 0.0028, color: '#ffeaa7', hasRing: true },
+            { name: 'Uranus', rFrac: 0.43, size: 5.8, speed: 0.0020, color: '#7bed9f' },
+            { name: 'Neptune', rFrac: 0.48, size: 5.6, speed: 0.0015, color: '#5352ed' }
+        ];
+        bgSolarPlanets = defs.map((d, idx) => ({
+            ...d,
+            orbitR: minDim * d.rFrac,
+            angle: idx * 1.1 + Math.random() * Math.PI * 2,
+            moonAngle: Math.random() * Math.PI * 2
+        }));
+        for (let i = 0; i < 120; i++) {
+            bgParticles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                size: 0.8 + Math.random() * 1.6,
+                color: i % 4 === 0 ? '#a8e6cf' : '#ffffff',
+                alpha: 0.3 + Math.random() * 0.65,
+                twinkleSpeed: 0.02 + Math.random() * 0.03,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    } else if (theme === 'bg-magical' || theme === 'bg-stars') {
+        const count = theme === 'bg-stars' ? 145 : 95;
+        for (let i = 0; i < count; i++) {
+            bgParticles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                size: 0.8 + Math.random() * 1.9,
+                color: i % 5 === 0 ? '#00d2ff' : (i % 7 === 0 ? '#ffeaa7' : '#ffffff'),
+                alpha: 0.3 + Math.random() * 0.7,
+                twinkleSpeed: 0.018 + Math.random() * 0.035,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    } else if (theme === 'bg-fireflies' || theme === 'bg-forest') {
+        const count = theme === 'bg-fireflies' ? 68 : 36;
+        const palette = ['#b8ff01', '#feca57', '#55efc4', '#7bed9f'];
+        for (let i = 0; i < count; i++) {
+            bgParticles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vx: (Math.random() - 0.5) * 0.55,
+                vy: -0.15 - Math.random() * 0.45,
+                size: 2.0 + Math.random() * 3.2,
+                color: palette[i % palette.length],
+                phase: Math.random() * Math.PI * 2,
+                twinkleSpeed: 0.025 + Math.random() * 0.035
+            });
+        }
+    } else if (theme === 'bg-deep-abyss' || theme === 'bg-light-ocean' || theme === 'bg-light-mint' || theme === 'bg-light-pastel' || theme === 'bg-light-sunset') {
+        const isLight = theme.startsWith('bg-light-');
+        const palette = theme === 'bg-deep-abyss'
+            ? ['#00f5d4', '#00bbf9', '#9b5de5', '#f15bb5']
+            : (theme === 'bg-light-ocean' ? ['rgba(255,255,255,0.75)', 'rgba(9,132,227,0.28)', 'rgba(0,210,255,0.38)']
+            : (theme === 'bg-light-mint' ? ['rgba(255,255,255,0.8)', 'rgba(0,184,148,0.28)', 'rgba(85,239,196,0.45)']
+            : (theme === 'bg-light-sunset' ? ['rgba(255,255,255,0.7)', 'rgba(255,159,67,0.35)', 'rgba(255,107,107,0.3)']
+            : ['rgba(255,255,255,0.75)', 'rgba(165,94,234,0.26)', 'rgba(0,210,255,0.26)'])));
+        for (let i = 0; i < 56; i++) {
+            bgParticles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vy: -0.25 - Math.random() * 0.65,
+                swayAmp: 0.3 + Math.random() * 0.8,
+                size: isLight ? (4 + Math.random() * 14) : (2.2 + Math.random() * 4.8),
+                color: palette[i % palette.length],
+                phase: Math.random() * Math.PI * 2,
+                isBubble: isLight
+            });
+        }
+    } else if (theme === 'bg-lava-ember' || theme === 'bg-crystal-cave' || theme === 'bg-cyberpunk') {
+        const palette = theme === 'bg-lava-ember'
+            ? ['#ff4757', '#ffa502', '#ff6348', '#ffeaa7']
+            : (theme === 'bg-crystal-cave' ? ['#d6a2e8', '#00d2ff', '#ff9ff3', '#ffffff'] : ['#00d2ff', '#ff2e93', '#feca57']);
+        for (let i = 0; i < 65; i++) {
+            bgParticles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vx: (Math.random() - 0.5) * 0.45,
+                vy: theme === 'bg-lava-ember' ? (-0.5 - Math.random() * 1.1) : ((Math.random() - 0.5) * 0.35),
+                size: 1.5 + Math.random() * 3.0,
+                color: palette[i % palette.length],
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    } else if (theme === 'bg-matrix') {
+        const colW = 22;
+        const cols = Math.min(90, Math.floor(w / colW));
+        for (let i = 0; i < cols; i++) {
+            bgMatrixCols.push({
+                x: i * colW + 6,
+                y: Math.random() * h,
+                speed: 1.8 + Math.random() * 3.2,
+                len: 6 + Math.floor(Math.random() * 10),
+                seed: Math.floor(Math.random() * 100)
+            });
+        }
+    } else if (theme === 'bg-light-sakura') {
+        const palette = ['#ffb7c5', '#ff8da1', '#ffc9d6', '#fff0f5'];
+        for (let i = 0; i < 46; i++) {
+            bgParticles.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                vx: 0.35 + Math.random() * 0.65,
+                vy: 0.55 + Math.random() * 0.95,
+                size: 5 + Math.random() * 6,
+                rot: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.03,
+                swayPhase: Math.random() * Math.PI * 2,
+                color: palette[i % palette.length]
+            });
+        }
+    } else if (theme === 'bg-light-clouds') {
+        for (let i = 0; i < 14; i++) {
+            bgParticles.push({
+                x: Math.random() * w,
+                y: (0.06 + Math.random() * 0.78) * h,
+                vx: 0.12 + Math.random() * 0.25,
+                r: 45 + Math.random() * 75,
+                alpha: 0.42 + Math.random() * 0.35
+            });
+        }
+    }
+}
+
+function resizeBgFxCanvas() {
+    if (!bgFxCanvas) return;
+    bgFxWidth = window.innerWidth || 1280;
+    bgFxHeight = window.innerHeight || 720;
+    if (bgFxCanvas.width !== bgFxWidth || bgFxCanvas.height !== bgFxHeight) {
+        bgFxCanvas.width = bgFxWidth;
+        bgFxCanvas.height = bgFxHeight;
+        initBgParticlesForTheme(currentBgTheme);
+    }
+}
+
+function syncThemeStateFromDom() {
+    if (!dynamicBgEl) return;
+    const cls = (dynamicBgEl.className || 'bg-light-dots').trim().split(/\s+/)[0] || 'bg-light-dots';
+    const isLight = cls.startsWith('bg-light-');
+    document.body.classList.toggle('light-theme', isLight);
+    document.querySelectorAll('.bg-opt-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-bg') === cls);
+    });
+    if (cls !== currentBgTheme) {
+        currentBgTheme = cls;
+        initBgParticlesForTheme(currentBgTheme);
+    }
+}
+
+if (dynamicBgEl && typeof MutationObserver !== 'undefined') {
+    const bgObserver = new MutationObserver(() => {
+        syncThemeStateFromDom();
+    });
+    bgObserver.observe(dynamicBgEl, { attributes: true, attributeFilter: ['class'] });
+}
+
+const toggleBgAnimCheckbox = document.getElementById('toggle-bg-anim');
+if (toggleBgAnimCheckbox) {
+    toggleBgAnimCheckbox.checked = bgAnimEnabled;
+    document.body.classList.toggle('pause-bg-anim', !bgAnimEnabled);
+    toggleBgAnimCheckbox.addEventListener('change', (e) => {
+        bgAnimEnabled = !!e.target.checked;
+        localStorage.setItem('syncspace_bg_anim', bgAnimEnabled ? '1' : '0');
+        document.body.classList.toggle('pause-bg-anim', !bgAnimEnabled);
+        bgStaticDrawn = false;
+    });
+}
+
+function renderBgFxFrame(now) {
+    if (!bgFxCtx || !bgFxCanvas) return;
+    if (document.hidden) return;
+    if (STATIC_BG_THEMES.has(currentBgTheme)) {
+        if (!bgStaticDrawn) {
+            bgFxCtx.clearRect(0, 0, bgFxWidth, bgFxHeight);
+            bgStaticDrawn = true;
+        }
+        return;
+    }
+    if (!bgAnimEnabled && bgStaticDrawn) return;
+
+    const busyInteraction = isPanning || drawing || globalPinchActive;
+    const minInterval = busyInteraction ? 36 : 22;
+    if (now - lastBgFrameTime < minInterval) return;
+    lastBgFrameTime = now;
+    bgGlobalAngle += 0.0025;
+
+    const w = bgFxWidth;
+    const h = bgFxHeight;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    bgFxCtx.clearRect(0, 0, w, h);
+
+    if (currentBgTheme === 'bg-galaxy' || currentBgTheme === 'bg-nebula-vortex') {
+        const armAngleOffset = currentBgTheme === 'bg-galaxy' ? 0.52 : -0.35;
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            if (p.staticStar) {
+                p.phase += p.twinkleSpeed;
+                const al = p.alpha * (0.55 + 0.45 * Math.sin(p.phase));
+                bgFxCtx.fillStyle = p.color;
+                bgFxCtx.globalAlpha = al;
+                bgFxCtx.beginPath();
+                bgFxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                bgFxCtx.fill();
+                continue;
+            }
+            p.angle += p.speed;
+            p.phase += p.twinkleSpeed;
+            const lx = Math.cos(p.angle) * p.r;
+            const ly = Math.sin(p.angle) * p.r * p.tilt;
+            const rx = cx + lx * Math.cos(armAngleOffset) - ly * Math.sin(armAngleOffset);
+            const ry = cy + lx * Math.sin(armAngleOffset) + ly * Math.cos(armAngleOffset);
+            if (rx < -10 || rx > w + 10 || ry < -10 || ry > h + 10) continue;
+            bgFxCtx.globalAlpha = p.alpha * (0.6 + 0.4 * Math.sin(p.phase));
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(rx, ry, p.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+    } else if (currentBgTheme === 'bg-blackhole') {
+        const tiltAngle = -0.22;
+        const cosT = Math.cos(tiltAngle);
+        const sinT = Math.sin(tiltAngle);
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.angle += p.speed;
+            const lx = Math.cos(p.angle) * p.r;
+            const ly = Math.sin(p.angle) * p.r * (p.lensing ? 0.92 : p.tilt);
+            const rx = cx + lx * cosT - ly * sinT;
+            const ry = cy + lx * sinT + ly * cosT;
+            const doppler = 0.65 + 0.35 * Math.cos(p.angle);
+            bgFxCtx.globalAlpha = Math.min(1, p.alpha * doppler);
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(rx, ry, p.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+    } else if (currentBgTheme === 'bg-astral-runes') {
+        bgFxCtx.save();
+        bgFxCtx.translate(cx, cy);
+        bgFxCtx.rotate(bgGlobalAngle * 0.8);
+        bgFxCtx.strokeStyle = 'rgba(254, 202, 87, 0.22)';
+        bgFxCtx.lineWidth = 1.4;
+        const polyR = Math.min(w, h) * 0.27;
+        for (let s = 0; s < 2; s++) {
+            bgFxCtx.beginPath();
+            for (let k = 0; k < 6; k++) {
+                const a = (k * Math.PI / 3) + (s * Math.PI / 6);
+                const px = Math.cos(a) * polyR;
+                const py = Math.sin(a) * polyR;
+                if (k === 0) bgFxCtx.moveTo(px, py);
+                else bgFxCtx.lineTo(px, py);
+            }
+            bgFxCtx.closePath();
+            bgFxCtx.stroke();
+        }
+        bgFxCtx.restore();
+
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.angle += p.speed;
+            p.phase += 0.03;
+            const rx = cx + Math.cos(p.angle) * p.r;
+            const ry = cy + Math.sin(p.angle) * p.r;
+            bgFxCtx.globalAlpha = p.alpha * (0.55 + 0.45 * Math.sin(p.phase));
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(rx, ry, p.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+    } else if (currentBgTheme === 'bg-wormhole') {
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.angle += p.speed;
+            p.r -= p.radialSpeed;
+            if (p.r < 14) {
+                p.r = p.maxR;
+                p.angle = Math.random() * Math.PI * 2;
+            }
+            const rx0 = cx + Math.cos(p.angle) * p.r;
+            const ry0 = cy + Math.sin(p.angle) * p.r;
+            const rx1 = cx + Math.cos(p.angle - 0.04) * (p.r + 12);
+            const ry1 = cy + Math.sin(p.angle - 0.04) * (p.r + 12);
+            const fade = Math.min(1, p.r / (p.maxR * 0.45));
+            bgFxCtx.globalAlpha = p.alpha * fade;
+            bgFxCtx.strokeStyle = p.color;
+            bgFxCtx.lineWidth = p.size;
+            bgFxCtx.beginPath();
+            bgFxCtx.moveTo(rx0, ry0);
+            bgFxCtx.lineTo(rx1, ry1);
+            bgFxCtx.stroke();
+        }
+    } else if (currentBgTheme === 'bg-solar-system') {
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.phase += p.twinkleSpeed;
+            bgFxCtx.globalAlpha = p.alpha * (0.55 + 0.45 * Math.sin(p.phase));
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+        bgFxCtx.globalAlpha = 0.16;
+        bgFxCtx.strokeStyle = '#70a1ff';
+        bgFxCtx.lineWidth = 1;
+        for (let i = 0; i < bgSolarPlanets.length; i++) {
+            const pl = bgSolarPlanets[i];
+            bgFxCtx.beginPath();
+            bgFxCtx.ellipse(cx, cy, pl.orbitR, pl.orbitR * 0.62, -0.18, 0, Math.PI * 2);
+            bgFxCtx.stroke();
+        }
+        const cosTilt = Math.cos(-0.18);
+        const sinTilt = Math.sin(-0.18);
+        for (let i = 0; i < bgSolarPlanets.length; i++) {
+            const pl = bgSolarPlanets[i];
+            pl.angle += pl.speed;
+            const ox = Math.cos(pl.angle) * pl.orbitR;
+            const oy = Math.sin(pl.angle) * pl.orbitR * 0.62;
+            const px = cx + ox * cosTilt - oy * sinTilt;
+            const py = cy + ox * sinTilt + oy * cosTilt;
+            bgFxCtx.globalAlpha = 0.95;
+            bgFxCtx.fillStyle = pl.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(px, py, pl.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+            if (pl.hasRing) {
+                bgFxCtx.strokeStyle = 'rgba(255, 234, 167, 0.75)';
+                bgFxCtx.lineWidth = 1.8;
+                bgFxCtx.beginPath();
+                bgFxCtx.ellipse(px, py, pl.size * 2.1, pl.size * 0.7, 0.35, 0, Math.PI * 2);
+                bgFxCtx.stroke();
+            }
+            if (pl.hasMoon) {
+                pl.moonAngle += 0.045;
+                const mx = px + Math.cos(pl.moonAngle) * (pl.size * 2.3);
+                const my = py + Math.sin(pl.moonAngle) * (pl.size * 1.5);
+                bgFxCtx.fillStyle = '#ffffff';
+                bgFxCtx.beginPath();
+                bgFxCtx.arc(mx, my, 1.8, 0, Math.PI * 2);
+                bgFxCtx.fill();
+            }
+        }
+    } else if (currentBgTheme === 'bg-magical' || currentBgTheme === 'bg-stars') {
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.phase += p.twinkleSpeed;
+            bgFxCtx.globalAlpha = p.alpha * (0.5 + 0.5 * Math.sin(p.phase));
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+        if (currentBgTheme === 'bg-magical') {
+            for (let band = 0; band < 2; band++) {
+                bgFxCtx.beginPath();
+                const baseY = h * (0.28 + band * 0.16);
+                for (let x = 0; x <= w; x += 48) {
+                    const y = baseY + Math.sin(x * 0.004 + bgGlobalAngle * 2.2 + band) * 34 + Math.cos(x * 0.009 - bgGlobalAngle * 1.5) * 18;
+                    if (x === 0) bgFxCtx.moveTo(x, y);
+                    else bgFxCtx.lineTo(x, y);
+                }
+                bgFxCtx.strokeStyle = band === 0 ? 'rgba(0, 245, 212, 0.16)' : 'rgba(165, 94, 234, 0.15)';
+                bgFxCtx.lineWidth = 36;
+                bgFxCtx.lineCap = 'round';
+                bgFxCtx.globalAlpha = 1;
+                bgFxCtx.stroke();
+            }
+        }
+        if (Math.random() < (currentBgTheme === 'bg-stars' ? 0.055 : 0.025) && bgMeteors.length < 4) {
+            bgMeteors.push({
+                x: Math.random() * w * 0.85 + w * 0.1,
+                y: Math.random() * h * 0.45,
+                vx: -6.5 - Math.random() * 4.5,
+                vy: 3.2 + Math.random() * 2.8,
+                len: 55 + Math.random() * 45,
+                life: 1.0
+            });
+        }
+        for (let i = bgMeteors.length - 1; i >= 0; i--) {
+            const m = bgMeteors[i];
+            m.x += m.vx;
+            m.y += m.vy;
+            m.life -= 0.028;
+            if (m.life <= 0 || m.x < -100 || m.y > h + 100) {
+                bgMeteors.splice(i, 1);
+                continue;
+            }
+            const grad = bgFxCtx.createLinearGradient(m.x, m.y, m.x - m.vx * 8, m.y - m.vy * 8);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${m.life})`);
+            grad.addColorStop(1, 'rgba(0, 210, 255, 0)');
+            bgFxCtx.globalAlpha = 1;
+            bgFxCtx.strokeStyle = grad;
+            bgFxCtx.lineWidth = 2.1;
+            bgFxCtx.beginPath();
+            bgFxCtx.moveTo(m.x, m.y);
+            bgFxCtx.lineTo(m.x - m.vx * 8, m.y - m.vy * 8);
+            bgFxCtx.stroke();
+        }
+    } else if (currentBgTheme === 'bg-fireflies' || currentBgTheme === 'bg-forest') {
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.phase += p.twinkleSpeed;
+            p.x += p.vx + Math.sin(p.phase * 0.7) * 0.35;
+            p.y += p.vy;
+            if (p.y < -15) p.y = h + 15;
+            if (p.x < -15) p.x = w + 15;
+            if (p.x > w + 15) p.x = -15;
+            const glow = 0.3 + 0.7 * Math.abs(Math.sin(p.phase));
+            bgFxCtx.globalAlpha = glow * 0.25;
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(p.x, p.y, p.size * 3.2, 0, Math.PI * 2);
+            bgFxCtx.fill();
+            bgFxCtx.globalAlpha = glow;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+    } else if (currentBgTheme === 'bg-deep-abyss' || currentBgTheme === 'bg-light-ocean' || currentBgTheme === 'bg-light-mint' || currentBgTheme === 'bg-light-pastel' || currentBgTheme === 'bg-light-sunset') {
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.phase += 0.022;
+            p.y += p.vy;
+            p.x += Math.sin(p.phase) * p.swayAmp;
+            if (p.y < -30) {
+                p.y = h + 30;
+                p.x = Math.random() * w;
+            }
+            bgFxCtx.globalAlpha = p.isBubble ? 0.55 : (0.35 + 0.45 * Math.sin(p.phase));
+            if (p.isBubble) {
+                bgFxCtx.strokeStyle = p.color;
+                bgFxCtx.lineWidth = 1.4;
+                bgFxCtx.beginPath();
+                bgFxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                bgFxCtx.stroke();
+            } else {
+                bgFxCtx.fillStyle = p.color;
+                bgFxCtx.beginPath();
+                bgFxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                bgFxCtx.fill();
+            }
+        }
+    } else if (currentBgTheme === 'bg-lava-ember' || currentBgTheme === 'bg-crystal-cave' || currentBgTheme === 'bg-cyberpunk') {
+        if (currentBgTheme === 'bg-cyberpunk') {
+            const horizonY = h * 0.68;
+            bgFxCtx.globalAlpha = 0.22;
+            bgFxCtx.strokeStyle = '#ff2e93';
+            bgFxCtx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const gy = horizonY + Math.pow(i / 7, 1.7) * (h - horizonY);
+                bgFxCtx.beginPath();
+                bgFxCtx.moveTo(0, gy);
+                bgFxCtx.lineTo(w, gy);
+                bgFxCtx.stroke();
+            }
+            bgFxCtx.strokeStyle = '#00d2ff';
+            for (let i = -6; i <= 6; i++) {
+                bgFxCtx.beginPath();
+                bgFxCtx.moveTo(cx + i * 35, horizonY);
+                bgFxCtx.lineTo(cx + i * 195, h);
+                bgFxCtx.stroke();
+            }
+        }
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.phase += 0.03;
+            p.x += p.vx + Math.sin(p.phase) * 0.25;
+            p.y += p.vy;
+            if (p.y < -15) p.y = h + 15;
+            if (p.y > h + 15) p.y = -15;
+            if (p.x < -15) p.x = w + 15;
+            if (p.x > w + 15) p.x = -15;
+            bgFxCtx.globalAlpha = 0.4 + 0.55 * Math.abs(Math.sin(p.phase));
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+    } else if (currentBgTheme === 'bg-matrix') {
+        bgFxCtx.font = 'bold 14px monospace';
+        for (let i = 0; i < bgMatrixCols.length; i++) {
+            const col = bgMatrixCols[i];
+            col.y += col.speed;
+            if (col.y - col.len * 16 > h) {
+                col.y = -20;
+                col.seed = Math.floor(Math.random() * 100);
+            }
+            for (let k = 0; k < col.len; k++) {
+                const cyPos = col.y - k * 16;
+                if (cyPos < -16 || cyPos > h + 16) continue;
+                const chIdx = (col.seed + k * 7 + Math.floor(now * 0.01)) % MATRIX_CHARS.length;
+                const ch = MATRIX_CHARS[chIdx];
+                bgFxCtx.fillStyle = k === 0 ? '#a8ffdb' : '#00ff88';
+                bgFxCtx.globalAlpha = (1 - k / col.len) * 0.55;
+                bgFxCtx.fillText(ch, col.x, cyPos);
+            }
+        }
+    } else if (currentBgTheme === 'bg-light-sakura') {
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.swayPhase += 0.025;
+            p.rot += p.rotSpeed;
+            p.x += p.vx + Math.sin(p.swayPhase) * 0.45;
+            p.y += p.vy;
+            if (p.y > h + 20) {
+                p.y = -20;
+                p.x = Math.random() * w;
+            }
+            if (p.x > w + 20) p.x = -20;
+            bgFxCtx.save();
+            bgFxCtx.translate(p.x, p.y);
+            bgFxCtx.rotate(p.rot);
+            bgFxCtx.globalAlpha = 0.72;
+            bgFxCtx.fillStyle = p.color;
+            bgFxCtx.beginPath();
+            bgFxCtx.ellipse(0, 0, p.size, p.size * 0.58, 0, 0, Math.PI * 2);
+            bgFxCtx.fill();
+            bgFxCtx.restore();
+        }
+    } else if (currentBgTheme === 'bg-light-clouds') {
+        for (let i = 0; i < bgParticles.length; i++) {
+            const p = bgParticles[i];
+            p.x += p.vx;
+            if (p.x - p.r * 2 > w) p.x = -p.r * 2;
+            bgFxCtx.globalAlpha = p.alpha;
+            bgFxCtx.fillStyle = '#ffffff';
+            bgFxCtx.beginPath();
+            bgFxCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            bgFxCtx.arc(p.x + p.r * 0.75, p.y + p.r * 0.1, p.r * 0.78, 0, Math.PI * 2);
+            bgFxCtx.arc(p.x - p.r * 0.72, p.y + p.r * 0.14, p.r * 0.72, 0, Math.PI * 2);
+            bgFxCtx.fill();
+        }
+    }
+
+    bgFxCtx.globalAlpha = 1;
+    if (!bgAnimEnabled) {
+        bgStaticDrawn = true;
+    }
+}
+
 function scheduleRedrawAll() {
     needsRedrawAll = true;
 }
@@ -82,6 +755,7 @@ function resizeViewportCanvases() {
         scheduleRedrawAll();
         scheduleRedrawDraft();
     }
+    resizeBgFxCanvas();
 }
 window.addEventListener('resize', resizeViewportCanvases);
 
@@ -157,6 +831,8 @@ window.zoomByStep = function(factor, pivotX, pivotY) {
 };
 
 resizeViewportCanvases();
+syncThemeStateFromDom();
+initBgParticlesForTheme(currentBgTheme);
 applyTransformImmediate();
 
 function queueStrokeDeletion(strokeId) {
@@ -284,7 +960,12 @@ function renderLaserLoop() {
     }
 }
 
-function mainAnimationLoop() {
+let globalPinchActive = false;
+let globalPinchDist = 0;
+let globalPinchScale = 1;
+let globalPinchCenter = { x: 0, y: 0 };
+
+function mainAnimationLoop(now) {
     const speed = 16;
     if (keys.w || keys.arrowup) targetPanY += speed;
     if (keys.s || keys.arrowdown) targetPanY -= speed;
@@ -309,9 +990,10 @@ function mainAnimationLoop() {
         performRedrawDraftCanvas();
     }
     renderLaserLoop();
+    renderBgFxFrame(now || performance.now());
     requestAnimationFrame(mainAnimationLoop);
 }
-mainAnimationLoop();
+requestAnimationFrame(mainAnimationLoop);
 
 window.addEventListener('wheel', (e) => {
     if (e.ctrlKey || e.metaKey) {
@@ -347,11 +1029,6 @@ window.addEventListener('gesturechange', (e) => {
 window.addEventListener('gestureend', (e) => {
     e.preventDefault();
 }, { passive: false, capture: true });
-
-let globalPinchActive = false;
-let globalPinchDist = 0;
-let globalPinchScale = 1;
-let globalPinchCenter = { x: 0, y: 0 };
 
 window.addEventListener('touchstart', (e) => {
     if (e.touches && e.touches.length >= 2) {
@@ -528,6 +1205,9 @@ window.bindSafeButton(document.getElementById('tool-export'), () => {
     const eCtx = exportCanvas.getContext('2d');
     eCtx.fillStyle = document.body.classList.contains('light-theme') ? '#f5f7fb' : '#0f0f13';
     eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    if (bgFxCanvas) {
+        eCtx.drawImage(bgFxCanvas, 0, 0);
+    }
     eCtx.drawImage(canvas, 0, 0);
     const link = document.createElement('a');
     link.download = `BangChung_${ROOM_ID}_${Date.now()}.png`;

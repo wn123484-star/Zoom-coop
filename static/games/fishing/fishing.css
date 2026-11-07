@@ -1,0 +1,38 @@
+.mod-fishing-widget { min-width: 680px !important; min-height: 520px !important; border: 1.5px solid rgba(0, 210, 255, 0.45) !important; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.78), 0 0 28px rgba(0, 210, 255, 0.22) !important; }
+.fishing-root { display: flex; flex-direction: column; width: 100%; height: 100%; flex: 1; background: radial-gradient(ellipse at center, #062c43 0%, #031626 65%, #010a12 100%); color: #fff; overflow: hidden; user-select: none; position: relative; }
+
+.fishing-hud-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; background: rgba(3, 12, 24, 0.88); border-bottom: 1px solid rgba(0, 210, 255, 0.28); flex-wrap: wrap; z-index: 12; flex-shrink: 0; }
+.fishing-hud-group { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.fish-pill { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.35); color: #e2e8f0; padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.fish-pill b { color: #feca57; font-size: 12px; }
+.fish-btn { background: rgba(0, 210, 255, 0.16); border: 1px solid rgba(0, 210, 255, 0.45); color: #00d2ff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s; white-space: nowrap; }
+.fish-btn:hover { background: #00d2ff; color: #000; transform: translateY(-1px); }
+.fish-btn.active { background: #2ed573 !important; color: #000 !important; border-color: #2ed573 !important; box-shadow: 0 0 12px rgba(46, 213, 115, 0.6); }
+.fish-btn.gold { background: linear-gradient(90deg, #feca57, #ff9f43); color: #000; border-color: #fff; }
+.fish-btn.danger { background: rgba(255, 71, 87, 0.2); color: #ff6b81; border-color: #ff4757; }
+.fish-btn.danger:hover { background: #ff4757; color: #fff; }
+
+.fishing-seats-strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; padding: 5px 8px; background: rgba(0, 0, 0, 0.42); border-bottom: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0; z-index: 11; }
+.fish-seat-slot { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; padding: 3px 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; cursor: pointer; transition: all 0.15s; text-align: center; min-width: 0; }
+.fish-seat-slot:hover { border-color: #00d2ff; background: rgba(0, 210, 255, 0.14); }
+.fish-seat-slot.occupied { border-color: rgba(254, 202, 87, 0.65); background: rgba(254, 202, 87, 0.12); }
+.fish-seat-slot.my-seat { border-color: #2ed573; background: rgba(46, 213, 115, 0.22); box-shadow: 0 0 10px rgba(46, 213, 115, 0.4); }
+.fish-seat-slot .seat-pos-tag { font-size: 9px; font-weight: 900; color: #00d2ff; text-transform: uppercase; letter-spacing: 0.3px; }
+.fish-seat-slot .seat-player-name { font-weight: 800; color: #fff; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fish-seat-slot .seat-coins { font-size: 9.5px; color: #feca57; font-weight: 800; }
+
+.fishing-arena-wrap { position: relative; flex: 1; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 50%, #0a3d62 0%, #051e34 62%, #020d18 100%); cursor: crosshair; touch-action: none; }
+.fishing-canvas { width: 100%; height: 100%; display: block; pointer-events: auto; }
+
+.fishing-wave-overlay { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 30% 25%, rgba(0, 245, 212, 0.08), transparent 45%), radial-gradient(circle at 75% 70%, rgba(0, 210, 255, 0.08), transparent 50%); mix-blend-mode: screen; z-index: 2; }
+
+.fishing-boss-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, rgba(255, 71, 87, 0.92), rgba(255, 165, 2, 0.92)); color: #fff; font-weight: 900; font-size: 12px; padding: 6px 18px; border-radius: 20px; border: 2px solid #fff; box-shadow: 0 0 24px rgba(255, 71, 87, 0.85); pointer-events: none; z-index: 15; display: none; animation: pulseBanner 0.6s infinite alternate; white-space: nowrap; }
+.fishing-boss-banner.show { display: inline-flex; align-items: center; gap: 6px; }
+
+.fishing-guide-footer { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px; font-size: 10.5px; background: rgba(2, 8, 16, 0.9); color: #94a3b8; border-top: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0; z-index: 12; gap: 8px; flex-wrap: wrap; }
+.fishing-guide-footer b { color: #00d2ff; }
+
+@media (max-width: 768px) {
+    .mod-fishing-widget { min-width: 340px !important; min-height: 420px !important; }
+    .fishing-seats-strip { grid-template-columns: repeat(4, 1fr); }
+}
