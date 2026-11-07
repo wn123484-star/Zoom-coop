@@ -1831,11 +1831,64 @@ def handle_multi_widget_event(data):
         if 'multi_widgets' not in state or not isinstance(state['multi_widgets'], dict):
             state['multi_widgets'] = {}
         mw_map = state['multi_widgets']
+        sender_id = str(data.get('client_id') or '').strip()
+        sender_name = str(data.get('username') or '').strip()
+
+        def is_member_authorized(w_obj):
+            if not isinstance(w_obj, dict):
+                return True
+            c_id = str(w_obj.get('creator_id') or '').strip()
+            c_name = str(w_obj.get('creator') or '').strip()
+            if (sender_id and c_id and sender_id == c_id) or (sender_name and c_name and sender_name == c_name):
+                return True
+            gd = w_obj.get('game_data') or {}
+            if not isinstance(gd, dict):
+                return True
+            active_humans = 0
+            if isinstance(gd.get('seats'), list):
+                for s in gd['seats']:
+                    if isinstance(s, dict) and s.get('occupantId') and not s.get('isBot'):
+                        active_humans += 1
+                        if (sender_id and s.get('occupantId') == sender_id) or (sender_name and s.get('occupantName') == sender_name):
+                            return True
+            elif isinstance(gd.get('seats'), dict):
+                for s in gd['seats'].values():
+                    if isinstance(s, dict) and s.get('type') == 'human' and (s.get('id') or s.get('name')):
+                        active_humans += 1
+                        if (sender_id and s.get('id') == sender_id) or (sender_name and s.get('name') == sender_name):
+                            return True
+            if isinstance(gd.get('players'), list):
+                for p in gd['players']:
+                    if isinstance(p, dict) and not p.get('isBot'):
+                        active_humans += 1
+                        if (sender_id and p.get('id') == sender_id) or (sender_name and p.get('name') == sender_name):
+                            return True
+            elif isinstance(gd.get('players'), dict):
+                for p in gd['players'].values():
+                    if isinstance(p, dict):
+                        active_humans += 1
+                        if (sender_id and p.get('id') == sender_id) or (sender_name and p.get('name') == sender_name):
+                            return True
+                    elif isinstance(p, str) and p:
+                        active_humans += 1
+                        if sender_name and p == sender_name:
+                            return True
+            if isinstance(gd.get('snakes'), dict):
+                for sk in gd['snakes'].values():
+                    if isinstance(sk, dict) and not sk.get('isBot'):
+                        active_humans += 1
+                        if (sender_id and sk.get('id') == sender_id) or (sender_name and sk.get('name') == sender_name):
+                            return True
+            return active_humans == 0 and not c_id and not c_name
 
         if action == 'create':
             w_obj = data.get('widget')
             if not isinstance(w_obj, dict) or 'id' not in w_obj:
                 return
+            if sender_id and not w_obj.get('creator_id'):
+                w_obj['creator_id'] = sender_id
+            if sender_name and not w_obj.get('creator'):
+                w_obj['creator'] = sender_name
             mw_map[w_obj['id']] = w_obj
             mark_room_dirty(room_id)
             emit('multi_widget_synced', {'action': 'create', 'widget': w_obj}, to=room_id)
@@ -1848,6 +1901,8 @@ def handle_multi_widget_event(data):
                 else:
                     return
             target = mw_map[wid]
+            if data.get('is_reset') and not is_member_authorized(target):
+                return
             for k in ('x', 'y', 'w', 'h', 'minimized', 'title', 'game_data'):
                 if k in data:
                     target[k] = data[k]
@@ -1862,6 +1917,8 @@ def handle_multi_widget_event(data):
         elif action == 'delete':
             wid = data.get('id')
             if wid and wid in mw_map:
+                if (sender_id or sender_name) and not is_member_authorized(mw_map[wid]):
+                    return
                 del mw_map[wid]
                 mark_room_dirty(room_id)
             emit('multi_widget_synced', {'action': 'delete', 'id': wid}, to=room_id)

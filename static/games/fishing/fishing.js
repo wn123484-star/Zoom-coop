@@ -3,31 +3,71 @@
     const TANK_H = 540;
 
     const CANNON_LEVELS = [
-        { lv: 1, cost: 10, dmg: 14, speed: 9.5, netR: 34, barrels: 1, color: '#00d2ff', name: 'Cấp 1 (10 xu)' },
-        { lv: 2, cost: 20, dmg: 28, speed: 10.2, netR: 40, barrels: 1, color: '#2ed573', name: 'Cấp 2 (20 xu)' },
-        { lv: 3, cost: 40, dmg: 56, speed: 11.0, netR: 46, barrels: 2, color: '#feca57', name: 'Cấp 3 (40 xu)' },
-        { lv: 4, cost: 80, dmg: 115, speed: 11.8, netR: 54, barrels: 2, color: '#ff9f43', name: 'Cấp 4 (80 xu)' },
-        { lv: 5, cost: 150, dmg: 220, speed: 12.6, netR: 62, barrels: 3, color: '#ff4757', name: 'Cấp 5 (150 xu)' },
-        { lv: 6, cost: 300, dmg: 460, speed: 13.8, netR: 74, barrels: 3, color: '#d6a2e8', name: 'Pháo Thần (300 xu)' }
+        { lv: 1, cost: 10, dmg: 16, speed: 10.5, netR: 36, barrels: 1, color: '#00d2ff', name: 'Cấp 1 (10 xu)' },
+        { lv: 2, cost: 20, dmg: 32, speed: 11.2, netR: 42, barrels: 1, color: '#2ed573', name: 'Cấp 2 (20 xu)' },
+        { lv: 3, cost: 40, dmg: 64, speed: 11.8, netR: 48, barrels: 2, color: '#feca57', name: 'Cấp 3 (40 xu)' },
+        { lv: 4, cost: 80, dmg: 130, speed: 12.5, netR: 56, barrels: 2, color: '#ff9f43', name: 'Cấp 4 (80 xu)' },
+        { lv: 5, cost: 150, dmg: 250, speed: 13.2, netR: 64, barrels: 3, color: '#ff4757', name: 'Cấp 5 (150 xu)' },
+        { lv: 6, cost: 300, dmg: 520, speed: 14.2, netR: 76, barrels: 3, color: '#d6a2e8', name: 'Pháo Thần (300 xu)' }
     ];
 
     const FISH_SPECIES = [
-        { key: 'clown', name: 'Cá Hề Nemo', emoji: '🐠', mult: 2, hp: 20, r: 16, speed: 1.55, weight: 28, glow: '#ff7f50' },
-        { key: 'neon', name: 'Cá Neon Xanh', emoji: '🐟', mult: 3, hp: 32, r: 18, speed: 1.75, weight: 24, glow: '#00d2ff' },
-        { key: 'puffer', name: 'Cá Nóc Gai', emoji: '🐡', mult: 5, hp: 55, r: 21, speed: 1.25, weight: 18, glow: '#feca57' },
-        { key: 'squid', name: 'Mực Ống Đỏ', emoji: '🦑', mult: 7, hp: 78, r: 23, speed: 1.65, weight: 15, glow: '#ff6b81' },
-        { key: 'crab', name: 'Cua Hoàng Đế', emoji: '🦀', mult: 10, hp: 110, r: 24, speed: 1.15, weight: 12, glow: '#ff4757' },
-        { key: 'jelly', name: 'Sứa Phát Quang', emoji: '🪼', mult: 12, hp: 135, r: 25, speed: 1.05, weight: 11, glow: '#d6a2e8' },
-        { key: 'turtle', name: 'Rùa Vàng Kim Quy', emoji: '🐢', mult: 16, hp: 180, r: 28, speed: 0.95, weight: 9, glow: '#2ed573' },
-        { key: 'octopus', name: 'Bạch Tuộc Đại Dương', emoji: '🐙', mult: 22, hp: 250, r: 31, speed: 1.12, weight: 7, glow: '#a55eea' },
-        { key: 'dolphin', name: 'Cá Heo Ngọc Bích', emoji: '🐬', mult: 30, hp: 340, r: 34, speed: 1.6, weight: 5, glow: '#70a1ff' },
-        { key: 'shark', name: 'Cá Mập Đầu Búa', emoji: '🦈', mult: 45, hp: 520, r: 39, speed: 1.38, weight: 4, glow: '#94a3b8', isElite: true },
-        { key: 'whale', name: 'Cá Voi Cổ Đại', emoji: '🐋', mult: 75, hp: 880, r: 46, speed: 0.88, weight: 2, glow: '#1e90ff', isBoss: true },
-        { key: 'dragon', name: 'Hải Vương Rồng Vàng', emoji: '🐉', mult: 120, hp: 1450, r: 52, speed: 1.05, weight: 1, glow: '#ffd32a', isBoss: true }
+        { key: 'clown', name: 'Cá Hề Nemo', emoji: '🐠', mult: 2, hp: 20, r: 16, speed: 1.5, weight: 28, glow: '#ff7f50' },
+        { key: 'neon', name: 'Cá Neon Xanh', emoji: '🐟', mult: 3, hp: 30, r: 18, speed: 1.7, weight: 24, glow: '#00d2ff' },
+        { key: 'puffer', name: 'Cá Nóc Gai', emoji: '🐡', mult: 5, hp: 50, r: 21, speed: 1.25, weight: 18, glow: '#feca57' },
+        { key: 'squid', name: 'Mực Ống Đỏ', emoji: '🦑', mult: 7, hp: 72, r: 23, speed: 1.6, weight: 15, glow: '#ff6b81' },
+        { key: 'crab', name: 'Cua Hoàng Đế', emoji: '🦀', mult: 10, hp: 105, r: 24, speed: 1.15, weight: 12, glow: '#ff4757' },
+        { key: 'jelly', name: 'Sứa Phát Quang', emoji: '🪼', mult: 12, hp: 125, r: 25, speed: 1.05, weight: 11, glow: '#d6a2e8' },
+        { key: 'turtle', name: 'Rùa Vàng Kim Quy', emoji: '🐢', mult: 16, hp: 170, r: 28, speed: 0.95, weight: 9, glow: '#2ed573' },
+        { key: 'octopus', name: 'Bạch Tuộc Đại Dương', emoji: '🐙', mult: 22, hp: 230, r: 31, speed: 1.1, weight: 7, glow: '#a55eea' },
+        { key: 'dolphin', name: 'Cá Heo Ngọc Bích', emoji: '🐬', mult: 30, hp: 320, r: 34, speed: 1.55, weight: 5, glow: '#70a1ff' },
+        { key: 'shark', name: 'Cá Mập Đầu Búa', emoji: '🦈', mult: 45, hp: 480, r: 39, speed: 1.35, weight: 4, glow: '#94a3b8', isElite: true },
+        { key: 'whale', name: 'Cá Voi Cổ Đại', emoji: '🐋', mult: 75, hp: 820, r: 45, speed: 0.88, weight: 2, glow: '#1e90ff', isBoss: true },
+        { key: 'dragon', name: 'Hải Vương Rồng Vàng', emoji: '🐉', mult: 120, hp: 1350, r: 50, speed: 1.05, weight: 1, glow: '#ffd32a', isBoss: true }
     ];
 
     const SPECIES_MAP = {};
     FISH_SPECIES.forEach(s => { SPECIES_MAP[s.key] = s; });
+
+    const fishSpriteCache = {};
+    function getFishSprite(spec) {
+        if (fishSpriteCache[spec.key]) return fishSpriteCache[spec.key];
+        const pad = 16;
+        const size = Math.ceil((spec.r * 2 + pad * 2));
+        const off = document.createElement('canvas');
+        off.width = size;
+        off.height = size;
+        const c = off.getContext('2d');
+        const cx = size / 2;
+        const cy = size / 2;
+
+        if (spec.isBoss || spec.isElite) {
+            const grad = c.createRadialGradient(cx, cy, spec.r * 0.2, cx, cy, spec.r + 10);
+            grad.addColorStop(0, spec.glow + '66');
+            grad.addColorStop(0.7, spec.glow + '22');
+            grad.addColorStop(1, 'transparent');
+            c.fillStyle = grad;
+            c.beginPath();
+            c.arc(cx, cy, spec.r + 10, 0, Math.PI * 2);
+            c.fill();
+
+            c.strokeStyle = spec.glow;
+            c.lineWidth = spec.isBoss ? 2.2 : 1.4;
+            c.globalAlpha = 0.6;
+            c.beginPath();
+            c.arc(cx, cy, spec.r + 4, 0, Math.PI * 2);
+            c.stroke();
+            c.globalAlpha = 1;
+        }
+
+        c.font = `${Math.round(spec.r * 1.62)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(spec.emoji, cx, cy);
+
+        fishSpriteCache[spec.key] = off;
+        return off;
+    }
 
     const SEAT_CONFIGS = [
         { idx: 0, code: 'D1 (Dưới-Trái)', edge: 'bottom', x: TANK_W * 0.30, y: TANK_H - 18, baseAngle: -Math.PI / 2 },
@@ -57,7 +97,7 @@
     function createSingleFish(forceBoss) {
         const spec = pickWeightedSpecies(forceBoss);
         const side = Math.floor(Math.random() * 4);
-        const pad = spec.r + 36;
+        const pad = spec.r + 32;
         let x = 0;
         let y = 0;
         let targetX = TANK_W * (0.25 + Math.random() * 0.5);
@@ -91,7 +131,7 @@
             vy: Number((Math.sin(ang) * spec.speed).toFixed(2)),
             hp: spec.hp,
             maxHp: spec.hp,
-            swayAmp: Number((0.25 + Math.random() * 0.55).toFixed(2)),
+            swayAmp: Number((0.22 + Math.random() * 0.45).toFixed(2)),
             swayPhase: Number((Math.random() * Math.PI * 2).toFixed(2))
         };
     }
@@ -114,8 +154,8 @@
         seats[0].occupantName = myName;
 
         const initialFishes = [];
-        for (let i = 0; i < 16; i++) {
-            const f = createSingleFish(i === 15);
+        for (let i = 0; i < 14; i++) {
+            const f = createSingleFish(i === 13);
             f.x = Math.round(120 + Math.random() * (TANK_W - 240));
             f.y = Math.round(90 + Math.random() * (TANK_H - 180));
             initialFishes.push(f);
@@ -166,7 +206,7 @@
 
         const rootEl = bodyEl.querySelector('.fishing-root');
         const canvas = rootEl.querySelector('.fishing-canvas');
-        const gCtx = canvas.getContext('2d');
+        const gCtx = canvas.getContext('2d', { alpha: false });
         const seatsStripEl = rootEl.querySelector('.fishing-seats-strip');
         const myCoinsEl = rootEl.querySelector('.fish-my-coins');
         const mySeatLabelEl = rootEl.querySelector('.fish-my-seat-label');
@@ -181,21 +221,44 @@
         const btnBot = rootEl.querySelector('.fish-bot-btn');
         const btnWave = rootEl.querySelector('.fish-wave-btn');
 
+        FISH_SPECIES.forEach(sp => getFishSprite(sp));
+
         let state = (widgetObj.game_data && Array.isArray(widgetObj.game_data.seats))
             ? JSON.parse(JSON.stringify(widgetObj.game_data))
             : createInitialFishingData();
+
+        const seatSlotDOM = [];
+        SEAT_CONFIGS.forEach((cfg, idx) => {
+            const slot = document.createElement('div');
+            slot.className = 'fish-seat-slot';
+            const posSpan = document.createElement('span');
+            posSpan.className = 'seat-pos-tag';
+            posSpan.textContent = cfg.code;
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'seat-player-name';
+            const coinsSpan = document.createElement('span');
+            coinsSpan.className = 'seat-coins';
+            slot.appendChild(posSpan);
+            slot.appendChild(nameSpan);
+            slot.appendChild(coinsSpan);
+            window.bindSafeButton(slot, () => {
+                ensurePlayerSeated(idx);
+            });
+            seatsStripEl.appendChild(slot);
+            seatSlotDOM.push({ slot, nameSpan, coinsSpan });
+        });
 
         let bullets = [];
         let nets = [];
         let floatingTexts = [];
         let coinParticles = [];
         let bgBubbles = [];
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0; i < 18; i++) {
             bgBubbles.push({
                 x: Math.random() * TANK_W,
                 y: Math.random() * TANK_H,
-                r: 1.5 + Math.random() * 3.5,
-                vy: -0.35 - Math.random() * 0.55,
+                r: 1.5 + Math.random() * 3.0,
+                vy: -0.35 - Math.random() * 0.5,
                 phase: Math.random() * Math.PI * 2
             });
         }
@@ -207,7 +270,7 @@
         let lockedFishId = null;
         let lastShotTime = 0;
         let lastBotShotTime = 0;
-        let lastHostSyncTime = Date.now();
+        let lastNetSyncTime = Date.now();
         let destroyed = false;
         let animFrameId = null;
 
@@ -280,8 +343,8 @@
                 s.cannonLv = savedLv;
                 s.score = savedScore;
                 s.angle = SEAT_CONFIGS[targetSeat].baseAngle;
-                syncStateToRoom(null, false);
-                renderHudAndSeats();
+                syncStateToRoom(null, false, true);
+                renderHudAndSeatsFast();
             }
             return targetSeat;
         }
@@ -297,8 +360,11 @@
             return true;
         }
 
-        function syncStateToRoom(animPayload, echoSelf) {
-            state.updatedAt = Date.now();
+        function syncStateToRoom(animPayload, echoSelf, forceNow) {
+            const now = Date.now();
+            if (!forceNow && !animPayload && now - lastNetSyncTime < 900) return;
+            lastNetSyncTime = now;
+            state.updatedAt = now;
             emitUpdate(state, animPayload || null, echoSelf === true);
         }
 
@@ -307,18 +373,18 @@
             return CANNON_LEVELS[idx];
         }
 
-        function renderHudAndSeats() {
+        function renderHudAndSeatsFast() {
             const myIdx = findMySeatIndex();
             if (myIdx !== -1) {
                 const mySeat = state.seats[myIdx];
                 const cSpec = getCannonSpec(mySeat.cannonLv);
-                myCoinsEl.innerText = Math.floor(mySeat.coins).toLocaleString('vi-VN');
-                mySeatLabelEl.innerText = SEAT_CONFIGS[myIdx].code;
-                cannonLvEl.innerText = cSpec.name;
+                myCoinsEl.textContent = Math.floor(mySeat.coins).toLocaleString('vi-VN');
+                mySeatLabelEl.textContent = SEAT_CONFIGS[myIdx].code;
+                cannonLvEl.textContent = cSpec.name;
             } else {
-                myCoinsEl.innerText = '---';
-                mySeatLabelEl.innerText = 'Chạm ghế để ngồi';
-                cannonLvEl.innerText = 'Cấp 2 (20 xu)';
+                myCoinsEl.textContent = '---';
+                mySeatLabelEl.textContent = 'Chạm ghế để ngồi';
+                cannonLvEl.textContent = 'Cấp 2 (20 xu)';
             }
 
             const hasBoss = state.fishes.some(f => {
@@ -327,29 +393,24 @@
             });
             bossBannerEl.classList.toggle('show', hasBoss);
 
-            seatsStripEl.innerHTML = '';
-            state.seats.forEach((s, idx) => {
-                const cfg = SEAT_CONFIGS[idx];
-                const slot = document.createElement('div');
+            for (let idx = 0; idx < state.seats.length; idx++) {
+                const s = state.seats[idx];
+                const dom = seatSlotDOM[idx];
+                if (!dom) continue;
                 const isMine = (idx === myIdx);
-                slot.className = 'fish-seat-slot' + (s.occupantId ? ' occupied' : '') + (isMine ? ' my-seat' : '');
+                const wantCls = 'fish-seat-slot' + (s.occupantId ? ' occupied' : '') + (isMine ? ' my-seat' : '');
+                if (dom.slot.className !== wantCls) dom.slot.className = wantCls;
                 const labelName = s.occupantId
                     ? (s.isBot ? `🤖 ${s.occupantName}` : `👤 ${s.occupantName}`)
                     : '➕ Ngồi ghế này';
                 const coinsTxt = s.occupantId ? `🪙 ${Math.floor(s.coins)} | Cấp ${s.cannonLv}` : 'Trống';
-                slot.innerHTML = `
-                    <span class="seat-pos-tag">${cfg.code}</span>
-                    <span class="seat-player-name">${labelName}</span>
-                    <span class="seat-coins">${coinsTxt}</span>
-                `;
-                window.bindSafeButton(slot, () => {
-                    ensurePlayerSeated(idx);
-                });
-                seatsStripEl.appendChild(slot);
-            });
+                if (dom.nameSpan.textContent !== labelName) dom.nameSpan.textContent = labelName;
+                if (dom.coinsSpan.textContent !== coinsTxt) dom.coinsSpan.textContent = coinsTxt;
+            }
         }
 
         function spawnBulletVisual(seatIdx, angle, cannonLv, isLocalOwner) {
+            if (bullets.length > 42) bullets.shift();
             const cfg = SEAT_CONFIGS[seatIdx];
             if (!cfg) return;
             const cSpec = getCannonSpec(cannonLv);
@@ -379,12 +440,12 @@
             const cSpec = getCannonSpec(seat.cannonLv);
             if (seat.coins < cSpec.cost) {
                 if (isBotShot) {
-                    seat.coins = 1200;
+                    seat.coins = 1500;
                 } else {
                     if (window.showToast) window.showToast('🪙 Hết xu! Hãy bấm "+1000 Xu" trên thanh công cụ để tiếp đạn!');
                     autoFire = false;
                     btnAuto.classList.remove('active');
-                    btnAuto.innerText = '⚡ Tự bắn: TẮT';
+                    btnAuto.textContent = '⚡ Tự bắn: TẮT';
                     return;
                 }
             }
@@ -394,18 +455,21 @@
             seat.coins = Math.max(0, seat.coins - cSpec.cost);
 
             spawnBulletVisual(seatIdx, seat.angle, seat.cannonLv, true);
-            renderHudAndSeats();
+            renderHudAndSeatsFast();
 
-            syncStateToRoom({
-                type: 'shoot',
-                sender: getMyClientId(),
-                seatIdx: seatIdx,
-                angle: seat.angle,
-                cannonLv: seat.cannonLv
-            }, false);
+            if (!isBotShot && Date.now() - lastNetSyncTime > 380) {
+                syncStateToRoom({
+                    type: 'shoot',
+                    sender: getMyClientId(),
+                    seatIdx: seatIdx,
+                    angle: seat.angle,
+                    cannonLv: seat.cannonLv
+                }, false, true);
+            }
         }
 
         function triggerNetExplosion(x, y, bullet) {
+            if (nets.length > 18) nets.shift();
             nets.push({
                 x: x,
                 y: y,
@@ -417,7 +481,6 @@
 
             if (!bullet.isAuthoritative) return;
 
-            let hitAny = false;
             let stateChanged = false;
             const seat = state.seats[bullet.seatIdx];
 
@@ -426,7 +489,6 @@
                 const spec = SPECIES_MAP[f.key] || FISH_SPECIES[0];
                 const dist = Math.hypot(f.x - x, f.y - y);
                 if (dist <= bullet.netR + spec.r * 0.85) {
-                    hitAny = true;
                     f.hp -= bullet.dmg;
                     if (f.hp <= 0) {
                         const cSpec = getCannonSpec(bullet.cannonLv);
@@ -447,36 +509,35 @@
                             reward: rewardCoins,
                             emoji: spec.emoji,
                             seatIdx: seat ? seat.idx : 0
-                        }, false);
+                        }, false, true);
                     }
                 }
             }
 
             if (stateChanged) {
-                while (state.fishes.length < 15) {
+                while (state.fishes.length < 14) {
                     state.fishes.push(createSingleFish(false));
                 }
-                renderHudAndSeats();
-            } else if (hitAny) {
-                lastHostSyncTime = 0;
+                renderHudAndSeatsFast();
             }
         }
 
         function spawnCatchCelebration(x, y, reward, emoji, seatIdx) {
             const cfg = SEAT_CONFIGS[seatIdx] || SEAT_CONFIGS[0];
+            if (floatingTexts.length > 14) floatingTexts.shift();
             floatingTexts.push({
                 x: x,
                 y: y,
-                text: `${emoji} +${reward.toLocaleString('vi-VN')} Xu`,
+                text: `${emoji} +${reward.toLocaleString('vi-VN')}`,
                 alpha: 1.0,
                 vy: -1.4
             });
-            for (let i = 0; i < 10; i++) {
-                const a = (Math.PI * 2 * i) / 10 + Math.random() * 0.4;
-                const spd = 2 + Math.random() * 3.5;
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
+                const spd = 2 + Math.random() * 3.0;
                 coinParticles.push({
-                    x: x + Math.cos(a) * 12,
-                    y: y + Math.sin(a) * 12,
+                    x: x + Math.cos(a) * 10,
+                    y: y + Math.sin(a) * 10,
                     vx: Math.cos(a) * spd,
                     vy: Math.sin(a) * spd,
                     tx: cfg.x,
@@ -542,7 +603,7 @@
 
             if (myIdx !== -1) {
                 const now = Date.now();
-                if (now - lastShotTime >= 165) {
+                if (now - lastShotTime >= 175) {
                     lastShotTime = now;
                     const tFish = lockBoss ? findBestTargetFish() : null;
                     const tx = tFish ? tFish.x : pointerTarget.x;
@@ -570,8 +631,8 @@
             if (myIdx === -1) return;
             const s = state.seats[myIdx];
             s.cannonLv = s.cannonLv <= 1 ? CANNON_LEVELS.length : s.cannonLv - 1;
-            renderHudAndSeats();
-            syncStateToRoom(null, false);
+            renderHudAndSeatsFast();
+            syncStateToRoom(null, false, true);
         });
 
         window.bindSafeButton(btnCannonUp, () => {
@@ -579,22 +640,22 @@
             if (myIdx === -1) return;
             const s = state.seats[myIdx];
             s.cannonLv = s.cannonLv >= CANNON_LEVELS.length ? 1 : s.cannonLv + 1;
-            renderHudAndSeats();
-            syncStateToRoom(null, false);
+            renderHudAndSeatsFast();
+            syncStateToRoom(null, false, true);
         });
 
         window.bindSafeButton(btnAuto, () => {
             ensurePlayerSeated();
             autoFire = !autoFire;
             btnAuto.classList.toggle('active', autoFire);
-            btnAuto.innerText = autoFire ? '⚡ Tự bắn: BẬT' : '⚡ Tự bắn: TẮT';
+            btnAuto.textContent = autoFire ? '⚡ Tự bắn: BẬT' : '⚡ Tự bắn: TẮT';
         });
 
         window.bindSafeButton(btnLock, () => {
             ensurePlayerSeated();
             lockBoss = !lockBoss;
             btnLock.classList.toggle('active', lockBoss);
-            btnLock.innerText = lockBoss ? '🎯 Đang Khóa Boss' : '🎯 Khóa Boss';
+            btnLock.textContent = lockBoss ? '🎯 Đang Khóa Boss' : '🎯 Khóa Boss';
             if (lockBoss) findBestTargetFish();
         });
 
@@ -602,15 +663,15 @@
             const myIdx = ensurePlayerSeated();
             if (myIdx === -1) return;
             state.seats[myIdx].coins += 1000;
-            renderHudAndSeats();
-            syncStateToRoom(null, false);
+            renderHudAndSeatsFast();
+            syncStateToRoom(null, false, true);
             if (window.showToast) window.showToast('🪙 Đã tiếp thêm +1.000 Xu đại dương!');
         });
 
         window.bindSafeButton(btnBot, () => {
             const emptySeat = state.seats.find(s => !s.occupantId);
             if (emptySeat) {
-                const botNames = ['Thợ Săn Cá Mập', 'Vua Thủy Tề', 'Xạ Thủ Đại Dương', 'Hải Tặc Tí Hon', 'Thuyền Trưởng Nemo', 'Ngư Ông Đắc Lợi'];
+                const botNames = ['Thợ Săn Cá Mập', 'Vua Thủy Tề', 'Xạ Thủ Đại Dương', 'Hải Tặc Tí Hon', 'Thuyền Trưởng Nemo', 'Ngư Ông'];
                 emptySeat.occupantId = 'bot_' + emptySeat.idx + '_' + Date.now();
                 emptySeat.occupantName = botNames[emptySeat.idx % botNames.length];
                 emptySeat.isBot = true;
@@ -625,26 +686,31 @@
                     }
                 });
             }
-            renderHudAndSeats();
-            syncStateToRoom(null, false);
+            renderHudAndSeatsFast();
+            syncStateToRoom(null, false, true);
         });
 
         window.bindSafeButton(btnWave, () => {
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; i < 4; i++) {
                 state.fishes.push(createSingleFish(i < 2));
             }
-            if (state.fishes.length > 26) {
-                state.fishes = state.fishes.slice(-26);
+            if (state.fishes.length > 22) {
+                state.fishes = state.fishes.slice(-22);
             }
-            renderHudAndSeats();
-            syncStateToRoom(null, false);
+            renderHudAndSeatsFast();
+            syncStateToRoom(null, false, true);
             if (window.showToast) window.showToast('🐉 Đàn Cá Lớn & Hải Vương Rồng Vàng đã tiến vào bể!');
         });
+
+        const bgGrad = gCtx.createRadialGradient(TANK_W * 0.5, TANK_H * 0.5, 40, TANK_W * 0.5, TANK_H * 0.5, TANK_W * 0.65);
+        bgGrad.addColorStop(0, '#0a3d62');
+        bgGrad.addColorStop(0.65, '#051e34');
+        bgGrad.addColorStop(1, '#020d18');
 
         function updateSimulation(now) {
             const myIdx = findMySeatIndex();
             if (myIdx !== -1 && (isPointerDown || autoFire)) {
-                if (now - lastShotTime >= 185) {
+                if (now - lastShotTime >= 190) {
                     lastShotTime = now;
                     const tFish = lockBoss ? findBestTargetFish() : null;
                     const tx = tFish ? tFish.x : pointerTarget.x;
@@ -653,7 +719,7 @@
                 }
             }
 
-            if (isLocalCoordinator() && now - lastBotShotTime >= 620) {
+            if (isLocalCoordinator() && now - lastBotShotTime >= 750) {
                 lastBotShotTime = now;
                 state.seats.forEach((s, idx) => {
                     if (s.isBot && s.occupantId && state.fishes.length > 0) {
@@ -668,13 +734,13 @@
             for (let i = state.fishes.length - 1; i >= 0; i--) {
                 const f = state.fishes[i];
                 const sp = SPECIES_MAP[f.key] || FISH_SPECIES[0];
-                f.swayPhase += 0.045;
+                f.swayPhase += 0.04;
                 const perpX = -f.vy;
                 const perpY = f.vx;
-                f.x += f.vx + perpX * Math.sin(f.swayPhase) * f.swayAmp * 0.25;
-                f.y += f.vy + perpY * Math.sin(f.swayPhase) * f.swayAmp * 0.25;
+                f.x += f.vx + perpX * Math.sin(f.swayPhase) * f.swayAmp * 0.22;
+                f.y += f.vy + perpY * Math.sin(f.swayPhase) * f.swayAmp * 0.22;
 
-                const outMargin = sp.r + 75;
+                const outMargin = sp.r + 70;
                 if (f.x < -outMargin || f.x > TANK_W + outMargin || f.y < -outMargin || f.y > TANK_H + outMargin) {
                     if (isLocalCoordinator()) {
                         state.fishes[i] = createSingleFish(false);
@@ -687,9 +753,9 @@
                 }
             }
 
-            if (isLocalCoordinator() && state.fishes.length < 15) {
-                while (state.fishes.length < 15) {
-                    state.fishes.push(createSingleFish(Math.random() < 0.12));
+            if (isLocalCoordinator() && state.fishes.length < 14) {
+                while (state.fishes.length < 14) {
+                    state.fishes.push(createSingleFish(Math.random() < 0.1));
                 }
             }
 
@@ -724,23 +790,23 @@
 
             for (let i = nets.length - 1; i >= 0; i--) {
                 const n = nets[i];
-                n.r += (n.maxR - n.r) * 0.28;
-                n.alpha -= 0.055;
+                n.r += (n.maxR - n.r) * 0.3;
+                n.alpha -= 0.06;
                 if (n.alpha <= 0) nets.splice(i, 1);
             }
 
             for (let i = coinParticles.length - 1; i >= 0; i--) {
                 const cp = coinParticles[i];
-                cp.phase += 0.05;
-                if (cp.phase < 0.45) {
+                cp.phase += 0.055;
+                if (cp.phase < 0.42) {
                     cp.x += cp.vx;
                     cp.y += cp.vy;
-                    cp.vy += 0.15;
+                    cp.vy += 0.14;
                 } else {
-                    cp.x += (cp.tx - cp.x) * 0.16;
-                    cp.y += (cp.ty - cp.y) * 0.16;
+                    cp.x += (cp.tx - cp.x) * 0.18;
+                    cp.y += (cp.ty - cp.y) * 0.18;
                 }
-                if (Math.hypot(cp.tx - cp.x, cp.ty - cp.y) < 16 || cp.phase > 2.4) {
+                if (Math.hypot(cp.tx - cp.x, cp.ty - cp.y) < 16 || cp.phase > 2.2) {
                     coinParticles.splice(i, 1);
                 }
             }
@@ -748,97 +814,74 @@
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
                 const ft = floatingTexts[i];
                 ft.y += ft.vy;
-                ft.alpha -= 0.022;
+                ft.alpha -= 0.025;
                 if (ft.alpha <= 0) floatingTexts.splice(i, 1);
             }
 
-            if (isLocalCoordinator() && now - lastHostSyncTime > 2600) {
-                lastHostSyncTime = now;
-                syncStateToRoom(null, false);
+            if (isLocalCoordinator() && now - lastNetSyncTime > 2400) {
+                syncStateToRoom(null, false, true);
             }
         }
 
         function drawTankScene() {
-            gCtx.clearRect(0, 0, TANK_W, TANK_H);
+            gCtx.fillStyle = bgGrad;
+            gCtx.fillRect(0, 0, TANK_W, TANK_H);
 
-            gCtx.save();
             gCtx.strokeStyle = 'rgba(0, 210, 255, 0.25)';
-            gCtx.lineWidth = 3;
-            gCtx.strokeRect(6, 6, TANK_W - 12, TANK_H - 12);
-            gCtx.restore();
+            gCtx.lineWidth = 2;
+            gCtx.strokeRect(5, 5, TANK_W - 10, TANK_H - 10);
 
+            gCtx.strokeStyle = 'rgba(130, 227, 245, 0.22)';
+            gCtx.lineWidth = 1;
             for (let i = 0; i < bgBubbles.length; i++) {
                 const b = bgBubbles[i];
-                b.phase += 0.03;
+                b.phase += 0.025;
                 b.y += b.vy;
-                b.x += Math.sin(b.phase) * 0.3;
+                b.x += Math.sin(b.phase) * 0.25;
                 if (b.y < -10) {
                     b.y = TANK_H + 10;
                     b.x = Math.random() * TANK_W;
                 }
-                gCtx.save();
-                gCtx.strokeStyle = 'rgba(130, 227, 245, 0.25)';
-                gCtx.lineWidth = 1.2;
                 gCtx.beginPath();
                 gCtx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
                 gCtx.stroke();
-                gCtx.restore();
             }
 
             for (let i = 0; i < state.fishes.length; i++) {
                 const f = state.fishes[i];
                 const sp = SPECIES_MAP[f.key] || FISH_SPECIES[0];
+                const spr = getFishSprite(sp);
                 const swimAngle = Math.atan2(f.vy, f.vx);
 
                 gCtx.save();
                 gCtx.translate(f.x, f.y);
 
-                if (sp.isBoss || sp.isElite) {
-                    gCtx.beginPath();
-                    gCtx.arc(0, 0, sp.r + 7 + Math.sin(f.swayPhase * 2) * 3, 0, Math.PI * 2);
-                    gCtx.strokeStyle = sp.glow;
-                    gCtx.lineWidth = sp.isBoss ? 2.5 : 1.5;
-                    gCtx.globalAlpha = 0.45;
-                    gCtx.stroke();
-                    gCtx.globalAlpha = 1;
-                }
-
                 if (lockBoss && f.id === lockedFishId) {
                     gCtx.beginPath();
-                    gCtx.arc(0, 0, sp.r + 12, 0, Math.PI * 2);
+                    gCtx.arc(0, 0, sp.r + 10, 0, Math.PI * 2);
                     gCtx.strokeStyle = '#ff4757';
-                    gCtx.lineWidth = 2.2;
-                    gCtx.setLineDash([6, 4]);
+                    gCtx.lineWidth = 2;
                     gCtx.stroke();
-                    gCtx.setLineDash([]);
                 }
 
                 gCtx.save();
-                const facingLeft = Math.cos(swimAngle) < 0;
-                if (facingLeft) {
+                if (Math.cos(swimAngle) < 0) {
                     gCtx.rotate(swimAngle - Math.PI);
                     gCtx.scale(-1, 1);
                 } else {
                     gCtx.rotate(swimAngle);
                 }
-                const wiggle = Math.sin(f.swayPhase * 2.4) * 0.09;
-                gCtx.rotate(wiggle);
-                gCtx.font = `${Math.round(sp.r * 1.65)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
-                gCtx.textAlign = 'center';
-                gCtx.textBaseline = 'middle';
-                gCtx.shadowColor = sp.glow;
-                gCtx.shadowBlur = sp.isBoss ? 16 : 6;
-                gCtx.fillText(sp.emoji, 0, 0);
+                gCtx.rotate(Math.sin(f.swayPhase * 2.2) * 0.08);
+                gCtx.drawImage(spr, -spr.width / 2, -spr.height / 2);
                 gCtx.restore();
 
                 if (f.hp < f.maxHp || sp.isBoss) {
-                    const bw = Math.max(28, sp.r * 1.3);
-                    const bh = 5;
+                    const bw = Math.max(26, sp.r * 1.25);
                     const pct = Math.max(0, Math.min(1, f.hp / f.maxHp));
                     gCtx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-                    gCtx.fillRect(-bw / 2, -sp.r - 12, bw, bh);
+                    gCtx.fillRect(-bw / 2, -sp.r - 11, bw, 4.5);
                     gCtx.fillStyle = pct > 0.45 ? '#2ed573' : '#ff4757';
-                    gCtx.fillRect(-bw / 2, -sp.r - 12, bw * pct, bh);
+                    gCtx.fillRect(-bw / 2, -sp.r - 11, bw * pct, 4.5);
                 }
 
                 if (sp.isBoss) {
@@ -856,22 +899,10 @@
                 gCtx.save();
                 gCtx.globalAlpha = Math.max(0, n.alpha);
                 gCtx.strokeStyle = n.color;
-                gCtx.fillStyle = n.color;
-                gCtx.lineWidth = 2;
+                gCtx.lineWidth = 1.8;
                 gCtx.beginPath();
                 gCtx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
                 gCtx.stroke();
-                gCtx.globalAlpha = Math.max(0, n.alpha * 0.18);
-                gCtx.fill();
-
-                gCtx.globalAlpha = Math.max(0, n.alpha * 0.65);
-                for (let k = 0; k < 6; k++) {
-                    const a = (k * Math.PI) / 3;
-                    gCtx.beginPath();
-                    gCtx.moveTo(n.x, n.y);
-                    gCtx.lineTo(n.x + Math.cos(a) * n.r, n.y + Math.sin(a) * n.r);
-                    gCtx.stroke();
-                }
                 gCtx.restore();
             }
 
@@ -882,12 +913,10 @@
                 gCtx.translate(b.x, b.y);
                 gCtx.rotate(ang);
                 gCtx.fillStyle = b.color;
-                gCtx.shadowColor = b.color;
-                gCtx.shadowBlur = 10;
                 const offsets = b.barrels === 3 ? [-6, 0, 6] : (b.barrels === 2 ? [-4, 4] : [0]);
                 for (let k = 0; k < offsets.length; k++) {
                     gCtx.beginPath();
-                    gCtx.ellipse(0, offsets[k], 7, 3.2, 0, 0, Math.PI * 2);
+                    gCtx.ellipse(0, offsets[k], 6.5, 3, 0, 0, Math.PI * 2);
                     gCtx.fill();
                 }
                 gCtx.restore();
@@ -906,22 +935,22 @@
                 gCtx.translate(cfg.x, cfg.y);
 
                 gCtx.beginPath();
-                gCtx.arc(0, 0, 24, 0, Math.PI * 2);
-                gCtx.fillStyle = isMine ? 'rgba(46, 213, 115, 0.28)' : (isOccupied ? 'rgba(0, 210, 255, 0.22)' : 'rgba(15, 23, 42, 0.65)');
+                gCtx.arc(0, 0, 23, 0, Math.PI * 2);
+                gCtx.fillStyle = isMine ? 'rgba(46, 213, 115, 0.28)' : (isOccupied ? 'rgba(0, 210, 255, 0.2)' : 'rgba(15, 23, 42, 0.65)');
                 gCtx.fill();
-                gCtx.lineWidth = isMine ? 2.8 : 1.6;
-                gCtx.strokeStyle = isMine ? '#2ed573' : (isOccupied ? cSpec.color : 'rgba(255, 255, 255, 0.22)');
+                gCtx.lineWidth = isMine ? 2.5 : 1.5;
+                gCtx.strokeStyle = isMine ? '#2ed573' : (isOccupied ? cSpec.color : 'rgba(255, 255, 255, 0.2)');
                 gCtx.stroke();
 
                 gCtx.save();
                 gCtx.rotate(turretAngle);
-                const barrelOffsets = cSpec.barrels === 3 ? [-7, 0, 7] : (cSpec.barrels === 2 ? [-4.5, 4.5] : [0]);
+                const barrelOffsets = cSpec.barrels === 3 ? [-6.5, 0, 6.5] : (cSpec.barrels === 2 ? [-4, 4] : [0]);
                 gCtx.fillStyle = isOccupied ? cSpec.color : '#64748b';
                 for (let b = 0; b < barrelOffsets.length; b++) {
-                    gCtx.fillRect(4, barrelOffsets[b] - 3, 24, 6);
+                    gCtx.fillRect(4, barrelOffsets[b] - 2.8, 22, 5.6);
                 }
                 gCtx.beginPath();
-                gCtx.arc(0, 0, 13, 0, Math.PI * 2);
+                gCtx.arc(0, 0, 12, 0, Math.PI * 2);
                 gCtx.fillStyle = isMine ? '#2ed573' : (isOccupied ? '#feca57' : '#475569');
                 gCtx.fill();
                 gCtx.restore();
@@ -929,44 +958,36 @@
                 gCtx.font = 'bold 9.5px Inter, sans-serif';
                 gCtx.textAlign = 'center';
                 gCtx.fillStyle = isMine ? '#2ed573' : '#ffffff';
-                let labelY = cfg.edge === 'top' ? 35 : -29;
+                let labelY = cfg.edge === 'top' ? 34 : -28;
                 if (cfg.edge === 'left') {
                     gCtx.textAlign = 'left';
-                    labelY = -28;
+                    labelY = -27;
                 } else if (cfg.edge === 'right') {
                     gCtx.textAlign = 'right';
-                    labelY = -28;
+                    labelY = -27;
                 }
                 const dispName = isOccupied
-                    ? `${s.isBot ? '🤖' : ''}${s.occupantName.slice(0, 10)} (${Math.floor(s.coins)})`
+                    ? `${s.isBot ? '🤖' : ''}${(s.occupantName || '').slice(0, 10)} (${Math.floor(s.coins)})`
                     : `${cfg.code.split(' ')[0]} [Trống]`;
                 gCtx.fillText(dispName, 0, labelY);
                 gCtx.restore();
             }
 
+            gCtx.fillStyle = '#feca57';
             for (let i = 0; i < coinParticles.length; i++) {
                 const cp = coinParticles[i];
-                gCtx.save();
                 gCtx.beginPath();
-                gCtx.arc(cp.x, cp.y, 6, 0, Math.PI * 2);
-                gCtx.fillStyle = '#feca57';
-                gCtx.strokeStyle = '#ffffff';
-                gCtx.lineWidth = 1.5;
+                gCtx.arc(cp.x, cp.y, 5.5, 0, Math.PI * 2);
                 gCtx.fill();
-                gCtx.stroke();
-                gCtx.restore();
             }
 
             for (let i = 0; i < floatingTexts.length; i++) {
                 const ft = floatingTexts[i];
                 gCtx.save();
                 gCtx.globalAlpha = Math.max(0, ft.alpha);
-                gCtx.font = '900 14px Inter, sans-serif';
+                gCtx.font = '900 13px Inter, sans-serif';
                 gCtx.fillStyle = '#feca57';
-                gCtx.strokeStyle = '#000000';
-                gCtx.lineWidth = 3;
                 gCtx.textAlign = 'center';
-                gCtx.strokeText(ft.text, ft.x, ft.y);
                 gCtx.fillText(ft.text, ft.x, ft.y);
                 gCtx.restore();
             }
@@ -974,13 +995,15 @@
 
         function loop(now) {
             if (destroyed) return;
-            updateSimulation(now || performance.now());
-            drawTankScene();
+            if (!document.hidden && !ctx.widgetEl.classList.contains('minimized') && !ctx.widgetEl.classList.contains('culled-offscreen')) {
+                updateSimulation(now || performance.now());
+                drawTankScene();
+            }
             animFrameId = requestAnimationFrame(loop);
         }
 
         ensurePlayerSeated();
-        renderHudAndSeats();
+        renderHudAndSeatsFast();
         animFrameId = requestAnimationFrame(loop);
 
         return {
@@ -1013,7 +1036,7 @@
                     if (Array.isArray(remoteData.fishes) && !isLocalCoordinator()) {
                         state.fishes = remoteData.fishes;
                     }
-                    renderHudAndSeats();
+                    renderHudAndSeatsFast();
                 }
             },
             onResize: function() {},
@@ -1028,7 +1051,7 @@
         window.registerSyncGameModule('fishing', {
             title: '🐟 Bể Bắn Cá Đại Dương (8 Súng Quanh 4 Cạnh)',
             defaultWidth: 940,
-            defaultHeight: 650,
+            defaultHeight: 640,
             minWidth: 680,
             minHeight: 500,
             createInitialData: createInitialFishingData,

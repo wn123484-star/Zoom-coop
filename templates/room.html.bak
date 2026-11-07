@@ -5,19 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 <title>Bảng Chung Online - Phòng {{ room_id }}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230984e3'/><circle cx='32' cy='32' r='18' fill='%2300d2ff'/></svg>">
-<link rel="stylesheet" href="/static/css/style.css?v=30">
-<link rel="stylesheet" href="/static/games/fishing/fishing.css?v=30">
+<link rel="stylesheet" href="/static/css/style.css?v=31">
+<link rel="stylesheet" href="/static/games/fishing/fishing.css?v=31">
 </head>
 <body class="fade-in light-theme">
 <div id="dynamic-bg" class="bg-light-dots">
-<div id="bg-cosmos-layer" class="bg-cosmos-layer">
-<div class="cosmos-nebula-glow"></div>
-<div class="cosmos-wheel-outer"></div>
-<div class="cosmos-wheel-mid"></div>
-<div class="cosmos-wheel-inner"></div>
-<div class="cosmos-core"></div>
-</div>
-<canvas id="bg-fx-canvas"></canvas>
+<canvas id="bg-ultra-canvas"></canvas>
 </div>
 
 <input type="file" id="file-upload" accept="image/*,video/*,audio/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.html,.htm,.txt,.md,.json,.py,.js,.css" style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0;">
@@ -411,14 +404,15 @@
 const ROOM_ID = "{{ room_id }}";
 window.USERNAME = "{{ username }}";
 </script>
-<script src="/static/js/socket_client.js?v=30"></script>
-<script src="/static/js/pointer.js?v=30"></script>
-<script src="/static/js/canvas.js?v=30"></script>
-<script src="/static/js/sticky.js?v=30"></script>
-<script src="/static/js/xo.js?v=30"></script>
-<script src="/static/js/game_loader.js?v=30"></script>
-<script src="/static/games/fishing/fishing.js?v=30"></script>
-<script src="/static/js/media.js?v=30"></script>
-<script src="/static/js/ui.js?v=30"></script>
+<script src="/static/js/socket_client.js?v=31"></script>
+<script src="/static/js/pointer.js?v=31"></script>
+<script src="/static/js/canvas.js?v=31"></script>
+<script src="/static/js/bg_effects.js?v=31"></script>
+<script src="/static/js/sticky.js?v=31"></script>
+<script src="/static/js/xo.js?v=31"></script>
+<script src="/static/js/game_loader.js?v=31"></script>
+<script src="/static/games/fishing/fishing.js?v=31"></script>
+<script src="/static/js/media.js?v=31"></script>
+<script src="/static/js/ui.js?v=31"></script>
 </body>
 </html>
