@@ -1,29 +1,77 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-body, html { margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow: hidden; width: 100vw; height: 100vh; background-color: #f4f5f9; color: #e2e2e2; user-select: none; -webkit-user-select: none; touch-action: none !important; overscroll-behavior: none; }
-#dynamic-bg { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; transform: translateZ(0); backface-visibility: hidden; }
+body, html { margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow: hidden; width: 100vw; height: 100vh; background-color: #0b0c10; color: #e2e2e2; user-select: none; -webkit-user-select: none; touch-action: none !important; overscroll-behavior: none; }
+
+#dynamic-bg { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 0; pointer-events: none !important; overflow: hidden !important; contain: strict; isolation: isolate; transform: translate3d(0, 0, 0); backface-visibility: hidden; transition: background-color 0.45s ease; }
+.bg-cosmos-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; perspective: 1100px; transform-style: preserve-3d; }
+.bg-cosmos-layer > div { position: absolute; top: 50%; left: 50%; pointer-events: none; opacity: 0; transform: translate3d(-50%, -50%, 0); will-change: transform, opacity; transition: opacity 0.5s ease; border-radius: 50%; }
+#bg-fx-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; transform: translate3d(0, 0, 0); }
+body.pause-bg-anim #dynamic-bg *, body.pause-bg-anim #dynamic-bg { animation-play-state: paused !important; }
+
+@keyframes cosmosSpinCW { 0% { transform: translate3d(-50%, -50%, 0) rotate(0deg); } 100% { transform: translate3d(-50%, -50%, 0) rotate(360deg); } }
+@keyframes cosmosSpinCCW { 0% { transform: translate3d(-50%, -50%, 0) rotate(360deg); } 100% { transform: translate3d(-50%, -50%, 0) rotate(0deg); } }
+@keyframes galaxyDiskSpinCW { 0% { transform: translate3d(-50%, -50%, 0) rotateX(56deg) rotateY(-10deg) rotateZ(0deg); } 100% { transform: translate3d(-50%, -50%, 0) rotateX(56deg) rotateY(-10deg) rotateZ(360deg); } }
+@keyframes galaxyDiskSpinCCW { 0% { transform: translate3d(-50%, -50%, 0) rotateX(56deg) rotateY(-10deg) rotateZ(360deg); } 100% { transform: translate3d(-50%, -50%, 0) rotateX(56deg) rotateY(-10deg) rotateZ(0deg); } }
+@keyframes blackholeDiskSpin { 0% { transform: translate3d(-50%, -50%, 0) rotateX(68deg) rotateY(-14deg) rotateZ(0deg); } 100% { transform: translate3d(-50%, -50%, 0) rotateX(68deg) rotateY(-14deg) rotateZ(360deg); } }
+@keyframes cosmosPulseCore { 0%, 100% { transform: translate3d(-50%, -50%, 0) scale(0.95); opacity: 0.85; } 50% { transform: translate3d(-50%, -50%, 0) scale(1.08); opacity: 1; } }
+@keyframes gradientAurora { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
 .bg-solid { background-color: #0f0f13; }
-.bg-dots { background-color: #0f0f13; background-image: radial-gradient(rgba(255,255,255,0.18) 1.2px, transparent 2.2px); background-size: 26px 26px; }
-.bg-grid { background-color: #0f0f13; background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 32px 32px; }
-.bg-magical { background: linear-gradient(-45deg, #0f0f13, #17172b, #142038, #0f3460, #0f0f13); background-size: 400% 400%; animation: gradientAurora 18s ease infinite; }
+.bg-dots { background-color: #0d0e14; background-image: radial-gradient(rgba(255,255,255,0.18) 1.2px, transparent 2.2px); background-size: 26px 26px; }
+.bg-grid { background-color: #0d0e14; background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px); background-size: 32px 32px; }
 
 .bg-light-dots { background-color: #f5f7fb; background-image: radial-gradient(rgba(15, 23, 42, 0.18) 1.2px, transparent 2.2px); background-size: 26px 26px; }
 .bg-light-grid { background-color: #f5f7fb; background-image: linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px); background-size: 32px 32px; }
 .bg-light-paper { background-color: #fdf6e3; background-image: linear-gradient(rgba(181, 137, 0, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(211, 54, 130, 0.12) 1px, transparent 1px); background-size: 100% 28px, 64px 100%; }
-.bg-light-pastel { background-color: #f3e7e9; background-image: radial-gradient(rgba(100, 80, 160, 0.14) 1.2px, transparent 2.2px), linear-gradient(120deg, #fdfbfb 0%, #f3e7e9 45%, #e3eeff 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
-.bg-light-sakura { background-color: #ffe4ec; background-image: radial-gradient(rgba(232, 67, 147, 0.22) 1.4px, transparent 2.4px), linear-gradient(135deg, #fff0f6 0%, #ffdde1 55%, #ffc2d1 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
-.bg-light-mint { background-color: #e0f8ec; background-image: radial-gradient(rgba(0, 184, 148, 0.22) 1.4px, transparent 2.4px), linear-gradient(135deg, #f0fff4 0%, #c6f6d5 50%, #9ae6b4 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
-.bg-light-sunset { background-color: #ffecd2; background-image: radial-gradient(rgba(225, 112, 85, 0.2) 1.3px, transparent 2.3px), linear-gradient(135deg, #fff5eb 0%, #ffecd2 45%, #fcb69f 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
-.bg-light-ocean { background-color: #dff9fb; background-image: radial-gradient(rgba(9, 132, 227, 0.2) 1.3px, transparent 2.3px), linear-gradient(135deg, #f0fbff 0%, #c7ecee 50%, #89f7fe 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-light-pastel { background: linear-gradient(125deg, #fdfbfb 0%, #f6e6f2 35%, #e2eeff 70%, #e6fcf5 100%); }
+.bg-light-sakura { background: linear-gradient(135deg, #fff5f8 0%, #ffe3ec 50%, #ffc9dc 100%); }
+.bg-light-clouds { background: linear-gradient(180deg, #cbe7ff 0%, #e3f2ff 52%, #f8fbff 100%); }
+.bg-light-mint { background: linear-gradient(135deg, #f2fff9 0%, #d3f9e6 50%, #a8f0ce 100%); }
+.bg-light-sunset { background: linear-gradient(135deg, #fff6ec 0%, #ffe4c4 48%, #fcb69f 100%); }
+.bg-light-ocean { background: linear-gradient(160deg, #e8fcff 0%, #bceff7 50%, #82e3f5 100%); }
 
-.bg-galaxy { background-color: #090514; background-image: radial-gradient(rgba(255,255,255,0.26) 1.2px, transparent 2.4px), linear-gradient(135deg, #090514 0%, #1e1035 45%, #3b1254 80%, #102542 100%); background-size: 64px 64px, 100% 100%; background-repeat: repeat, no-repeat; }
+.bg-galaxy { background: radial-gradient(ellipse at center, #12092b 0%, #070312 62%, #020106 100%); }
+.bg-galaxy .cosmos-nebula-glow { width: 135vmax; height: 135vmax; opacity: 0.78; background: radial-gradient(circle at 40% 45%, rgba(157, 78, 221, 0.25), transparent 48%), radial-gradient(circle at 62% 55%, rgba(0, 210, 255, 0.22), transparent 46%), radial-gradient(circle at 50% 50%, rgba(255, 71, 126, 0.16), transparent 55%); animation: cosmosSpinCW 140s linear infinite; }
+.bg-galaxy .cosmos-wheel-outer { width: 115vmax; height: 115vmax; opacity: 0.92; background: conic-gradient(from 0deg, transparent 0deg, rgba(0, 210, 255, 0.32) 32deg, rgba(255, 255, 255, 0.55) 46deg, rgba(165, 94, 234, 0.36) 72deg, transparent 115deg, rgba(255, 107, 129, 0.28) 160deg, transparent 180deg, rgba(0, 210, 255, 0.34) 212deg, rgba(255, 255, 255, 0.52) 226deg, rgba(165, 94, 234, 0.38) 255deg, transparent 300deg, rgba(255, 107, 129, 0.26) 340deg, transparent 360deg); -webkit-mask-image: radial-gradient(circle, transparent 4%, rgba(0,0,0,0.95) 22%, rgba(0,0,0,0.65) 46%, transparent 70%); mask-image: radial-gradient(circle, transparent 4%, rgba(0,0,0,0.95) 22%, rgba(0,0,0,0.65) 46%, transparent 70%); filter: blur(8px); animation: galaxyDiskSpinCW 72s linear infinite; }
+.bg-galaxy .cosmos-wheel-mid { width: 78vmax; height: 78vmax; opacity: 0.88; background: conic-gradient(from 90deg, transparent 0deg, rgba(254, 202, 87, 0.45) 40deg, rgba(255, 71, 126, 0.42) 85deg, transparent 140deg, rgba(0, 210, 255, 0.48) 215deg, rgba(165, 94, 234, 0.42) 265deg, transparent 330deg); -webkit-mask-image: radial-gradient(circle, rgba(0,0,0,1) 8%, rgba(0,0,0,0.75) 38%, transparent 68%); mask-image: radial-gradient(circle, rgba(0,0,0,1) 8%, rgba(0,0,0,0.75) 38%, transparent 68%); filter: blur(5px); animation: galaxyDiskSpinCW 46s linear infinite; }
+.bg-galaxy .cosmos-core { width: 28vmax; height: 28vmax; opacity: 0.95; background: radial-gradient(circle, #ffffff 0%, #ffeaa7 18%, rgba(255, 107, 129, 0.65) 42%, rgba(165, 94, 234, 0.25) 65%, transparent 78%); animation: cosmosPulseCore 7s ease-in-out infinite; }
+
+.bg-blackhole { background: radial-gradient(ellipse at center, #110617 0%, #05020a 58%, #010103 100%); }
+.bg-blackhole .cosmos-nebula-glow { width: 82vmax; height: 82vmax; opacity: 0.72; background: radial-gradient(circle, transparent 22%, rgba(255, 159, 67, 0.42) 31%, rgba(255, 71, 87, 0.22) 42%, rgba(165, 94, 234, 0.14) 55%, transparent 68%); animation: cosmosPulseCore 6s ease-in-out infinite; }
+.bg-blackhole .cosmos-wheel-outer { width: 108vmax; height: 108vmax; opacity: 0.96; background: conic-gradient(from 0deg, rgba(255, 120, 30, 0.18) 0deg, rgba(255, 180, 60, 0.85) 55deg, rgba(255, 250, 225, 0.98) 95deg, rgba(255, 110, 50, 0.78) 145deg, rgba(165, 94, 234, 0.35) 195deg, rgba(255, 71, 87, 0.75) 255deg, rgba(255, 210, 120, 0.88) 310deg, rgba(255, 120, 30, 0.18) 360deg); -webkit-mask-image: radial-gradient(circle, transparent 15%, rgba(0,0,0,1) 22%, rgba(0,0,0,0.85) 42%, transparent 66%); mask-image: radial-gradient(circle, transparent 15%, rgba(0,0,0,1) 22%, rgba(0,0,0,0.85) 42%, transparent 66%); filter: blur(4px); animation: blackholeDiskSpin 28s linear infinite; }
+.bg-blackhole .cosmos-wheel-mid { width: 42vmax; height: 42vmax; opacity: 0.9; border: 3px solid rgba(255, 215, 140, 0.65); box-shadow: 0 0 38px rgba(255, 140, 40, 0.8), inset 0 0 28px rgba(255, 100, 30, 0.7); animation: cosmosSpinCCW 36s linear infinite; }
+.bg-blackhole .cosmos-core { width: 22vmax; height: 22vmax; opacity: 1; background: radial-gradient(circle, #000000 0%, #000000 58%, #fff6d6 61%, #ff9f43 66%, rgba(255, 71, 87, 0.45) 75%, transparent 86%); box-shadow: 0 0 50px rgba(255, 145, 45, 0.65); }
+
+.bg-nebula-vortex { background: radial-gradient(circle at center, #14082e 0%, #070414 65%, #020108 100%); }
+.bg-nebula-vortex .cosmos-nebula-glow { width: 140vmax; height: 140vmax; opacity: 0.82; background: conic-gradient(from 0deg, rgba(0, 210, 255, 0.26), rgba(157, 78, 221, 0.34), rgba(255, 46, 147, 0.28), rgba(46, 213, 115, 0.18), rgba(0, 210, 255, 0.26)); -webkit-mask-image: radial-gradient(circle, rgba(0,0,0,0.95) 10%, rgba(0,0,0,0.6) 45%, transparent 72%); mask-image: radial-gradient(circle, rgba(0,0,0,0.95) 10%, rgba(0,0,0,0.6) 45%, transparent 72%); filter: blur(18px); animation: cosmosSpinCW 80s linear infinite; }
+.bg-nebula-vortex .cosmos-wheel-outer { width: 96vmax; height: 96vmax; opacity: 0.78; background: conic-gradient(from 180deg, transparent 0deg, rgba(0, 245, 212, 0.36) 60deg, transparent 120deg, rgba(255, 71, 126, 0.38) 200deg, transparent 260deg, rgba(165, 94, 234, 0.42) 320deg, transparent 360deg); -webkit-mask-image: radial-gradient(circle, transparent 8%, rgba(0,0,0,0.9) 28%, transparent 65%); mask-image: radial-gradient(circle, transparent 8%, rgba(0,0,0,0.9) 28%, transparent 65%); filter: blur(10px); animation: cosmosSpinCCW 52s linear infinite; }
+.bg-nebula-vortex .cosmos-core { width: 32vmax; height: 32vmax; opacity: 0.85; background: radial-gradient(circle, rgba(255,255,255,0.85) 0%, rgba(0, 210, 255, 0.48) 28%, rgba(157, 78, 221, 0.3) 56%, transparent 76%); animation: cosmosPulseCore 8s ease-in-out infinite; }
+
+.bg-astral-runes { background: radial-gradient(circle at center, #111028 0%, #070614 68%, #03020a 100%); }
+.bg-astral-runes .cosmos-nebula-glow { width: 95vmax; height: 95vmax; opacity: 0.55; background: radial-gradient(circle, rgba(254, 202, 87, 0.18) 0%, rgba(0, 210, 255, 0.14) 38%, transparent 68%); }
+.bg-astral-runes .cosmos-wheel-outer { width: 76vmin; height: 76vmin; opacity: 0.75; border: 2px dashed rgba(254, 202, 87, 0.55); box-shadow: 0 0 28px rgba(254, 202, 87, 0.22), inset 0 0 28px rgba(0, 210, 255, 0.22); background: repeating-conic-gradient(from 0deg, rgba(254, 202, 87, 0.12) 0deg 2deg, transparent 2deg 15deg); animation: cosmosSpinCW 64s linear infinite; }
+.bg-astral-runes .cosmos-wheel-mid { width: 54vmin; height: 54vmin; opacity: 0.8; border: 2px solid rgba(0, 210, 255, 0.52); box-shadow: 0 0 22px rgba(0, 210, 255, 0.28); background: repeating-conic-gradient(from 0deg, rgba(0, 210, 255, 0.16) 0deg 3deg, transparent 3deg 30deg); animation: cosmosSpinCCW 42s linear infinite; }
+.bg-astral-runes .cosmos-wheel-inner { width: 32vmin; height: 32vmin; opacity: 0.85; border: 2px dotted rgba(254, 202, 87, 0.75); animation: cosmosSpinCW 26s linear infinite; }
+.bg-astral-runes .cosmos-core { width: 12vmin; height: 12vmin; opacity: 0.9; background: radial-gradient(circle, #fff8d6 0%, #feca57 35%, rgba(0, 210, 255, 0.4) 68%, transparent 82%); animation: cosmosPulseCore 5s ease-in-out infinite; }
+
+.bg-wormhole { background: radial-gradient(circle at center, #091834 0%, #040817 60%, #010208 100%); }
+.bg-wormhole .cosmos-wheel-outer { width: 98vmax; height: 98vmax; opacity: 0.82; background: repeating-radial-gradient(circle at center, transparent 0px, rgba(0, 210, 255, 0.16) 18px, rgba(165, 94, 234, 0.22) 36px, transparent 54px), conic-gradient(from 0deg, rgba(0, 210, 255, 0.35), rgba(165, 94, 234, 0.35), rgba(46, 213, 115, 0.25), rgba(0, 210, 255, 0.35)); -webkit-mask-image: radial-gradient(circle, transparent 6%, rgba(0,0,0,0.92) 26%, transparent 66%); mask-image: radial-gradient(circle, transparent 6%, rgba(0,0,0,0.92) 26%, transparent 66%); animation: cosmosSpinCW 38s linear infinite; }
+.bg-wormhole .cosmos-wheel-mid { width: 52vmax; height: 52vmax; opacity: 0.85; border: 2px dashed rgba(0, 210, 255, 0.55); box-shadow: 0 0 40px rgba(0, 210, 255, 0.4), inset 0 0 40px rgba(165, 94, 234, 0.45); animation: cosmosSpinCCW 22s linear infinite; }
+.bg-wormhole .cosmos-core { width: 18vmax; height: 18vmax; opacity: 0.95; background: radial-gradient(circle, #ffffff 0%, #00d2ff 36%, rgba(165, 94, 234, 0.55) 68%, transparent 82%); animation: cosmosPulseCore 4s ease-in-out infinite; }
+
+.bg-solar-system { background: radial-gradient(circle at center, #0d1629 0%, #050811 65%, #020307 100%); }
+.bg-solar-system .cosmos-core { width: 11vmin; height: 11vmin; opacity: 1; background: radial-gradient(circle, #ffffff 0%, #fff2a3 28%, #ffa502 58%, rgba(255, 71, 87, 0.42) 80%, transparent 92%); box-shadow: 0 0 45px rgba(255, 165, 2, 0.75); animation: cosmosPulseCore 6s ease-in-out infinite; }
+
+.bg-magical { background: linear-gradient(165deg, #040711 0%, #0a192f 48%, #0f3156 82%, #071324 100%); }
+.bg-fireflies { background: radial-gradient(ellipse at bottom, #0d2b1d 0%, #061710 58%, #020a07 100%); }
+.bg-deep-abyss { background: linear-gradient(180deg, #04243c 0%, #031525 52%, #010812 100%); }
+.bg-lava-ember { background: radial-gradient(ellipse at bottom, #3b0d0c 0%, #1a0608 55%, #080204 100%); }
+.bg-crystal-cave { background: radial-gradient(circle at center, #1f1138 0%, #0e071c 62%, #05020a 100%); }
 .bg-forest { background-color: #071a12; background-image: radial-gradient(rgba(85, 239, 196, 0.18) 1.2px, transparent 2.2px), linear-gradient(135deg, #05140e 0%, #0b291e 55%, #133b2b 100%); background-size: 28px 28px, 100% 100%; background-repeat: repeat, no-repeat; }
 .bg-blueprint { background-color: #0a2540; background-image: linear-gradient(rgba(0, 210, 255, 0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 210, 255, 0.14) 1px, transparent 1px); background-size: 32px 32px; }
-.bg-cyberpunk { background-color: #060612; background-image: linear-gradient(rgba(0, 210, 255, 0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 71, 87, 0.09) 1px, transparent 1px), radial-gradient(circle at center, rgba(165, 94, 234, 0.22), #060612 85%); background-size: 36px 36px, 36px 36px, 100% 100%; background-repeat: repeat, repeat, no-repeat; }
-.bg-matrix { background-color: #040d08; background-image: linear-gradient(rgba(0, 255, 128, 0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 128, 0.09) 1px, transparent 1px); background-size: 32px 32px; }
-.bg-stars { background-color: #030308; background-image: radial-gradient(rgba(255,255,255,0.28) 1.2px, transparent 2.5px), radial-gradient(rgba(0,210,255,0.18) 1px, transparent 2.2px); background-size: 96px 96px, 48px 48px; background-position: 0 0, 24px 24px; }
+.bg-cyberpunk { background: linear-gradient(180deg, #090418 0%, #1c0936 52%, #2c0b3f 78%, #090414 100%); }
+.bg-matrix { background-color: #030b06; }
+.bg-stars { background: radial-gradient(ellipse at center, #0b1021 0%, #04060f 70%, #010206 100%); }
 
-@keyframes gradientAurora { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 .fade-in { animation: fadeIn 0.35s ease-out; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -380,17 +428,18 @@ body.light-theme .timer-big-clock { color: #0984e3; text-shadow: none; }
 .timer-act-btn.pause { background: #ffa502; color: #000; }
 .timer-act-btn.reset { background: rgba(255,71,87,0.2); color: #ff4757; border: 1px solid #ff4757; }
 
-.settings-overlay { position: fixed; top: 56px; right: 12px; width: 320px; max-width: calc(100vw - 24px); border-radius: 14px; display: none !important; flex-direction: column; z-index: 85; pointer-events: none; }
+.settings-overlay { position: fixed; top: 56px; right: 12px; width: 345px; max-width: calc(100vw - 24px); border-radius: 14px; display: none !important; flex-direction: column; z-index: 85; pointer-events: none; }
 .settings-overlay.active { display: flex !important; pointer-events: auto !important; animation: fadeIn 0.18s ease-out; }
 .settings-header { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: #00d2ff; font-size: 13px; }
 .settings-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; max-height: 78vh; overflow-y: auto; touch-action: pan-y; }
-.setting-group label { font-size: 11px; color: #999; margin-bottom: 8px; display: block; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+.setting-group label { font-size: 11px; color: #00d2ff; margin-bottom: 8px; display: block; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; }
+body.light-theme .setting-group label { color: #0984e3; }
 .bg-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .bg-opt-btn, .eraser-opt-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 8px 10px; min-height: 36px; border-radius: 8px; color: #ddd; font-size: 12px; cursor: pointer; transition: all 0.15s; text-align: left; }
 body.light-theme .bg-opt-btn, body.light-theme .eraser-opt-btn { color: #333; background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.12); }
-.bg-opt-btn:hover, .eraser-opt-btn:hover { background: rgba(255,255,255,0.14); }
-.bg-opt-btn.active, .eraser-opt-btn.active { background: rgba(0, 210, 255, 0.22); border-color: #00d2ff; color: #00d2ff; font-weight: 700; }
-body.light-theme .bg-opt-btn.active, body.light-theme .eraser-opt-btn.active { color: #0984e3; border-color: #0984e3; }
+.bg-opt-btn:hover, .eraser-opt-btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(0, 210, 255, 0.45); }
+.bg-opt-btn.active, .eraser-opt-btn.active { background: rgba(0, 210, 255, 0.22); border-color: #00d2ff; color: #00d2ff; font-weight: 700; box-shadow: 0 0 10px rgba(0, 210, 255, 0.25); }
+body.light-theme .bg-opt-btn.active, body.light-theme .eraser-opt-btn.active { color: #0984e3; border-color: #0984e3; background: rgba(9, 132, 227, 0.14); }
 .toggle-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; align-items: center; min-height: 28px; }
 .toggle-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: #00d2ff; cursor: pointer; }
 

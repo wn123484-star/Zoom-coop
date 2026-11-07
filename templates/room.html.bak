@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 <title>Bảng Chung Online - Phòng {{ room_id }}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%230984e3'/><circle cx='32' cy='32' r='18' fill='%2300d2ff'/></svg>">
-<link rel="stylesheet" href="/static/css/style.css?v=29">
+<link rel="stylesheet" href="/static/css/style.css?v=30">
+<link rel="stylesheet" href="/static/games/fishing/fishing.css?v=30">
 </head>
 <body class="fade-in light-theme">
 <div id="dynamic-bg" class="bg-light-dots">
@@ -243,9 +244,10 @@
 </div>
 </div>
 
-<div id="popover-games" class="tool-popover glass-effect">
+<div id="popover-games" class="tool-popover glass-effect" style="width: 350px;">
 <div class="popover-title">🎮 Tạo Bàn Chơi Mới (Mở Nhiều Bàn Cùng Lúc)</div>
 <div class="popover-grid single-col">
+<button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="fishing" style="border-color:#00d2ff; background:rgba(0,210,255,0.16); color:#feca57; font-weight:800;">🐟 ➕ Tạo Bể Bắn Cá Đại Dương (1 - 8 Người Quanh 4 Cạnh & Bot)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="uno">🃏 ➕ Tạo Bàn Bài UNO (2 - 8 Người & Bot)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="noitu">🔤 ➕ Tạo Bàn Nối Từ Tiếng Việt (Nhiều người)</button>
 <button type="button" class="game-menu-btn create-multi-game-btn" data-game-type="ludo">🐎 ➕ Tạo Bàn Cờ Cá Ngựa (Xúc Xắc 3D Rơi + Hẹn Giờ)</button>
@@ -274,7 +276,7 @@
 <button type="button" id="tool-sticky" class="dock-btn" title="Dán ghi chú mới lên bảng">📝<span>Ghi chú</span></button>
 <button type="button" id="group-webmedia-btn" class="dock-btn highlight-dock group-trigger-btn" data-popover="popover-webmedia" title="Mở Tab Web riêng, Đăng tệp HTML Game, Ảnh, Video, PDF, Word, Excel">🌐<span>Web / HTML / Tài Liệu ▾</span></button>
 <button type="button" id="group-screen-btn" class="dock-btn group-trigger-btn" data-popover="popover-screen" title="Chia sẻ màn hình kiểu Google Meet (Tab, Cửa sổ, Toàn màn hình)">🖥️<span>Chia sẻ màn hình ▾</span></button>
-<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Tạo nhiều bàn UNO, Nối Từ, Cờ Cá Ngựa, Cờ Vua, Caro, Xúc Xắc 3D trên mặt bảng">🎮<span>Tạo Bàn Chơi ▾</span></button>
+<button type="button" id="group-games-btn" class="dock-btn group-trigger-btn" data-popover="popover-games" title="Tạo nhiều bàn Bắn Cá, UNO, Nối Từ, Cờ Cá Ngựa, Cờ Vua, Caro, Xúc Xắc 3D trên mặt bảng">🎮<span>Tạo Bàn Chơi ▾</span></button>
 <button type="button" id="tool-chat" class="dock-btn" title="Bật/Tắt khung Trò chuyện">💬<span>Chat Phòng</span><em id="chat-badge" class="badge-dot" style="display:none;">0</em></button>
 <button type="button" id="tool-center" class="dock-btn secondary" title="Đưa góc nhìn về trung tâm bảng">🎯<span>Về tâm</span></button>
 <button type="button" id="group-backup-btn" class="dock-btn secondary group-trigger-btn" data-popover="popover-backup" title="Sao lưu JSON, Khôi phục JSON hoặc Xuất ảnh PNG">📦<span>Sao lưu ▾</span></button>
@@ -409,12 +411,14 @@
 const ROOM_ID = "{{ room_id }}";
 window.USERNAME = "{{ username }}";
 </script>
-<script src="/static/js/socket_client.js?v=29"></script>
-<script src="/static/js/pointer.js?v=29"></script>
-<script src="/static/js/canvas.js?v=29"></script>
-<script src="/static/js/sticky.js?v=29"></script>
-<script src="/static/js/xo.js?v=29"></script>
-<script src="/static/js/media.js?v=29"></script>
-<script src="/static/js/ui.js?v=29"></script>
+<script src="/static/js/socket_client.js?v=30"></script>
+<script src="/static/js/pointer.js?v=30"></script>
+<script src="/static/js/canvas.js?v=30"></script>
+<script src="/static/js/sticky.js?v=30"></script>
+<script src="/static/js/xo.js?v=30"></script>
+<script src="/static/js/game_loader.js?v=30"></script>
+<script src="/static/games/fishing/fishing.js?v=30"></script>
+<script src="/static/js/media.js?v=30"></script>
+<script src="/static/js/ui.js?v=30"></script>
 </body>
 </html>
